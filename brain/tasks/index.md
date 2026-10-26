@@ -6,6 +6,8 @@
 | R10 | feat/db-contract | todo |
 | R11 | feat/core | todo |
 | R12 | feat/storage | done (pending merge) |
+| R11 | feat/core | done (awaiting merge) |
+| R12 | feat/storage | todo |
 | R13 | feat/mail | todo |
 | R20 | feat/api-auth | todo |
 | R21 | feat/api-projects | todo |
