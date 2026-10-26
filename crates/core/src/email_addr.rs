@@ -17,7 +17,6 @@ const MAX_INPUT: usize = 4096;
 
 static ENCODED_WORD: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"=\?[^?\s]+\?[BbQq]\?[^?\s]*\?=").unwrap());
-static COMMENT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\([^()]*\)").unwrap());
 static ANGLE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<([^<>]*)>").unwrap());
 static GROUP: LazyLock<Regex> = LazyLock::new(|| Regex::new(r":\s*([^;]+);").unwrap());
 static BARE: LazyLock<Regex> =
@@ -31,34 +30,28 @@ fn clip(s: &str) -> &str {
     &s[..end]
 }
 
-fn strip_comments(s: &str) -> String {
-    // Nested comments: peel innermost pairs until nothing changes (each pass shrinks the string).
-    let mut cur = s.to_string();
-    loop {
-        let next = COMMENT.replace_all(&cur, "").into_owned();
-        if next == cur {
-            return next.trim().to_string();
-        }
-        cur = next;
-    }
-}
-
-/// Drops RFC 5322 quoted-strings (honouring backslash escapes) so text inside a display name
-/// can never be mistaken for the real angle-addr.
-fn mask_quoted(s: &str) -> String {
+/// One pass over RFC 5322 quoted-strings and (nested) comments, dropping both so neither a
+/// display name nor a comment can hide or fake the address. Quotes are literal inside comments
+/// and parentheses are literal inside quotes; a backslash escapes the next character.
+/// `None` when a quote or comment is left open: such input is not trusted at all.
+fn strip_quoted_and_comments(s: &str) -> Option<String> {
     let mut out = String::with_capacity(s.len());
-    let (mut in_q, mut esc) = (false, false);
+    let (mut in_q, mut depth, mut esc) = (false, 0usize, false);
     for c in s.chars() {
-        match (in_q, esc, c) {
-            (_, true, _) => esc = false,
-            (_, false, '\\') => esc = true,
-            (false, _, '"') => in_q = true,
-            (true, _, '"') => in_q = false,
-            (false, _, _) => out.push(c),
-            _ => {}
+        if esc {
+            esc = false;
+            continue;
+        }
+        match c {
+            '\\' => esc = true,
+            '"' if depth == 0 => in_q = !in_q,
+            '(' if !in_q => depth += 1,
+            ')' if !in_q && depth > 0 => depth -= 1,
+            _ if in_q || depth > 0 => {}
+            _ => out.push(c),
         }
     }
-    out
+    (!in_q && depth == 0).then_some(out)
 }
 
 fn to_ascii_domain(addr: &str) -> String {
@@ -84,7 +77,9 @@ pub fn extract_email_address(input: &str) -> String {
 
     // Every search runs on text with quoted-strings removed first, then comments, so neither
     // a display name nor a comment can hide or fake the address.
-    let masked = strip_comments(&mask_quoted(raw));
+    let Some(masked) = strip_quoted_and_comments(raw) else {
+        return raw.to_string();
+    };
     let mut found = ANGLE
         .captures_iter(&masked)
         .map(|c| c[1].trim().to_string())
@@ -408,6 +403,22 @@ mod tests {
         assert!(!is_valid_email(&ex(r#"Team: "evil@x.com", b;"#)));
         // unterminated quote: nothing after it is trusted
         assert!(!is_valid_email(&ex(r#""abc <evil@x.com>"#)));
+    }
+
+    #[test]
+    fn quotes_and_comments_cannot_confuse_each_other() {
+        // quote inside a comment is literal; paren inside a quote is literal
+        assert_eq!(ex(r#"(a " b) <real@ok.com> (c " d)"#), "real@ok.com");
+        assert_eq!(ex(r#"(") <real@ok.com> (")"#), "real@ok.com");
+        assert_eq!(ex(r#""a)" (b) <real@ok.com>"#), "real@ok.com");
+        // unbalanced: nothing is extracted
+        for bad in [
+            r#"(" <evil@x.com>"#,
+            r#"( <evil@x.com>"#,
+            r#""( <evil@x.com>"#,
+        ] {
+            assert!(!is_valid_email(&ex(bad)), "{bad}");
+        }
     }
 
     #[test]
