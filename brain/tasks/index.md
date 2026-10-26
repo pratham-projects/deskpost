@@ -5,7 +5,7 @@
 | R00 | scaffold | done (coordinator) |
 | R10 | feat/db-contract | todo |
 | R11 | feat/core | todo |
-| R12 | feat/storage | todo |
+| R12 | feat/storage | done (pending merge) |
 | R13 | feat/mail | todo |
 | R20 | feat/api-auth | todo |
 | R21 | feat/api-projects | todo |
