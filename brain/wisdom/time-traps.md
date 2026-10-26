@@ -18,3 +18,7 @@ Carried over from bunfiiliate:
 - Rust 1.99 clippy flags `x % 2 != 0`; use `is_multiple_of`. Use a public `-> impl Future + Send` trait, not `async_trait`, when `dyn` is not needed.
 - Crypto crates moved (aes-gcm 0.11, sha2/hkdf 0.13, rand 0.10): `from_slice` is deprecated (use `Key::from([u8;32])`, `Nonce::from([u8;12])`) and `rand::fill(&mut buf)` replaces `thread_rng().fill_bytes`. Check the registry source, not memory.
 - proptest found a real bug in `build_references` (parent already in the chain was not last); always assert the invariant, not an example.
+- mail-parser 1.x: `body_html(0)` fabricates HTML from a text-only mail (use `html_body()` + `is_content_type("text","html")`); `\u{80}..\u{9f}` count as control chars in header checks.
+- IMAP `UID SEARCH n:*` always returns the highest message even if its UID < n: filter `> last_uid` client-side or the poller re-delivers the last mail forever.
+- async-imap `Client::new` does not read the greeting (call `read_response()`); STARTTLS must be done on the raw socket before wrapping.
+

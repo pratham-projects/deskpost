@@ -4,3 +4,4 @@
 
 - [Storage](/architecture/storage.md) — sd-storage: trait, fs driver, tokens, quota, TS weaknesses
 - [sd-core](/architecture/core.md) — pure logic: status machine, email parsing, threading, reply stripping, secret box, API keys, filename and content-type safety
+- [Mail crate](/architecture/mail.md) — SMTP sender, MIME parse, IMAP poller, fake servers
