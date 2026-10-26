@@ -43,6 +43,24 @@ fn strip_comments(s: &str) -> String {
     }
 }
 
+/// Drops RFC 5322 quoted-strings (honouring backslash escapes) so text inside a display name
+/// can never be mistaken for the real angle-addr.
+fn mask_quoted(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let (mut in_q, mut esc) = (false, false);
+    for c in s.chars() {
+        match (in_q, esc, c) {
+            (_, true, _) => esc = false,
+            (_, false, '\\') => esc = true,
+            (false, _, '"') => in_q = true,
+            (true, _, '"') => in_q = false,
+            (false, _, _) => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}
+
 fn to_ascii_domain(addr: &str) -> String {
     let Some((local, domain)) = addr.rsplit_once('@') else {
         return addr.to_string();
@@ -62,15 +80,16 @@ pub fn extract_email_address(input: &str) -> String {
     }
 
     let no_words = ENCODED_WORD.replace_all(trimmed, "");
-    let s = strip_comments(&no_words)
-        .replace("\\\"", "\"")
-        .replace("\\'", "'");
+    let no_comments = strip_comments(&no_words);
+    let s = no_comments.replace("\\\"", "\"").replace("\\'", "'");
     let s = s.trim();
 
+    let masked = mask_quoted(&no_comments);
     let mut found = ANGLE
-        .captures_iter(s)
+        .captures_iter(&masked)
         .map(|c| c[1].trim().to_string())
-        .find(|a| !a.is_empty());
+        .find(|a| !a.is_empty())
+        .map(|a| a.replace("\\\"", "\""));
 
     if found.is_none() {
         let scope = GROUP
@@ -78,12 +97,7 @@ pub fn extract_email_address(input: &str) -> String {
             .map(|c| c[1].split(',').next().unwrap_or("").trim().to_string())
             .filter(|g| !g.is_empty());
         let scope = scope.as_deref().unwrap_or(s);
-        // group members may themselves use brackets: "Alice <a@x.com>"
-        found = ANGLE
-            .captures(scope)
-            .map(|c| c[1].trim().to_string())
-            .filter(|a| !a.is_empty())
-            .or_else(|| BARE.find(scope).map(|m| m.as_str().to_string()));
+        found = BARE.find(scope).map(|m| m.as_str().to_string());
     }
 
     let mut out = found.unwrap_or_else(|| s.to_string());
@@ -366,6 +380,16 @@ mod tests {
     #[test]
     fn bracketed_address_beats_group_text() {
         assert_eq!(ex("Sales: fake@evil.com; <real@ok.com>"), "real@ok.com");
+    }
+
+    #[test]
+    fn angle_inside_quoted_display_name_cannot_spoof() {
+        assert_eq!(
+            ex(r#""boss@corp.com <boss@corp.com>" <real@evil.com>"#),
+            "real@evil.com"
+        );
+        assert_eq!(ex(r#""a \" <x@y.com>" <real@ok.com>"#), "real@ok.com");
+        assert_eq!(ex(r#"<real@ok.com> "x <fake@y.com>""#), "real@ok.com");
     }
 
     #[test]
