@@ -80,27 +80,28 @@ pub fn extract_email_address(input: &str) -> String {
     }
 
     let no_words = ENCODED_WORD.replace_all(trimmed, "");
-    let no_comments = strip_comments(&no_words);
-    let s = no_comments.replace("\\\"", "\"").replace("\\'", "'");
-    let s = s.trim();
+    let raw = no_words.trim();
 
-    let masked = mask_quoted(&no_comments);
+    // Every search runs on text with quoted-strings removed first, then comments, so neither
+    // a display name nor a comment can hide or fake the address.
+    let masked = strip_comments(&mask_quoted(raw));
     let mut found = ANGLE
         .captures_iter(&masked)
         .map(|c| c[1].trim().to_string())
-        .find(|a| !a.is_empty())
-        .map(|a| a.replace("\\\"", "\""));
+        .find(|a| !a.is_empty());
 
     if found.is_none() {
         let scope = GROUP
-            .captures(s)
+            .captures(&masked)
             .map(|c| c[1].split(',').next().unwrap_or("").trim().to_string())
             .filter(|g| !g.is_empty());
-        let scope = scope.as_deref().unwrap_or(s);
+        let scope = scope.as_deref().unwrap_or(&masked);
         found = BARE.find(scope).map(|m| m.as_str().to_string());
     }
 
-    let mut out = found.unwrap_or_else(|| s.to_string());
+    // Nothing found: hand back the input (so callers can show it); a wholly quoted value is unquoted.
+    let s = raw.replace("\\\"", "\"").replace("\\'", "'");
+    let mut out = found.unwrap_or(s);
     if let Some(inner) = out
         .strip_prefix(['"', '\''])
         .and_then(|r| r.strip_suffix(['"', '\'']))
@@ -390,6 +391,23 @@ mod tests {
         );
         assert_eq!(ex(r#""a \" <x@y.com>" <real@ok.com>"#), "real@ok.com");
         assert_eq!(ex(r#"<real@ok.com> "x <fake@y.com>""#), "real@ok.com");
+    }
+
+    #[test]
+    fn comment_markers_inside_quotes_cannot_hide_the_address() {
+        assert_eq!(ex(r#""x (" <real@ok.com> ")""#), "real@ok.com");
+        assert_eq!(
+            ex(r#""(" <real@ok.com> ")" <fake@evil.com>"#),
+            "real@ok.com"
+        );
+    }
+
+    #[test]
+    fn quoted_text_is_never_searched_for_addresses() {
+        assert!(!is_valid_email(&ex(r#""evil@x.com <evil@x.com>""#)));
+        assert!(!is_valid_email(&ex(r#"Team: "evil@x.com", b;"#)));
+        // unterminated quote: nothing after it is trusted
+        assert!(!is_valid_email(&ex(r#""abc <evil@x.com>"#)));
     }
 
     #[test]

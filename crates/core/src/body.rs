@@ -16,7 +16,7 @@ use regex::Regex;
 /// Input beyond this many bytes is ignored (cut on a char boundary).
 pub const MAX_INPUT: usize = 1 << 20;
 const MAX_TAG_LEN: usize = 2048;
-/// Total bytes all tag scans may read, as a multiple of the input length. Beyond it a `<` is text.
+/// Total bytes all tag scans may read, as a multiple of the input length. Beyond it the rest of the input is dropped.
 const TAG_SCAN_BUDGET: usize = 4;
 
 fn clip(s: &str) -> &str {
@@ -123,6 +123,9 @@ impl Writer {
 /// Converts an HTML fragment/document to plain text. Scripts, styles, head, comments and tags
 /// are dropped (no link targets, no image text), block tags become line breaks, common entities
 /// are decoded, and `<blockquote>` content is prefixed with `> `.
+///
+/// The result is plain text, not HTML: callers must escape it when rendering. Pathological input
+/// (more unclosed tags than the scan budget allows) is truncated rather than passed through.
 pub fn html_to_text(html: &str) -> String {
     let html = clip(html);
     let mut w = Writer {
@@ -164,7 +167,11 @@ pub fn html_to_text(html: &str) -> String {
         }
         let is_tag = rest[1..]
             .starts_with(|c: char| c.is_ascii_alphabetic() || c == '/' || c == '!' || c == '?');
-        let tag_end = if is_tag && budget > 0 {
+        if is_tag && budget == 0 {
+            // Scan budget spent: fail closed, drop the rest instead of emitting raw markup.
+            break;
+        }
+        let tag_end = if is_tag {
             let r = tag_end(rest);
             budget = budget.saturating_sub(r.map_or(rest.len().min(MAX_TAG_LEN), |e| e + 1));
             r
@@ -814,7 +821,11 @@ mod tests {
         // every '<a' would scan MAX_TAG_LEN bytes without the scan budget
         let flood = "<a ".repeat(MAX_INPUT / 3);
         let t = std::time::Instant::now();
-        let _ = html_to_text(&flood);
+        let out = html_to_text(&flood);
+        assert!(
+            out.len() < flood.len(),
+            "flood must be truncated, not passed through"
+        );
         assert!(t.elapsed().as_secs() < 2, "{:?}", t.elapsed());
     }
 
