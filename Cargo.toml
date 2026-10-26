@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/db", "crates/mail", "crates/storage", "crates/api"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+publish = false
+
+[workspace.dependencies]
+sd-core = { path = "crates/core" }
+sd-db = { path = "crates/db" }
+sd-mail = { path = "crates/mail" }
+sd-storage = { path = "crates/storage" }
