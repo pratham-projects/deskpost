@@ -63,6 +63,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Serve => {
             let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
+            api::routes::tickets::spawn_presence_gc(pool.clone());
             let app = build_app(AppState::new(pool, config)?);
             let listener = tokio::net::TcpListener::bind(addr).await?;
             tracing::info!(%addr, "listening");
