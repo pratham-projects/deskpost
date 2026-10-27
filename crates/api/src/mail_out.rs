@@ -26,6 +26,7 @@ pub const MAX_ATTEMPTS: i32 = 5;
 const OUTBOX_BATCH: i64 = 20;
 const LEASE_SECS: i64 = 300;
 const ERROR_LEN: usize = 300;
+const EXCERPT_CHARS: usize = 300;
 
 /// AAD binding a sealed password to its project and field. `routes::projects` must seal with the same.
 pub fn smtp_aad(project: Id) -> Vec<u8> {
@@ -158,15 +159,10 @@ impl Mailer {
 }
 
 impl OutboundMailer for Mailer {
-    fn send_reply(
-        &self,
-        mail: ReplyMail,
-    ) -> impl Future<Output = Result<SentReply, MailError>> + Send {
-        async move {
-            match self {
-                Self::Smtp(m) => m.send_reply(mail).await,
-                Self::Recording(m) => m.send_reply(mail).await,
-            }
+    async fn send_reply(&self, mail: ReplyMail) -> Result<SentReply, MailError> {
+        match self {
+            Self::Smtp(m) => m.send_reply(mail).await,
+            Self::Recording(m) => m.send_reply(mail).await,
         }
     }
 }
@@ -180,27 +176,22 @@ pub struct RecordingMailer {
 }
 
 impl OutboundMailer for RecordingMailer {
-    fn send_reply(
-        &self,
-        mail: ReplyMail,
-    ) -> impl Future<Output = Result<SentReply, MailError>> + Send {
-        async move {
-            if let Some(e) = self.fail_next.lock().unwrap().take() {
-                return Err(e);
-            }
-            let n = {
-                let mut sent = self.sent.lock().unwrap();
-                sent.push(mail);
-                sent.len()
-            };
-            Ok(SentReply {
-                email_message_id: format!("recorded-{n}@test.invalid"),
-                in_reply_to: None,
-                references: None,
-                to: "client@test.invalid".into(),
-                subject: "recorded".into(),
-            })
+    async fn send_reply(&self, mail: ReplyMail) -> Result<SentReply, MailError> {
+        if let Some(e) = self.fail_next.lock().unwrap().take() {
+            return Err(e);
         }
+        let n = {
+            let mut sent = self.sent.lock().unwrap();
+            sent.push(mail);
+            sent.len()
+        };
+        Ok(SentReply {
+            email_message_id: format!("recorded-{n}@test.invalid"),
+            in_reply_to: None,
+            references: None,
+            to: "client@test.invalid".into(),
+            subject: "recorded".into(),
+        })
     }
 }
 
@@ -287,74 +278,66 @@ impl SmtpMailer {
 }
 
 impl OutboundMailer for SmtpMailer {
-    fn send_reply(
-        &self,
-        mail: ReplyMail,
-    ) -> impl Future<Output = Result<SentReply, MailError>> + Send {
-        async move {
-            let settings = projects::mail_settings(&self.pool, mail.project_id)
-                .await?
-                .ok_or(MailError::NotConfigured)?;
-            let (smtp, password) =
-                smtp_config(&settings, &self.secrets, self.config.mail.plaintext)?;
-            let ticket = mailq::ticket_mail(&self.pool, mail.project_id, mail.ticket_id)
-                .await?
-                .ok_or_else(|| MailError::Internal("ticket not found".into()))?;
-            let thread = mailq::thread_ids(&self.pool, mail.project_id, mail.ticket_id).await?;
-            let (in_reply_to, references) = match thread.split_last() {
-                Some((parent, previous)) => {
-                    (Some(parent.clone()), build_references(previous, parent))
-                }
-                None => (None, vec![]),
-            };
-            let domain = domain_of(&smtp.from_address).to_string();
-            let message_id = reply_message_id(
-                &mail.ticket_id.to_string(),
-                &uuid::Uuid::new_v4().to_string(),
-                &domain,
-            )
-            .map(|m| bare(&m));
-            let subject = ticket_subject(&ticket.project_name, ticket.ticket_number as u32, true);
-            let attachments = self.attachments(&mail).await?;
-            let email = OutboundEmail {
-                to: vec![ticket.client_email.clone()],
-                subject: subject.clone(),
-                text: Some(mail.body.clone()),
-                message_id: message_id.clone(),
-                in_reply_to: in_reply_to.clone(),
-                references: references.clone(),
-                attachments,
-                ..Default::default()
-            };
-            let log = email_logs::create(
-                &self.pool,
-                &email_logs::NewEmailLog {
-                    project_id: mail.project_id,
-                    ticket_id: mail.ticket_id,
-                    message_id: None,
-                    to_email: ticket.client_email.clone(),
-                    subject: Some(subject.clone()),
-                    sent_by_user_id: mail.sent_by,
-                },
-            )
-            .await?;
-            match sd_mail::send(&smtp, &email).await {
-                Ok(id) => {
-                    let id = bare(&id);
-                    email_logs::mark_sent(&self.pool, log.id, &id).await?;
-                    Ok(SentReply {
-                        email_message_id: id,
-                        in_reply_to,
-                        references: (!references.is_empty()).then(|| references.join(" ")),
-                        to: ticket.client_email,
-                        subject,
-                    })
-                }
-                Err(e) => {
-                    let msg = redact(&e.to_string(), &[&password]);
-                    email_logs::mark_failed(&self.pool, log.id, &msg).await?;
-                    Err(MailError::Delivery(msg))
-                }
+    async fn send_reply(&self, mail: ReplyMail) -> Result<SentReply, MailError> {
+        let settings = projects::mail_settings(&self.pool, mail.project_id)
+            .await?
+            .ok_or(MailError::NotConfigured)?;
+        let (smtp, password) = smtp_config(&settings, &self.secrets, self.config.mail.plaintext)?;
+        let ticket = mailq::ticket_mail(&self.pool, mail.project_id, mail.ticket_id)
+            .await?
+            .ok_or_else(|| MailError::Internal("ticket not found".into()))?;
+        let thread = mailq::thread_ids(&self.pool, mail.project_id, mail.ticket_id).await?;
+        let (in_reply_to, references) = match thread.split_last() {
+            Some((parent, previous)) => (Some(parent.clone()), build_references(previous, parent)),
+            None => (None, vec![]),
+        };
+        let domain = domain_of(&smtp.from_address).to_string();
+        let message_id = reply_message_id(
+            &mail.ticket_id.to_string(),
+            &uuid::Uuid::new_v4().to_string(),
+            &domain,
+        )
+        .map(|m| bare(&m));
+        let subject = ticket_subject(&ticket.project_name, ticket.ticket_number as u32, true);
+        let attachments = self.attachments(&mail).await?;
+        let email = OutboundEmail {
+            to: vec![ticket.client_email.clone()],
+            subject: subject.clone(),
+            text: Some(mail.body.clone()),
+            message_id: message_id.clone(),
+            in_reply_to: in_reply_to.clone(),
+            references: references.clone(),
+            attachments,
+            ..Default::default()
+        };
+        let log = email_logs::create(
+            &self.pool,
+            &email_logs::NewEmailLog {
+                project_id: mail.project_id,
+                ticket_id: mail.ticket_id,
+                message_id: None,
+                to_email: ticket.client_email.clone(),
+                subject: Some(subject.clone()),
+                sent_by_user_id: mail.sent_by,
+            },
+        )
+        .await?;
+        match sd_mail::send(&smtp, &email).await {
+            Ok(id) => {
+                let id = bare(&id);
+                email_logs::mark_sent(&self.pool, log.id, &id).await?;
+                Ok(SentReply {
+                    email_message_id: id,
+                    in_reply_to,
+                    references: (!references.is_empty()).then(|| references.join(" ")),
+                    to: ticket.client_email,
+                    subject,
+                })
+            }
+            Err(e) => {
+                let msg = redact(&e.to_string(), &[&password]);
+                email_logs::mark_failed(&self.pool, log.id, &msg).await?;
+                Err(MailError::Delivery(msg))
             }
         }
     }
@@ -466,8 +449,12 @@ async fn send_job(state: &AppState, job: &mailq::OutboxJob) -> Result<String, (S
     };
     let mut text = resp.body.clone();
     if let Some(d) = t.description.as_deref().filter(|d| !d.trim().is_empty()) {
+        // Only a short excerpt: the address may be spoofed, and we must not reflect a whole mail at it.
         text.push_str("\n\n---\nYour message:\n");
-        text.push_str(d);
+        text.push_str(&d.chars().take(EXCERPT_CHARS).collect::<String>());
+        if d.chars().count() > EXCERPT_CHARS {
+            text.push('…');
+        }
     }
     let email = OutboundEmail {
         to: vec![t.client_email.clone()],
