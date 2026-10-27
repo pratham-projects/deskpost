@@ -9,7 +9,7 @@
 | R11 | feat/core | done (awaiting merge) |
 | R12 | feat/storage | todo |
 | R13 | feat/mail | done (awaiting merge) |
-| R20 | feat/api-auth | todo |
+| R20 | feat/api-auth | done (awaiting merge) |
 | R21 | feat/api-projects | todo |
 | R22 | feat/api-tickets | todo |
 | R23 | feat/api-mail-attach | todo |
