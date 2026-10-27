@@ -27,6 +27,23 @@ fn simple_message_fields() {
 }
 
 #[test]
+fn machine_generated_mail_is_flagged() {
+    let with = |h: &str| {
+        parse(&format!(
+            "From: a@example.com\r\n{h}\r\nSubject: x\r\n\r\nbody\r\n"
+        ))
+    };
+    assert!(!with("X-Other: 1").auto_generated);
+    assert!(!with("Auto-Submitted: no").auto_generated);
+    assert!(!with("Precedence: first-class").auto_generated);
+    assert!(with("Auto-Submitted: auto-replied").auto_generated);
+    assert!(with("auto-submitted: Auto-Generated").auto_generated);
+    assert!(with("Precedence: Bulk").auto_generated);
+    assert!(with("Precedence: list").auto_generated);
+    assert!(with("X-Autoreply: yes").auto_generated);
+}
+
+#[test]
 fn missing_message_id_is_derived_and_stable() {
     let raw = SIMPLE.replace("Message-ID: <abc@example.com>\r\n", "");
     let (a, b) = (parse(&raw), parse(&raw));
