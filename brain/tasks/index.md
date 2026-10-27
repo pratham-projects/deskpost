@@ -11,7 +11,7 @@
 | R13 | feat/mail | done (awaiting merge) |
 | R20 | feat/api-auth | done (awaiting merge) |
 | R21 | feat/api-projects | todo |
-| R22 | feat/api-tickets | todo |
+| R22 | feat/api-tickets | done (awaiting merge) |
 | R23 | feat/api-mail-attach | todo |
 | R30 | feat/web-live | todo |
 | R31 | feat/deploy-docs | todo |

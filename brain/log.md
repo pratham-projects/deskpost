@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-10-27] R22 api tickets
+
+- **Creation**: tickets (create admin + widget, list/search/counts, get, patch, delete), messages and internal notes, unread, viewers with GC task, `OutboundMailer` seam; see [API tickets](/architecture/api-tickets.md). 50 new integration tests.
+- **Decision**: status changes go through the sd-core machine (closed only reopens to pending, same status is a no-op), so API.md 7.3 "any to any" was corrected. Mail is sent after commit and failures are recorded, replacing "mail first, 502" of API.md 7.4 (R23 may revisit). Delete stays a hard delete (API.md deviation 16), not a soft delete.
+- **Lesson**: [axum multipart and query rejections](/wisdom/time-traps.md).
+
 ## [2026-10-27] R20 api auth
 
 - **Creation**: `crates/api` (lib + `api` binary: serve, migrate, bootstrap), config, envelope/errors, HS256 JWT, Argon2id hasher, sliding-window limiter, trusted-proxy client IP, auth routes, extractors, health; see [API crate](/architecture/api.md). 100+ tests, including a reusable tenant fixture.

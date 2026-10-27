@@ -5,6 +5,7 @@ use sd_db::Pool;
 
 use crate::config::{Config, ConfigError};
 use crate::jwt::Jwt;
+use crate::mailer::{NoopMailer, OutboundMailer};
 use crate::password::Hasher;
 use crate::ratelimit::RateLimiter;
 
@@ -19,6 +20,8 @@ pub struct AppState {
     pub limiter: Arc<RateLimiter>,
     /// Encrypts per-project mail passwords (R21+).
     pub secrets: Arc<SecretBox>,
+    /// Outbound mail after a reply commits; R23 replaces the no-op default.
+    pub mailer: Arc<dyn OutboundMailer>,
 }
 
 impl AppState {
@@ -32,6 +35,7 @@ impl AppState {
             hasher: Arc::new(Hasher::new(config.argon2, concurrency)?),
             limiter: Arc::new(RateLimiter::new(RATE_LIMIT_KEYS)),
             secrets: Arc::new(secrets),
+            mailer: Arc::new(NoopMailer),
             config: Arc::new(config),
         })
     }

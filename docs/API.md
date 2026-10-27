@@ -231,7 +231,7 @@ Errors: 403/404 (admin route, not a member), 401 `TOKEN_INVALID` on the public r
 | `DELETE /tickets/:id` | project-admin | | `data: { success: true, id }` (hard delete, cascades messages/attachments/unread/viewers) |
 
 - `assignedToUserId` must be a member of the ticket's project (422 otherwise); `null` unassigns.
-- `status` change rules (state machine in `sd-core`; the query that persists it is `sd_db::tickets::update`): any status may go to any other; entering `resolved` or `closed` sets `closedAt = now()` (if not already set); leaving them clears `closedAt` (TS never cleared it on reopen). Entering `resolved` sends the `resolved` email response (if enabled) after commit.
+- `status` change rules (state machine in `sd-core`; the query that persists it is `sd_db::tickets::update`): moves follow the state machine (an open status may go to any other; a `closed` ticket can only be reopened to `pending`, else `409 CONFLICT`; re-sending the current status is a no-op); entering `resolved` or `closed` sets `closedAt = now()` (if not already set); leaving them clears `closedAt` (TS never cleared it on reopen). Entering `resolved` sends the `resolved` email response (if enabled) after commit.
 - Every successful update bumps `updatedAt`.
 
 ### 7.4 Messages
@@ -243,7 +243,7 @@ Errors: 403/404 (admin route, not a member), 401 `TOKEN_INVALID` on the public r
 
 - Created messages are always `senderType: "agent"` with `senderUserId` = caller. (TS let an agent post as `client` and could reopen tickets with it; removed. Client messages arrive only via public create, IMAP and the webhook.)
 - `isInternal: true` => stored as an internal note (`messageType: "note"`), never emailed.
-- Otherwise, unless `sendEmail === false`, the reply is emailed to the ticket's client over the project's SMTP with threading headers. **Mail is sent first; if SMTP fails the message is not saved** and the endpoint returns `502 MAIL_DELIVERY_FAILED` / `422` when the project has no SMTP configured (same as TS behaviour, kept on purpose).
+- Otherwise, unless `sendEmail === false`, the reply is handed to the outbound mailer (`OutboundMailer`, R23) **after the message commits**. A mail failure is logged and recorded in `email_logs` (`failed`); the endpoint still answers `201` (R22 decision, supersedes the earlier "mail first, 502" idea; R23 may revisit).
 - `attachmentIds` must belong to the same ticket and be unlinked; they are linked to the message (422 otherwise).
 - Posting bumps ticket `updatedAt`; a first agent reply sets `firstResponseAt`.
 - Inbound client messages (IMAP/webhook, not an HTTP route here) reopen `resolved`/`closed` tickets to `in_progress`, add an unread row, and de-duplicate on the email `Message-ID`.
@@ -297,6 +297,7 @@ Files live on the server filesystem behind `sd-storage`; the database stores onl
 |---|---|---|---|
 | `GET /unread/` | user | query `projectId?` | `data: UnreadItem[]` for the caller's projects, oldest first |
 | `DELETE /unread/ticket/:ticketId` | member | | `200 data: { deleted: n }` (the mock returned `{}`; the UI ignores the body) |
+| `POST /unread/ticket/:ticketId` | member | | `200 data: { created: bool }` marks the ticket unread (`false` if it already was) |
 
 Unread rows are per ticket (not per user), as in the TS product: any member opening the ticket clears it for everyone.
 

@@ -21,6 +21,7 @@ pub mod dto;
 pub mod error;
 pub mod extract;
 pub mod jwt;
+pub mod mailer;
 pub mod password;
 pub mod ratelimit;
 pub mod routes;
@@ -52,6 +53,7 @@ pub fn build_app_with(state: AppState, extra: Router<AppState>) -> Router {
     let cfg = state.config.clone();
     let versioned = Router::new()
         .nest("/auth", routes::auth::router())
+        .merge(routes::tickets::router())
         .merge(extra);
     let origins: Vec<HeaderValue> = cfg
         .cors_origins
