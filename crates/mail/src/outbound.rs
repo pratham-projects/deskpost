@@ -279,3 +279,17 @@ pub async fn send(cfg: &SmtpConfig, mail: &OutboundEmail) -> Result<String, Erro
         .map_err(|e| Error::Smtp(e.to_string()))?;
     Ok(id)
 }
+
+/// Connect, secure and authenticate against the server without sending anything (settings check).
+pub async fn check(cfg: &SmtpConfig) -> Result<(), Error> {
+    let t = transport(cfg)?;
+    let ok = tokio::time::timeout(cfg.total_timeout, t.test_connection())
+        .await
+        .map_err(|_| Error::Timeout("smtp check"))?
+        .map_err(|e| Error::Smtp(e.to_string()))?;
+    if ok {
+        Ok(())
+    } else {
+        Err(Error::Smtp("server did not accept the connection".into()))
+    }
+}

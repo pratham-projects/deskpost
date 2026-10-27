@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-10-27] R21 api projects
+
+- **Creation**: routes for projects, members, users, clients, templates, email responses and SMTP/IMAP settings with probes ([architecture](/architecture/projects-api.md)); `mail_guard` SSRF policy; `sd_mail::check_smtp`; db `update_with_mail`, `admin_update_guarded`, `delete_guarded`, `email_responses::project_of`.
+- **Decision**: TLS derived from port (no schema change); passwords sealed with project+field AAD; `POST /users/me/password` and read-only `/clients` added to `docs/API.md`.
+- **Lesson**: [two-step writes need one transaction](/wisdom/time-traps.md).
+
 ## [2026-10-27] R20 api auth
 
 - **Creation**: `crates/api` (lib + `api` binary: serve, migrate, bootstrap), config, envelope/errors, HS256 JWT, Argon2id hasher, sliding-window limiter, trusted-proxy client IP, auth routes, extractors, health; see [API crate](/architecture/api.md). 100+ tests, including a reusable tenant fixture.
