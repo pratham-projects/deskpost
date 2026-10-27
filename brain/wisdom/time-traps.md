@@ -25,3 +25,6 @@ Carried over from bunfiiliate:
 
 - Composite FK `ON DELETE SET NULL (col)` (PG15+) needs the referenced pair to be UNIQUE; use plain NO ACTION (not RESTRICT) on client_id so a project delete can cascade to clients and tickets in one statement.
 - `#[sqlx::test]` binds `$n` types by first use; cast (`$4::text`) when a param is used in both COALESCE and comparisons.
+- Refresh grace: when a parallel tab replays a just-rotated token, answer 401 but do NOT send a clearing `Set-Cookie`; it would delete the cookie the winning tab just received and log that tab out.
+- `tower-http` CORS adds `Access-Control-Allow-Credentials` even for non-allowed origins (harmless without `Allow-Origin`); assert on `Allow-Origin`, not credentials. `Option<Layer>` is not a `Layer` for axum `Route`: apply conditional layers with `if`.
+- Argon2 in debug builds takes seconds: tests build `Config` and override `argon2` with 8 KiB/t=1. `uuid` v4 needs the `v4` feature; `hmac::KeyInit` must be imported for `new_from_slice`.

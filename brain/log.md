@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-10-27] R20 api auth
+
+- **Creation**: `crates/api` (lib + `api` binary: serve, migrate, bootstrap), config, envelope/errors, HS256 JWT, Argon2id hasher, sliding-window limiter, trusted-proxy client IP, auth routes, extractors, health; see [API crate](/architecture/api.md). 100+ tests, including a reusable tenant fixture.
+- **Decision**: `/auth/config` kept (reports `signupEnabled`), `/health` split into liveness and `/health/db`, default body cap 64 KiB, new `METHOD_NOT_ALLOWED` code; all recorded in `docs/API.md`.
+- **Lesson**: [refresh grace must not clear the cookie](/wisdom/time-traps.md).
+
 ## [2026-10-27] R12 storage
 
 - **Creation**: `sd-storage` (Storage trait, FsStorage, DownloadSigner, check_quota), [architecture page](/architecture/storage.md) with TS weaknesses. S3 driver deferred.

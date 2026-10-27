@@ -10,7 +10,7 @@ is wrong, this document decides; every such case is listed in [Deviations](#devi
 - Base path `/api/v3` (`API_VERSION=v3`; the UI reads `NEXT_PUBLIC_API_VERSION`). Only `/health` is outside it.
 - JSON in/out (`Content-Type: application/json`) unless an endpoint says multipart or binary.
 - IDs are UUIDs (strings). Timestamps are RFC 3339 UTC strings (`2026-10-27T10:00:00Z`). Field names are camelCase.
-- Request bodies are capped (default 1 MiB JSON; upload endpoints have their own caps, section 9).
+- Request bodies are capped (default 64 KiB, `SD_BODY_LIMIT_BYTES`; upload and webhook routes raise their own cap, section 9). Over the cap: `413 PAYLOAD_TOO_LARGE`.
   Unknown JSON fields are ignored; missing/invalid required fields give `422 VALIDATION_ERROR`.
 
 ### Envelope
@@ -35,6 +35,7 @@ is wrong, this document decides; every such case is listed in [Deviations](#devi
 | 401 | `TOKEN_INVALID` | signature/format wrong, or user inactive |
 | 401 | `INVALID_CREDENTIALS` | sign-in failed (same message for unknown email and wrong password) |
 | 403 | `FORBIDDEN` | authenticated, member of the project, but role too low |
+| 405 | `METHOD_NOT_ALLOWED` | known path, wrong method (unknown paths are `404 NOT_FOUND`) |
 | 404 | `NOT_FOUND` | resource missing **or not visible to the caller** (tenant isolation never leaks existence) |
 | 409 | `CONFLICT` | unique violation (email, slug, domain, status already has an email response, ...) |
 | 413 | `PAYLOAD_TOO_LARGE` | body/file over cap; `details` lists offending files |
@@ -129,7 +130,8 @@ interface UnreadItem { id: string; ticketId: string; projectId: string; createdA
 
 | Method / path | Auth | Response |
 |---|---|---|
-| `GET /health` | public | `200 { success, data: { status: "ok", database: "up" } }`; `503` with `database: "down"` when Postgres is unreachable. No table names, no versions. |
+| `GET /health` | public | liveness: `200 { success, data: { status: "ok" } }`, no database access |
+| `GET /health/db` | public | readiness: `200 { success, data: { status: "ok", database: "up" } }`; `503 { success: false, data: { status: "error", database: "down" } }` when Postgres does not answer within 2 s. No table names, no versions. |
 
 ## 4. Auth (`/api/v3/auth`)
 
@@ -141,6 +143,7 @@ interface UnreadItem { id: string; ticketId: string; projectId: string; createdA
 | `POST /auth/signout` | refresh token optional | none | `200 data: { message }`; revokes the token's family; cookie cleared. Always 200. | |
 | `POST /auth/signout-all` | user | none | `200 data: { message }`; revokes every family of the caller | 401 |
 | `GET /auth/me` | user | none | `200 data: { user: User }` | 401 |
+| `GET /auth/config` | public | none | `200 data: { signupEnabled: bool }` (`SD_ALLOW_SIGNUP`, default true; when false, `POST /auth/signup` is `403 FORBIDDEN` and the first admin comes from `api bootstrap`) | |
 
 Bootstrap: the first user ever registered gets role `admin`; every later signup is `agent`.
 Passwords are Argon2id; the account is looked up by lower-cased email.
@@ -343,6 +346,6 @@ Fixed on purpose, do not port back:
 15. **Webhook** secret was compared with `!==`, replayable, and payloads (with secret header) appended to a log file; now HMAC + timestamp, no payload logging. "Project not found" is a 404, not a 200.
 16. **Soft deletes** (`deletedAt` on users/projects/tickets/messages/clients) are replaced by real deletes with FK cascades; there is no restore feature in the UI.
 17. **Health** exposed table names and DB pool config; now `{status, database}` only.
-18. **Dropped routes** (UI never calls them): `GET /auth/config`, `/clients/*`, `GET /template-responses/:id`, `GET /email-responses/:id`, `GET /attachments/ticket/:id` is kept (used by the viewer), `/test`, `/test-auth`, `/health/db-pool`, `/swagger` redirect.
+18. **Dropped routes** (UI never calls them): `/clients/*`, `GET /template-responses/:id`, `GET /email-responses/:id`, `GET /attachments/ticket/:id` is kept (used by the viewer), `/test`, `/test-auth`, `/health/db-pool`, `/swagger` redirect.
 19. **Error leakage**: TS returned raw `err.message` for 400s (SES token errors, DB messages such as "relation does not exist" were turned into empty lists/503). All 5xx are generic.
 20. **Mock vs TS drift resolved**: `POST /tickets/admin` status 201 (mock 200); `GET /tickets/:id/messages` default limit 50 (mock 5, UI always sends limit); delete endpoints return `{success:true,id}` consistently; `DELETE /unread/ticket/:id` returns `{deleted}`.
