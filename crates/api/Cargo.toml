@@ -15,8 +15,10 @@ path = "src/main.rs"
 [dependencies]
 sd-core.workspace = true
 sd-db.workspace = true
+sd-mail.workspace = true
+sd-storage.workspace = true
 argon2 = "0.5"
-axum = "0.8"
+axum = { version = "0.8", features = ["multipart"] }
 base64 = "0.23.1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 clap = { version = "4", features = ["derive", "env"] }
@@ -34,6 +36,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["serde", "v4"] }
 
 [dev-dependencies]
+sd-mail = { workspace = true, features = ["testing"] }
+tempfile = "3"
 http-body-util = "0.1"
 proptest = "1.12.0"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "macros", "uuid", "chrono"] }
