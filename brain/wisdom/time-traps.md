@@ -22,3 +22,6 @@ Carried over from bunfiiliate:
 - IMAP `UID SEARCH n:*` always returns the highest message even if its UID < n: filter `> last_uid` client-side or the poller re-delivers the last mail forever.
 - async-imap `Client::new` does not read the greeting (call `read_response()`); STARTTLS must be done on the raw socket before wrapping.
 
+
+- Composite FK `ON DELETE SET NULL (col)` (PG15+) needs the referenced pair to be UNIQUE; use plain NO ACTION (not RESTRICT) on client_id so a project delete can cascade to clients and tickets in one statement.
+- `#[sqlx::test]` binds `$n` types by first use; cast (`$4::text`) when a param is used in both COALESCE and comparisons.

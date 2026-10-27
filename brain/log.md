@@ -11,6 +11,10 @@
 
 - **Creation**: `sd-mail` (lettre sender, mail-parser inbound, async-imap `Mailbox`/`poll`, `testing` fakes), `docs/free-email.md`, [architecture/mail.md](/architecture/mail.md).
 - **Lesson**: [mail-parser and IMAP gotchas](/wisdom/time-traps.md).
+## [2026-10-27] R10 db + contract
+
+- **Creation**: `docs/API.md`, `crates/db` (sd-db) with migration 0001, 13 query modules, 69 DB tests. See [DB crate and API contract](/architecture/db-contract.md).
+- **Decision**: templates and clients are per project; API key hashed; `/clients` CRUD dropped; envelope `{success,...}` means R30 must change UI auth `status` checks.
 
 ## [2026-10-27] R00 scaffold
 
