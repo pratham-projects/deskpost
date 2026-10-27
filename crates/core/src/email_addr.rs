@@ -32,8 +32,9 @@ fn clip(s: &str) -> &str {
 
 /// One pass over RFC 5322 quoted-strings and (nested) comments, dropping both so neither a
 /// display name nor a comment can hide or fake the address. Quotes are literal inside comments
-/// and parentheses are literal inside quotes; a backslash escapes the next character.
-/// `None` when a quote or comment is left open: such input is not trusted at all.
+/// and parentheses are literal inside quotes; a backslash escapes the next character, and is
+/// rejected outside both.
+/// `None` when a quote or comment is left open or a backslash appears outside them: such input is not trusted at all.
 fn strip_quoted_and_comments(s: &str) -> Option<String> {
     let mut out = String::with_capacity(s.len());
     let (mut in_q, mut depth, mut esc) = (false, 0usize, false);
@@ -43,7 +44,9 @@ fn strip_quoted_and_comments(s: &str) -> Option<String> {
             continue;
         }
         match c {
-            '\\' => esc = true,
+            '\\' if in_q || depth > 0 => esc = true,
+            // invalid outside quotes/comments and a parser-confusion signal: trust nothing
+            '\\' => return None,
             '"' if depth == 0 => in_q = !in_q,
             '(' if !in_q => depth += 1,
             ')' if !in_q && depth > 0 => depth -= 1,
@@ -288,7 +291,10 @@ mod tests {
             ex(r#""{\"John\"} Smith" <john@example.com>"#),
             "john@example.com"
         );
-        assert_eq!(ex(r#"\"John\" <john@test.com>"#), "john@test.com");
+        // TS accepted backslash-escaped quotes outside a quoted-string; that is invalid
+        // RFC 5322 and a parser-confusion vector, so it is now rejected, not extracted.
+        assert!(!is_valid_email(&ex(r#"\"John\" <john@test.com>"#)));
+        assert!(!is_valid_email(&ex(r#"\" <fake@a.com> ""#)));
     }
 
     #[test]
