@@ -3,7 +3,7 @@
 | id | branch | status |
 |----|--------|--------|
 | R00 | scaffold | done (coordinator) |
-| R10 | feat/db-contract | todo |
+| R10 | feat/db-contract | done (pending merge) |
 | R11 | feat/core | todo |
 | R12 | feat/storage | todo |
 | R13 | feat/mail | todo |

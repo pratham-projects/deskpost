@@ -1,3 +1,3 @@
 # Architecture
 
-(filled in per task; start with `docs/PLAN.md` section 2)
+- [DB crate and API contract](/architecture/db-contract.md) — schema, tenant rules, query map
