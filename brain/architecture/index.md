@@ -8,3 +8,4 @@
 - [DB crate and API contract](/architecture/db-contract.md) — schema, tenant rules, query map
 - [API crate](/architecture/api.md) — config, envelope, auth, extractors, limits, how to add a route and its tests
 - [API tickets](/architecture/api-tickets.md) — tickets, messages, unread, presence, widget submit, OutboundMailer seam
+- [Projects and team API](/architecture/projects-api.md) — R21 routes, role matrix, secret and SSRF rules

@@ -133,6 +133,8 @@ dependencies = [
  "rand 0.10.3",
  "sd-core",
  "sd-db",
+ "sd-mail",
+ "sd-storage",
  "serde",
  "serde_json",
  "sha2 0.11.1",

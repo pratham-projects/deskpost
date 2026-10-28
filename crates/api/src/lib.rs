@@ -54,6 +54,7 @@ pub fn build_app_with(state: AppState, extra: Router<AppState>) -> Router {
     let versioned = Router::new()
         .nest("/auth", routes::auth::router())
         .merge(routes::tickets::router())
+        .merge(routes::project_routes())
         .merge(extra);
     let origins: Vec<HeaderValue> = cfg
         .cors_origins

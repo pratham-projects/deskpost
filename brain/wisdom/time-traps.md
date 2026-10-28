@@ -30,3 +30,6 @@ Carried over from bunfiiliate:
 - Argon2 in debug builds takes seconds: tests build `Config` and override `argon2` with 8 KiB/t=1. `uuid` v4 needs the `v4` feature; `hmac::KeyInit` must be imported for `new_from_slice`.
 - axum `Multipart` rejects a non-multipart content type with 400, not 415, and `Query<T>` failures are plain text: map both into `ApiError` yourself (`routes/tickets/mod.rs` `Params`, `create.rs`).
 - macOS `sed -i` needs `-i ''`; prefer a small python script for multi-line edits.
+- A route that writes two column groups (project + mail settings) must do it in one transaction, or a unique clash on the second half leaves the first applied; a `cat >>` heredoc run twice silently duplicated a whole test file (check `wc -l` after appending).
+- macOS `sed -i` needs `''` and an `&&` chain stops at its failure: the following heredoc never ran.
+- Limiter buckets are per IP and per rule: tests that sign in many times hit `Login` (10/min); give new endpoints their own `Rule`, and use `.peer(ip)` in tests that need a fresh bucket.

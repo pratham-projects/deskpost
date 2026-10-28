@@ -193,6 +193,47 @@ pub async fn update(
     patch: &ProjectPatch,
 ) -> Result<Option<Project>> {
     let mut tx = pool.begin().await?;
+    if !apply_patch(&mut tx, actor, id, patch).await? {
+        return Ok(None);
+    }
+    let project = reload(&mut tx, id).await?;
+    tx.commit().await?;
+    Ok(Some(project))
+}
+
+/// [`update`] and [`set_mail_settings`] in one transaction, so a clash on one half (slug vs mailbox
+/// address) leaves nothing half-applied.
+pub async fn update_with_mail(
+    pool: &Pool,
+    actor: Id,
+    id: Id,
+    patch: &ProjectPatch,
+    mail: &MailUpdate,
+) -> Result<Option<Project>> {
+    let mut tx = pool.begin().await?;
+    if !apply_patch(&mut tx, actor, id, patch).await?
+        || !apply_mail(&mut tx, actor, id, mail).await?
+    {
+        return Ok(None);
+    }
+    let project = reload(&mut tx, id).await?;
+    tx.commit().await?;
+    Ok(Some(project))
+}
+
+async fn reload(conn: &mut sqlx::PgConnection, id: Id) -> Result<Project> {
+    sqlx::query_as(&format!("SELECT {COLS} FROM projects p WHERE p.id = $1"))
+        .bind(id)
+        .fetch_one(conn)
+        .await
+}
+
+async fn apply_patch(
+    conn: &mut sqlx::PgConnection,
+    actor: Id,
+    id: Id,
+    patch: &ProjectPatch,
+) -> Result<bool> {
     let done = sqlx::query(&format!(
         "UPDATE projects p SET name = COALESCE($3, name), slug = COALESCE($4, slug),
                 domain = NULLIF(COALESCE($5, domain), ''), description = COALESCE($6, description),
@@ -209,17 +250,9 @@ pub async fn update(
     .bind(patch.status)
     .bind(patch.is_archived)
     .bind(patch.auto_close_days)
-    .execute(&mut *tx)
+    .execute(conn)
     .await?;
-    if done.rows_affected() == 0 {
-        return Ok(None);
-    }
-    let project = sqlx::query_as(&format!("SELECT {COLS} FROM projects p WHERE p.id = $1"))
-        .bind(id)
-        .fetch_one(&mut *tx)
-        .await?;
-    tx.commit().await?;
-    Ok(Some(project))
+    Ok(done.rows_affected() == 1)
 }
 
 /// Project-admin only. The old key stops matching immediately.
@@ -272,6 +305,20 @@ pub async fn set_mail_settings(
     u: &MailUpdate,
 ) -> Result<Option<Project>> {
     let mut tx = pool.begin().await?;
+    if !apply_mail(&mut tx, actor, id, u).await? {
+        return Ok(None);
+    }
+    let project = reload(&mut tx, id).await?;
+    tx.commit().await?;
+    Ok(Some(project))
+}
+
+async fn apply_mail(
+    conn: &mut sqlx::PgConnection,
+    actor: Id,
+    id: Id,
+    u: &MailUpdate,
+) -> Result<bool> {
     let done = sqlx::query(&format!(
         "UPDATE projects p SET
             reply_to_email = NULLIF(COALESCE($3, reply_to_email), ''),
@@ -301,17 +348,9 @@ pub async fn set_mail_settings(
     .bind(&u.imap_username)
     .bind(&u.imap_password_encrypted)
     .bind(&u.imap_folder)
-    .execute(&mut *tx)
+    .execute(conn)
     .await?;
-    if done.rows_affected() == 0 {
-        return Ok(None);
-    }
-    let project = sqlx::query_as(&format!("SELECT {COLS} FROM projects p WHERE p.id = $1"))
-        .bind(id)
-        .fetch_one(&mut *tx)
-        .await?;
-    tx.commit().await?;
-    Ok(Some(project))
+    Ok(done.rows_affected() == 1)
 }
 
 // ---- system side (no actor): public widget, inbound mail, workers ----

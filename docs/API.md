@@ -159,7 +159,8 @@ Sign-in with a user whose `status != active` fails with the generic credentials 
 | `POST /users` | global-admin | `{ email, password, name, role?: "admin"\|"agent" }` | `201 data: User` | 403, 409, 422 |
 | `GET /users/:id` | user (self, global-admin, or shares a project) | | `data: User` | 404 |
 | `PATCH /users/:id` | global-admin | `{ name?, role?, status?, phone?, timezone? }` | `data: User` | 403, 404, 422. Cannot demote/suspend the last active admin (409). |
-| `DELETE /users/:id` | global-admin | | `data: { success: true, id }` | 403, 404, 409 when the user still owns a project |
+| `DELETE /users/:id` | global-admin | | `data: { success: true, id }` | 403, 404, 409 when the user still owns a project or is the last active admin |
+| `POST /users/me/password` | user, rate limited (6/min per IP) | `{ currentPassword, newPassword (8..128) }` | `data: { message }`; every refresh family of the caller is revoked | 422 (`currentPassword` wrong), 429 |
 
 Deleting a user cascades their memberships and refresh families; their tickets/messages are kept (assignee/sender set to null).
 
@@ -182,7 +183,14 @@ A project is the tenant. `GET /projects` returns only projects the caller is a m
 | `PATCH /projects/:id/members/:userId` | project-admin | `{ role?, shouldNotify?, canViewAllTickets?, canManageTemplates? }` | `data: ProjectMember` | 403, 404; 409 when it would demote the project owner (a project always keeps an admin) |
 | `DELETE /projects/:id/members/:userId` | project-admin, or the member removing themself | | `data: { success: true }` | 404; 409 for the owner. Tickets assigned to the removed member become unassigned. |
 
+| `POST /projects/:id/test-smtp` | project-admin, rate limited (5/min per IP, shared with IMAP) | `{ host?, port?, tls?: "starttls"\|"implicit"\|"none", username?, password? }`; omitted fields come from the stored settings | `data: { ok, message }` (fixed messages, no server text) | 403, 404, 422, 429 |
+| `POST /projects/:id/test-imap` | same | same (`port` defaults to 993) | same | same |
+
 Notes:
+- The stored password is only used for a probe when host, port and username equal the stored ones; any other target needs `password` in the request (422 `password`). Resolved addresses are checked too (a name that resolves to a private address is refused). `tls: "none"` needs `SD_ALLOW_PRIVATE_MAIL_HOSTS=1`.
+- TLS is not stored: port 465/993 means implicit TLS, everything else STARTTLS.
+- Changing `smtpHost`/`smtpPort`/`smtpUsername` (or the IMAP equivalents) while a password is stored requires the password again in the same PATCH (`""` clears it), otherwise 422. PATCH applies project and mail fields in one transaction.
+- `DELETE /projects/:id` is owner only (403 for other admins); the owner cannot be demoted or removed (409).
 - SMTP/IMAP hosts are validated: loopback/private targets are rejected unless `SD_ALLOW_PRIVATE_MAIL_HOSTS=1` (`422`).
 - `smtpPort` defaults to 587, `smtpHost` has **no** provider default (TS defaulted to `smtp.gmail.com`); outbound mail needs a configured host or the reply endpoint returns 422 `SMTP not configured`.
 - `POST /projects` auto-created `canViewAllTickets=true` for the owner.
@@ -274,6 +282,15 @@ Project-scoped (TS stored them globally, visible to every user; the UI must now 
 | `DELETE /email-responses/:id` | project-admin | | `data: { success: true }` | 404 |
 
 Statuses are restricted to `created` and `resolved` (the only two the UI uses and the only two the TS product ever sends mail for; `pending`/`in_progress` rows existed in the schema but were dead). `subject` is always a string in responses (`""` when unset).
+
+### Clients - `/api/v3/clients` (read only)
+
+| Endpoint | Auth | Request | Response |
+|---|---|---|---|
+| `GET /clients` | member | query `projectId` (required), `q?`, `limit?`, `offset?` | `data: Client[]` (`id, projectId, email, name, phone, createdAt, updatedAt`) |
+| `GET /clients/:id` | member | | `data: Client` (404 for another project's client) |
+
+Clients are created by tickets and inbound mail; the TS create/update/delete routes stay dropped.
 
 ## 9. Attachments (`/api/v3/attachments`)
 

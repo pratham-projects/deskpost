@@ -116,3 +116,11 @@ pub async fn get_enabled(
     .fetch_optional(pool)
     .await
 }
+
+/// The project a response belongs to, for callers that must tell 404 from 403 before acting.
+pub async fn project_of(pool: &Pool, id: Id) -> Result<Option<Id>> {
+    sqlx::query_scalar("SELECT project_id FROM email_responses WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+}

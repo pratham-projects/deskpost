@@ -17,6 +17,10 @@ pub enum Rule {
     /// Unauthenticated widget endpoints.
     Public,
     Webhook,
+    /// SMTP/IMAP connection tests: each one makes the server dial out.
+    MailProbe,
+    /// Password changes by a signed-in user (guessing the current password).
+    PasswordChange,
 }
 
 impl Rule {
@@ -28,6 +32,8 @@ impl Rule {
             Self::Refresh => (30, Duration::from_secs(60)),
             Self::Public => (20, Duration::from_secs(60)),
             Self::Webhook => (120, Duration::from_secs(60)),
+            Self::MailProbe => (5, Duration::from_secs(60)),
+            Self::PasswordChange => (6, Duration::from_secs(60)),
         }
     }
 }
