@@ -203,10 +203,12 @@ pub async fn attachments_of_ticket(
 
 /// Download by signed token: the token already proves an authorised member asked for this object.
 pub async fn attachment_system(pool: &Pool, id: Id) -> Result<Option<Attachment>> {
-    sqlx::query_as(&format!("SELECT {ATT_COLS} FROM attachments a WHERE a.id = $1"))
-        .bind(id)
-        .fetch_optional(pool)
-        .await
+    sqlx::query_as(&format!(
+        "SELECT {ATT_COLS} FROM attachments a WHERE a.id = $1"
+    ))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
 }
 
 /// Delete an attachment row the actor may remove (its uploader or a project admin, and the ticket
@@ -227,11 +229,13 @@ pub async fn delete_attachment(pool: &Pool, actor: Id, id: Id) -> Result<Option<
 
 /// Roll back an upload that never became a message (system side, scoped to the ticket).
 pub async fn delete_attachments(pool: &Pool, ticket_id: Id, ids: &[Id]) -> Result<()> {
-    sqlx::query("DELETE FROM attachments WHERE ticket_id = $1 AND id = ANY($2) AND message_id IS NULL")
-        .bind(ticket_id)
-        .bind(ids)
-        .execute(pool)
-        .await?;
+    sqlx::query(
+        "DELETE FROM attachments WHERE ticket_id = $1 AND id = ANY($2) AND message_id IS NULL",
+    )
+    .bind(ticket_id)
+    .bind(ids)
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
@@ -392,15 +396,20 @@ pub async fn purge_finished(pool: &Pool, days: i32) -> Result<u64> {
 
 /// Record the outcome of a poll: `None` clears the last error. The caller strips secrets first.
 pub async fn set_imap_status(pool: &Pool, project_id: Id, error: Option<&str>) -> Result<()> {
-    sqlx::query("UPDATE projects SET imap_last_error = $2, imap_last_polled_at = now() WHERE id = $1")
-        .bind(project_id)
-        .bind(error)
-        .execute(pool)
-        .await?;
+    sqlx::query(
+        "UPDATE projects SET imap_last_error = $2, imap_last_polled_at = now() WHERE id = $1",
+    )
+    .bind(project_id)
+    .bind(error)
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
-pub async fn imap_status(pool: &Pool, project_id: Id) -> Result<Option<(Option<String>, Option<DateTime<Utc>>)>> {
+pub async fn imap_status(
+    pool: &Pool,
+    project_id: Id,
+) -> Result<Option<(Option<String>, Option<DateTime<Utc>>)>> {
     sqlx::query_as("SELECT imap_last_error, imap_last_polled_at FROM projects WHERE id = $1")
         .bind(project_id)
         .fetch_optional(pool)

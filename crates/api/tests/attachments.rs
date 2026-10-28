@@ -635,17 +635,18 @@ async fn upload_without_email_does_not_touch_the_mailer(pool: PgPool) {
             .header("x-message", "see attached");
     let r = k.t.send_body(req, Body::from("abc")).await;
     assert_eq!(r.status, 201);
-    let sent = k.recorder.sent.lock().unwrap();
-    assert_eq!(sent.len(), 1);
-    assert_eq!(
-        (
-            sent[0].body.as_str(),
-            sent[0].attachment_ids.len(),
-            sent[0].ticket_id
-        ),
-        ("see attached", 1, ticket.id)
-    );
-    drop(sent);
+    {
+        let sent = k.recorder.sent.lock().unwrap();
+        assert_eq!(sent.len(), 1);
+        assert_eq!(
+            (
+                sent[0].body.as_str(),
+                sent[0].attachment_ids.len(),
+                sent[0].ticket_id
+            ),
+            ("see attached", 1, ticket.id)
+        );
+    }
     let stored: Value = json!(
         sqlx::query_scalar::<_, Option<String>>(
             "SELECT email_message_id FROM messages WHERE body = 'see attached'"
