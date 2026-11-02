@@ -265,7 +265,7 @@ async fn starttls(tcp: &mut TcpStream) -> Result<(), Error> {
     let mut line = String::new();
     r.read_line(&mut line).await?;
     if !line.starts_with("* OK") && !line.starts_with("* PREAUTH") {
-        return Err(Error::Imap(format!("unexpected greeting: {}", line.trim())));
+        return Err(Error::Imap("unexpected greeting".to_owned()));
     }
     r.get_mut().write_all(b"sd1 STARTTLS\r\n").await?;
     loop {
@@ -306,12 +306,22 @@ impl ImapMailbox {
         .map_err(t("imap connect"))??;
         let (stream, greeted) = match cfg.tls {
             TlsMode::None => (Stream::Plain(tcp), false),
-            TlsMode::Implicit => (upgrade(&cfg.host, tcp).await?, false),
+            TlsMode::Implicit => (
+                timeout(io, upgrade(&cfg.host, tcp))
+                    .await
+                    .map_err(t("imap tls"))??,
+                false,
+            ),
             TlsMode::StartTls => {
                 timeout(io, starttls(&mut tcp))
                     .await
                     .map_err(t("imap starttls"))??;
-                (upgrade(&cfg.host, tcp).await?, true)
+                (
+                    timeout(io, upgrade(&cfg.host, tcp))
+                        .await
+                        .map_err(t("imap tls"))??,
+                    true,
+                )
             }
         };
         let mut client = async_imap::Client::new(stream);
