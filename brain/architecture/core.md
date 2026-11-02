@@ -29,6 +29,7 @@ Pure logic, no IO, no async. Consumed by `sd-db`, `sd-mail`, `sd-storage`, `api`
 - Leading-header stripping needs 2+ header lines; `Sent from my ...` signature only for short device phrases.
 - Bounce check matches the exact local part (TS prefix regex flagged `noreplyfan@`).
 - Encryption: TS padded the secret with `0` into the key, used no KDF, no version tag, no AAD.
+- Address parser rejects backslashes outside quoted-strings and unbalanced quotes/comments (TS accepted `\"John\" <a@b>`).
 - Subject helper strips control characters from the project name (header injection).
 - HTML `<blockquote>` becomes `>` lines so HTML-only replies are stripped.
 
