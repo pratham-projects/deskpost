@@ -336,8 +336,8 @@ The UI calls POST every ~30 s while a ticket is open and DELETE on close.
 `X-Webhook-Timestamp` (unix seconds, within 5 min) and `X-Webhook-Signature` = hex HMAC-SHA256 of `"{timestamp}.{raw body}"` with `SD_WEBHOOK_SECRET` (constant-time compare). Replaces TS's bare `X-Webhook-Secret` header (replayable, logged to disk with the secret in `incoming_emails.log`; no logging of payloads now).
 
 Body: `{ from, to, subject?, body?, bodyHtml?, ticketNumber?: number|null, messageId?, inReplyTo?, references?, attachments?: [{ filename?, contentType?, contentBase64 }] }` (TS took attachment `url`s into S3; now inline base64, size-capped).
-- Project = the one whose `smtpEmail` equals the lower-cased `to` address (unknown => `404`, TS answered 200 with `success:false`).
-- `ticketNumber` (or a threading match on `inReplyTo`/`references`) appends to that ticket **of that project only**; otherwise a ticket is created. Replayed `messageId` => `200` no-op (dedup via unique message id).
+- Project = the one whose `smtpEmail` equals the lower-cased `to` address (active, non-archived projects only; the mailbox must be proven reachable by the admin's own SMTP/IMAP login before it is saved, R21; unknown => `404`, TS answered 200 with `success:false`).
+- `ticketNumber` (or a threading match on `inReplyTo`/`references`) appends to that ticket **of that project only, and only when the sender address equals the ticket client's email or an address already present on the ticket** (ticket numbers are sequential and guessable; anything else opens a new ticket); otherwise a ticket is created. Replayed `messageId` => `200` no-op (dedup via unique message id).
 - Auto-replies (`mailer-daemon`, `postmaster`, `Auto-Submitted`) are ignored with `200`.
 - Success `201 data: { ticketId, messageId, created: bool }`; `401` bad signature, `422`, `429`.
 

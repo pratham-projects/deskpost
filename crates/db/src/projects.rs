@@ -363,9 +363,9 @@ pub async fn find_by_api_key_hash(pool: &Pool, api_key_hash: &str) -> Result<Opt
         .await
 }
 
-/// Inbound mail routing: the one project whose mailbox address is `email`.
+/// Inbound mail routing: the one active, non-archived project whose mailbox address is `email`.
 pub async fn find_by_smtp_email(pool: &Pool, email: &str) -> Result<Option<Id>> {
-    sqlx::query_scalar("SELECT id FROM projects WHERE lower(smtp_email) = lower($1)")
+    sqlx::query_scalar("SELECT id FROM projects WHERE lower(smtp_email) = lower($1) AND status = 'active' AND NOT is_archived")
         .bind(email)
         .fetch_optional(pool)
         .await
