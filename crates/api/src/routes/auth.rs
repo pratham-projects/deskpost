@@ -161,8 +161,8 @@ async fn signin(
             found.as_ref().map(|u| u.password_hash.clone()),
         )
         .await;
-    if found.is_some() && !matched {
-        s.limiter.account_failed(req.email.trim());
+    if let Some(u) = found.as_ref().filter(|_| !matched) {
+        s.limiter.account_failed(&u.email);
     }
     // One failure for unknown email, wrong password and inactive account alike.
     let user = found

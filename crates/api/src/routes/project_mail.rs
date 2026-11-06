@@ -46,6 +46,12 @@ pub fn router() -> Router<AppState> {
         .route("/{id}/mailbox/approve", post(approve_mailbox))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ApproveReq {
+    smtp_email: String,
+}
+
 /// Approve the project's mailbox address for inbound webhook routing. Global admins only: the
 /// operator controls the mail provider, a tenant cannot prove an address by logging in to a server
 /// of its own choosing or by receiving a code through it.
@@ -53,9 +59,13 @@ async fn approve_mailbox(
     State(s): State<AppState>,
     GlobalAdmin(_): GlobalAdmin,
     ApiPath(id): ApiPath<sd_db::Id>,
+    ApiJson(req): ApiJson<ApproveReq>,
 ) -> Result<Envelope<serde_json::Value>, ApiError> {
-    if !projects::approve_mailbox(&s.pool, id).await? {
-        return Err(ApiError::not_found("Mailbox"));
+    // The address the admin looked at; a tenant that changed it in the meantime is not approved.
+    if !projects::approve_mailbox(&s.pool, id, req.smtp_email.trim()).await? {
+        return Err(ApiError::Conflict(
+            "The project's mailbox address is not the one given.".into(),
+        ));
     }
     Ok(Envelope::ok(serde_json::json!({ "approved": true })))
 }

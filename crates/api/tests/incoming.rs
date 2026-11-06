@@ -677,10 +677,30 @@ async fn only_a_global_admin_can_approve_a_mailbox(pool: PgPool) {
     let owner = k.t.signin("owner@example.com").await.access_token;
     let root = k.t.signin("root@example.com").await.access_token;
     let path = format!("/projects/{}/mailbox/approve", project.id);
-    let r = k.t.send(k.t.post(&path).bearer(&owner)).await;
+    let r =
+        k.t.send_json(
+            k.t.post(&path).bearer(&owner),
+            json!({ "smtpEmail": MAILBOX }),
+        )
+        .await;
     assert_eq!(r.status, 403, "the project owner cannot approve itself");
     assert_eq!(k.hook(mail("<c1@x>", "Hi", "before")).await.status, 404);
-    let r = k.t.send(k.t.post(&path).bearer(&root)).await;
+    let stale =
+        k.t.send_json(
+            k.t.post(&path).bearer(&root),
+            json!({ "smtpEmail": "other@evil.test" }),
+        )
+        .await;
+    assert_eq!(
+        stale.status, 409,
+        "approval is bound to the reviewed address"
+    );
+    let r =
+        k.t.send_json(
+            k.t.post(&path).bearer(&root),
+            json!({ "smtpEmail": MAILBOX }),
+        )
+        .await;
     assert_eq!(r.status, 200, "{}", r.text());
     assert_eq!(k.hook(mail("<c2@x>", "Hi", "after")).await.status, 201);
 }

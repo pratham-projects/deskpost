@@ -408,13 +408,14 @@ pub async fn set_imap_cursor(
     Ok(r.rows_affected() == 1)
 }
 
-/// Operator approval of the project's current mailbox address for webhook routing. `false` when
-/// the project has no address. Cleared again by a trigger when the address or servers change.
-pub async fn approve_mailbox(pool: &Pool, id: Id) -> Result<bool> {
+/// Operator approval of the mailbox address the operator reviewed (`email`) for webhook routing.
+/// `false` when the project no longer has that address. Cleared again by a trigger when the address or servers change.
+pub async fn approve_mailbox(pool: &Pool, id: Id, email: &str) -> Result<bool> {
     let n = sqlx::query(
-        "UPDATE projects SET mail_verified_at = now() WHERE id = $1 AND smtp_email IS NOT NULL",
+        "UPDATE projects SET mail_verified_at = now() WHERE id = $1 AND lower(smtp_email) = lower($2)",
     )
     .bind(id)
+    .bind(email)
     .execute(pool)
     .await?
     .rows_affected();
