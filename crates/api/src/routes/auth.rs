@@ -146,7 +146,12 @@ async fn signin(
         f.add("password", "Password is required.");
     }
     f.finish()?;
-    s.limiter.account_check(req.email.trim())?;
+    // A throttled account answers like a wrong password (after the same hashing work), so the
+    // throttle cannot tell a caller which emails exist.
+    if s.limiter.account_check(req.email.trim()).is_err() {
+        s.hasher.verify(req.password, None).await;
+        return Err(ApiError::InvalidCredentials);
+    }
 
     let found = users::get_by_email(&s.pool, req.email.trim()).await?;
     let matched = s
