@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Backup: one pg_dump (custom format) + a tarball of the file storage dir, with 14-day retention.
-#   DATABASE_URL=postgres://senddesk:...@localhost:5432/senddesk STORAGE_DIR=/var/lib/senddesk/storage \
+#   DATABASE_URL=postgres://senddesk:...@localhost:5432/senddesk   (password is moved to PGPASSWORD, not passed in argv) STORAGE_DIR=/var/lib/senddesk/storage \
 #     BACKUP_DIR=/var/backups/senddesk scripts/backup.sh
 # Restore steps: docs/OPERATIONS.md. Cron example: 15 3 * * * /opt/senddesk/scripts/backup.sh
 # Env: DATABASE_URL (required), STORAGE_DIR (default /var/lib/senddesk/storage), BACKUP_DIR (default ./backups),
@@ -11,6 +11,17 @@ STORAGE_DIR=${STORAGE_DIR:-/var/lib/senddesk/storage}
 BACKUP_DIR=${BACKUP_DIR:-./backups}
 KEEP_DAYS=${KEEP_DAYS:-14}
 case "$KEEP_DAYS" in '' | *[!0-9]*) echo "KEEP_DAYS must be a number" >&2; exit 2 ;; esac
+
+# Keep the password out of argv (visible in `ps`): move it from the URL into PGPASSWORD.
+# A password-less URL works with ~/.pgpass or an already exported PGPASSWORD.
+if [ -z "${PGPASSWORD:-}" ]; then
+  PGPASSWORD=$(python3 -I -c 'import sys,urllib.parse as u; print(u.unquote(u.urlsplit(sys.argv[1]).password or ""), end="")' "$DATABASE_URL")
+fi
+[ -n "$PGPASSWORD" ] && export PGPASSWORD || unset PGPASSWORD
+DATABASE_URL=$(python3 -I -c 'import sys,urllib.parse as u
+p=u.urlsplit(sys.argv[1]); n=p.netloc.rpartition("@")[2]
+n=(p.username and u.quote(u.unquote(p.username), safe="")+"@" or "")+n
+print(u.urlunsplit((p.scheme,n,p.path,p.query,p.fragment)), end="")' "$DATABASE_URL")
 
 umask 077 # dumps contain customer data and sealed credentials
 mkdir -p "$BACKUP_DIR"
@@ -37,6 +48,7 @@ if [ -d "$STORAGE_DIR" ]; then
   mv "$files_out.part" "$files_out"
 else
   echo "warning: STORAGE_DIR $STORAGE_DIR not found, skipping files" >&2
+  files_out=
 fi
 
 if [ "$KEEP_DAYS" -gt 0 ]; then
