@@ -1,0 +1,31 @@
+# /etc/systemd/system/senddesk-api.service
+# Install: copy the release binary to /usr/local/bin/api, put secrets in /etc/senddesk/env (chmod 600),
+# run `api migrate` once, then `systemctl enable --now senddesk-api`.
+[Unit]
+Description=SendDesk API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=senddesk
+Group=senddesk
+EnvironmentFile=/etc/senddesk/env
+Environment=STORAGE_DIR=/var/lib/senddesk/storage
+ExecStart=/usr/local/bin/api serve
+Restart=on-failure
+RestartSec=3
+StateDirectory=senddesk
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+ReadWritePaths=/var/lib/senddesk
+
+[Install]
+WantedBy=multi-user.target

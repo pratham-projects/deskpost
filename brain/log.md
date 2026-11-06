@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-11-06] R31 deploy docs
+
+- **Creation**: multi-stage `Dockerfile` (targets `api`, `web`), `docker-compose.yml` (postgres, migrate, app, web, mailpit), `deploy/Caddyfile`, `deploy/senddesk-api.service`, `.env.example` (every var in `config.rs` and `mail_config.rs`), `SECURITY.md`, new `README.md` linking the free-email guide.
+- **Decision**: web ships as `next start` under bun, not a static export, because `apps/web/next.config.mjs` is out of scope. `NEXT_PUBLIC_*` are build args.
+- **Lesson**: docker is not installed locally, so images and compose were not built; only YAML syntax and env-var coverage were checked.
+
 ## [2026-11-06] R30 web live
 
 - **Creation**: `apps/web/lib/api/config.ts` (`NEXT_PUBLIC_API_URL`, default same origin; `NEXT_PUBLIC_API_VERSION`, default v3); `output: "export"` to `apps/web/out`; `.env.example`.
