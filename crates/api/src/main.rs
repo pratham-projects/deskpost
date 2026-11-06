@@ -63,6 +63,11 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Serve => {
             let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
+            if config.trusted_proxies.is_empty() {
+                tracing::warn!(
+                    "SD_TRUSTED_PROXIES is empty: behind a reverse proxy every client shares the proxy's address and one rate-limit bucket"
+                );
+            }
             let state = AppState::new(pool, config)?;
             api::routes::tickets::spawn_presence_gc(state.pool.clone());
             let jobs = api::workers::spawn(state.clone());

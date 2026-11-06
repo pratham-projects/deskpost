@@ -146,6 +146,7 @@ async fn signin(
         f.add("password", "Password is required.");
     }
     f.finish()?;
+    s.limiter.check_name(Rule::LoginAccount, req.email.trim())?;
 
     let found = users::get_by_email(&s.pool, req.email.trim()).await?;
     let matched = s

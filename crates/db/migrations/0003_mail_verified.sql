@@ -1,5 +1,9 @@
--- A mailbox address only routes inbound webhook mail after the project proved it can log in with it.
-ALTER TABLE projects ADD COLUMN mail_verified_at timestamptz;
+-- A mailbox address only routes inbound webhook mail after someone read a code sent to that address.
+ALTER TABLE projects
+    ADD COLUMN mail_verified_at timestamptz,
+    ADD COLUMN mail_verify_hash text,
+    ADD COLUMN mail_verify_email text,
+    ADD COLUMN mail_verify_expires_at timestamptz;
 
 CREATE FUNCTION projects_reset_mail_verified() RETURNS trigger AS $$
 BEGIN

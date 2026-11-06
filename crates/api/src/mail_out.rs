@@ -246,6 +246,12 @@ impl SmtpMailer {
             &mail.attachment_ids,
         )
         .await?;
+        let total: i64 = rows.iter().map(|a| a.size_bytes.max(0)).sum();
+        if total as usize > self.config.mail.max_request_bytes {
+            return Err(MailError::Internal(
+                "attachments are larger than the mail size limit".into(),
+            ));
+        }
         if rows.len() != mail.attachment_ids.len() {
             return Err(MailError::Internal(
                 "attachment does not belong to the ticket".into(),
@@ -473,4 +479,34 @@ async fn send_job(state: &AppState, job: &mailq::OutboxJob) -> Result<String, (S
         .await
         .map(|id| bare(&id))
         .map_err(|e| (redact(&e.to_string(), &[&password]), true))
+}
+
+/// Mail the mailbox-ownership code to `to` through the project's own SMTP settings.
+pub async fn send_mailbox_code(
+    state: &AppState,
+    project_id: Id,
+    to: &str,
+    code: &str,
+) -> Result<(), MailError> {
+    let settings = projects::mail_settings(&state.pool, project_id)
+        .await?
+        .ok_or(MailError::NotConfigured)?;
+    let (smtp, password) = smtp_config(
+        &settings,
+        &state.secrets,
+        state.config.mail.plaintext,
+        state.config.allow_private_mail_hosts,
+    )?;
+    let email = OutboundEmail {
+        to: vec![to.to_string()],
+        subject: "Confirm your SendDesk mailbox".into(),
+        text: Some(format!(
+            "Your SendDesk mailbox confirmation code is {code}\n\nIt expires in 15 minutes. If you did not ask for it, ignore this mail."
+        )),
+        ..Default::default()
+    };
+    sd_mail::send(&smtp, &email)
+        .await
+        .map(|_| ())
+        .map_err(|e| MailError::Delivery(redact(&e.to_string(), &[&password])))
 }

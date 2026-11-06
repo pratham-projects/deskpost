@@ -35,3 +35,4 @@ Carried over from bunfiiliate:
 - Limiter buckets are per IP and per rule: tests that sign in many times hit `Login` (10/min); give new endpoints their own `Rule`, and use `.peer(ip)` in tests that need a fresh bucket.
 - `navigator.sendBeacon` can only POST: a "DELETE" via `_method` body registers a heartbeat instead. Use `fetch(..., {method:'DELETE', keepalive:true})` on unload.
 - Turbopack does not dead-code-eliminate `require()`/`import()` behind `process.env.X === "1"`; the mock stayed in the bundle. Swap modules with `turbopack.resolveAlias` in `next.config.mjs` and grep `out/` for a seed string.
+- **login to a chosen server proves nothing**: a mailbox claim must be checked by a code sent to the address itself; an IMAP/SMTP login only shows the user controls some server.

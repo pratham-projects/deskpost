@@ -663,3 +663,48 @@ async fn unverified_mailbox_does_not_receive_webhook_mail(pool: PgPool) {
     let r = k.hook(mail("<sq2@x>", "Hello", "again")).await;
     assert_eq!(r.status, 404);
 }
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn mailbox_code_round_trip_verifies_the_address(pool: PgPool) {
+    let k = Kit::new(pool).await;
+    let (owner, project) = k.acme().await;
+    let smtp = sd_mail::testing::FakeSmtp::start().await;
+    k.configure_mail(project.id, smtp.port(), None).await;
+    sqlx::query("UPDATE projects SET mail_verified_at = NULL WHERE id = $1")
+        .bind(project.id)
+        .execute(&k.t.pool)
+        .await
+        .unwrap();
+    let tok = k.t.signin("owner@example.com").await.access_token;
+    let _ = owner;
+    let path = |p: &str| format!("/projects/{}/mailbox/{p}", project.id);
+    let wrong =
+        k.t.send_json(
+            k.t.post(&path("verify")).bearer(&tok),
+            json!({"code":"nope"}),
+        )
+        .await;
+    assert_eq!(wrong.status, 422);
+    let sent = k.t.send(k.t.post(&path("send-code")).bearer(&tok)).await;
+    assert_eq!(sent.status, 200, "{}", sent.text());
+    let raw = String::from_utf8_lossy(&smtp.messages()[0].data).to_string();
+    let code = raw
+        .split("code is ")
+        .nth(1)
+        .and_then(|r| r.split_whitespace().next())
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        k.hook(mail("<c1@x>", "Hi", "before")).await.status,
+        404,
+        "not routed before the code is entered"
+    );
+    let ok =
+        k.t.send_json(
+            k.t.post(&path("verify")).bearer(&tok),
+            json!({"code": code}),
+        )
+        .await;
+    assert_eq!(ok.status, 200, "{}", ok.text());
+    assert_eq!(k.hook(mail("<c2@x>", "Hi", "after")).await.status, 201);
+}

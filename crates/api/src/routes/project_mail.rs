@@ -43,6 +43,58 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/{id}/test-smtp", post(test_smtp))
         .route("/{id}/test-imap", post(test_imap))
+        .route("/{id}/mailbox/send-code", post(send_code))
+        .route("/{id}/mailbox/verify", post(verify_code))
+}
+
+const CODE_TTL_SECS: i64 = 15 * 60;
+
+/// Mail a one-time code to the project's mailbox address. Only whoever can read that mailbox can
+/// finish `verify`; logging in to a server of one's own choosing proves nothing.
+async fn send_code(
+    State(s): State<AppState>,
+    ClientIp(ip): ClientIp,
+    AuthUser(user): AuthUser,
+    ApiPath(id): ApiPath<sd_db::Id>,
+) -> Result<Envelope<serde_json::Value>, ApiError> {
+    load(&s, ip, user.id, id).await?;
+    let code = uuid::Uuid::new_v4().simple().to_string()[..10].to_string();
+    let to = projects::start_mail_verification(
+        &s.pool,
+        id,
+        &sd_core::api_key::hash_api_key(&code),
+        CODE_TTL_SECS,
+    )
+    .await?
+    .ok_or_else(|| {
+        let mut f = Fields::default();
+        f.add("smtpEmail", "Save a mailbox address first.");
+        f.finish().unwrap_err()
+    })?;
+    crate::mail_out::send_mailbox_code(&s, id, &to, &code).await?;
+    Ok(Envelope::ok(serde_json::json!({ "sentTo": to })))
+}
+
+#[derive(Deserialize)]
+struct VerifyReq {
+    code: String,
+}
+
+async fn verify_code(
+    State(s): State<AppState>,
+    ClientIp(ip): ClientIp,
+    AuthUser(user): AuthUser,
+    ApiPath(id): ApiPath<sd_db::Id>,
+    ApiJson(req): ApiJson<VerifyReq>,
+) -> Result<Envelope<serde_json::Value>, ApiError> {
+    load(&s, ip, user.id, id).await?;
+    let hash = sd_core::api_key::hash_api_key(req.code.trim());
+    if !projects::confirm_mail_verification(&s.pool, id, &hash).await? {
+        let mut f = Fields::default();
+        f.add("code", "The code is wrong or expired.");
+        return Err(f.finish().unwrap_err());
+    }
+    Ok(Envelope::ok(serde_json::json!({ "verified": true })))
 }
 
 /// Mail part of the create/patch bodies. `None` = not sent = unchanged; `""` clears.
@@ -239,17 +291,6 @@ struct ProbeReq {
     password: Option<String>,
 }
 
-impl ProbeReq {
-    /// The probe used the saved settings only, so a success proves the saved mailbox.
-    fn is_saved_only(&self) -> bool {
-        self.host.is_none()
-            && self.port.is_none()
-            && self.tls.is_none()
-            && self.username.is_none()
-            && self.password.is_none()
-    }
-}
-
 #[derive(Serialize)]
 struct ProbeResult {
     ok: bool,
@@ -379,7 +420,6 @@ async fn test_smtp(
     ApiJson(req): ApiJson<ProbeReq>,
 ) -> Result<Envelope<ProbeResult>, ApiError> {
     let cur = load(&s, ip, user.id, id).await?;
-    let saved_only = req.is_saved_only();
     let t = resolve(&s, req, &cur, Kind::Smtp)?;
     guard(&s, &t).await?;
     let from = cur
@@ -393,9 +433,6 @@ async fn test_smtp(
     cfg.io_timeout = PROBE_TIMEOUT;
     cfg.total_timeout = PROBE_TIMEOUT * 2;
     let r = sd_mail::check_smtp(&cfg).await;
-    if r.is_ok() && saved_only && cfg.username.is_some() {
-        sd_db::projects::mark_mail_verified(&s.pool, id).await?;
-    }
     Ok(Envelope::ok(result(r)))
 }
 
@@ -407,7 +444,6 @@ async fn test_imap(
     ApiJson(req): ApiJson<ProbeReq>,
 ) -> Result<Envelope<ProbeResult>, ApiError> {
     let cur = load(&s, ip, user.id, id).await?;
-    let saved_only = req.is_saved_only();
     let t = resolve(&s, req, &cur, Kind::Imap)?;
     guard(&s, &t).await?;
     let mut cfg = ImapConfig::new(
@@ -428,9 +464,6 @@ async fn test_imap(
         }
         Err(e) => Err(e),
     };
-    if r.is_ok() && saved_only {
-        sd_db::projects::mark_mail_verified(&s.pool, id).await?;
-    }
     Ok(Envelope::ok(result(r)))
 }
 

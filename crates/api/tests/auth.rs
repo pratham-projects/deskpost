@@ -774,3 +774,25 @@ async fn bootstrap_validates_and_refuses_duplicates(pool: PgPool) {
         .unwrap_err();
     assert_eq!(e.code(), "CONFLICT");
 }
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn one_account_cannot_be_guessed_from_many_addresses(pool: PgPool) {
+    let t = TestApp::new(pool).await;
+    t.user("victim@example.com", Role::Agent).await;
+    let mut last = StatusCode::OK;
+    for n in 0..25u8 {
+        let req = t.post("/auth/signin").peer(&format!("198.51.100.{n}"));
+        let r = t
+            .send_json(
+                req,
+                json!({ "email": "Victim@Example.com", "password": "wrong-password" }),
+            )
+            .await;
+        last = r.status;
+    }
+    assert_eq!(
+        last,
+        StatusCode::TOO_MANY_REQUESTS,
+        "per-account throttle applies across addresses"
+    );
+}
