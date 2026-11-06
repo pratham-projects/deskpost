@@ -21,8 +21,6 @@ pub enum Rule {
     MailProbe,
     /// Password changes by a signed-in user (guessing the current password).
     PasswordChange,
-    /// Sign-in attempts against one account, from anywhere (keyed by the lower-cased email).
-    LoginAccount,
 }
 
 impl Rule {
@@ -36,20 +34,18 @@ impl Rule {
             Self::Webhook => (120, Duration::from_secs(60)),
             Self::MailProbe => (5, Duration::from_secs(60)),
             Self::PasswordChange => (6, Duration::from_secs(60)),
-            Self::LoginAccount => (20, Duration::from_secs(600)),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum Key {
-    Ip(IpAddr),
-    Name(String),
-}
+const ACCOUNT_FAILURES: usize = 20;
+const ACCOUNT_WINDOW: Duration = Duration::from_secs(600);
 
 pub struct RateLimiter {
     max_keys: usize,
-    hits: Mutex<HashMap<(Rule, Key), VecDeque<Instant>>>,
+    hits: Mutex<HashMap<(Rule, IpAddr), VecDeque<Instant>>>,
+    /// Failed sign-ins per existing account, in their own table so address buckets cannot evict them.
+    failures: Mutex<HashMap<String, VecDeque<Instant>>>,
 }
 
 impl RateLimiter {
@@ -57,32 +53,76 @@ impl RateLimiter {
         Self {
             max_keys: max_keys.max(1),
             hits: Mutex::default(),
+            failures: Mutex::default(),
         }
     }
 
     pub fn check(&self, rule: Rule, ip: IpAddr) -> Result<(), ApiError> {
-        self.check_key_at(rule, Key::Ip(bucket(ip)), Instant::now())
+        self.check_at(rule, ip, Instant::now())
             .map_err(|retry| ApiError::RateLimited {
                 retry_after_secs: retry.as_secs_f64().ceil().max(1.0) as u64,
             })
     }
 
-    /// Limit by a name (an account), not by address.
-    pub fn check_name(&self, rule: Rule, name: &str) -> Result<(), ApiError> {
-        self.check_key_at(rule, Key::Name(name.to_lowercase()), Instant::now())
-            .map_err(|retry| ApiError::RateLimited {
-                retry_after_secs: retry.as_secs_f64().ceil().max(1.0) as u64,
-            })
+    /// Reject sign-in for an account that already failed too often, whoever asks. Only wrong
+    /// passwords count (see [`Self::account_failed`]) and only for accounts that exist.
+    pub fn account_check(&self, name: &str) -> Result<(), ApiError> {
+        let now = Instant::now();
+        let mut f = self.failures.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(q) = f.get_mut(&name.to_lowercase()) else {
+            return Ok(());
+        };
+        while q
+            .front()
+            .is_some_and(|t| now.duration_since(*t) >= ACCOUNT_WINDOW)
+        {
+            q.pop_front();
+        }
+        if q.len() >= ACCOUNT_FAILURES {
+            let wait = ACCOUNT_WINDOW - now.duration_since(*q.front().expect("not empty"));
+            return Err(ApiError::RateLimited {
+                retry_after_secs: wait.as_secs_f64().ceil().max(1.0) as u64,
+            });
+        }
+        Ok(())
+    }
+
+    /// Count a wrong password against an existing account.
+    pub fn account_failed(&self, name: &str) {
+        let now = Instant::now();
+        let mut f = self.failures.lock().unwrap_or_else(|e| e.into_inner());
+        if f.len() >= self.max_keys {
+            f.retain(|_, q| {
+                q.back()
+                    .is_some_and(|t| now.duration_since(*t) < ACCOUNT_WINDOW)
+            });
+        }
+        // Still full of live entries: keep counting the ones we have rather than evicting them.
+        let key = name.to_lowercase();
+        if f.len() < self.max_keys || f.contains_key(&key) {
+            let q = f.entry(key).or_default();
+            while q
+                .front()
+                .is_some_and(|t| now.duration_since(*t) >= ACCOUNT_WINDOW)
+            {
+                q.pop_front();
+            }
+            q.push_back(now);
+        }
+    }
+
+    /// A correct password resets the count.
+    pub fn account_ok(&self, name: &str) {
+        self.failures
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&name.to_lowercase());
     }
 
     /// `Err(wait)` when the client is over quota. Rejected requests are not recorded.
     pub fn check_at(&self, rule: Rule, ip: IpAddr, now: Instant) -> Result<(), Duration> {
-        self.check_key_at(rule, Key::Ip(bucket(ip)), now)
-    }
-
-    fn check_key_at(&self, rule: Rule, key: Key, now: Instant) -> Result<(), Duration> {
         let (limit, window) = rule.quota();
-        let key = (rule, key);
+        let key = (rule, bucket(ip));
         let mut hits = self.hits.lock().unwrap_or_else(|e| e.into_inner());
         if !hits.contains_key(&key) && hits.len() >= self.max_keys {
             hits.retain(|(r, _), q| {
@@ -93,7 +133,7 @@ impl RateLimiter {
                 let oldest = hits
                     .iter()
                     .min_by_key(|(_, q)| q.back().copied())
-                    .map(|(k, _)| k.clone());
+                    .map(|(k, _)| *k);
                 if let Some(k) = oldest {
                     hits.remove(&k);
                 }

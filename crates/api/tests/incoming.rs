@@ -665,46 +665,22 @@ async fn unverified_mailbox_does_not_receive_webhook_mail(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn mailbox_code_round_trip_verifies_the_address(pool: PgPool) {
+async fn only_a_global_admin_can_approve_a_mailbox(pool: PgPool) {
     let k = Kit::new(pool).await;
-    let (owner, project) = k.acme().await;
-    let smtp = sd_mail::testing::FakeSmtp::start().await;
-    k.configure_mail(project.id, smtp.port(), None).await;
+    let (_, project) = k.acme().await;
     sqlx::query("UPDATE projects SET mail_verified_at = NULL WHERE id = $1")
         .bind(project.id)
         .execute(&k.t.pool)
         .await
         .unwrap();
-    let tok = k.t.signin("owner@example.com").await.access_token;
-    let _ = owner;
-    let path = |p: &str| format!("/projects/{}/mailbox/{p}", project.id);
-    let wrong =
-        k.t.send_json(
-            k.t.post(&path("verify")).bearer(&tok),
-            json!({"code":"nope"}),
-        )
-        .await;
-    assert_eq!(wrong.status, 422);
-    let sent = k.t.send(k.t.post(&path("send-code")).bearer(&tok)).await;
-    assert_eq!(sent.status, 200, "{}", sent.text());
-    let raw = String::from_utf8_lossy(&smtp.messages()[0].data).to_string();
-    let code = raw
-        .split("code is ")
-        .nth(1)
-        .and_then(|r| r.split_whitespace().next())
-        .unwrap()
-        .to_string();
-    assert_eq!(
-        k.hook(mail("<c1@x>", "Hi", "before")).await.status,
-        404,
-        "not routed before the code is entered"
-    );
-    let ok =
-        k.t.send_json(
-            k.t.post(&path("verify")).bearer(&tok),
-            json!({"code": code}),
-        )
-        .await;
-    assert_eq!(ok.status, 200, "{}", ok.text());
+    k.t.user("root@example.com", Role::Admin).await;
+    let owner = k.t.signin("owner@example.com").await.access_token;
+    let root = k.t.signin("root@example.com").await.access_token;
+    let path = format!("/projects/{}/mailbox/approve", project.id);
+    let r = k.t.send(k.t.post(&path).bearer(&owner)).await;
+    assert_eq!(r.status, 403, "the project owner cannot approve itself");
+    assert_eq!(k.hook(mail("<c1@x>", "Hi", "before")).await.status, 404);
+    let r = k.t.send(k.t.post(&path).bearer(&root)).await;
+    assert_eq!(r.status, 200, "{}", r.text());
     assert_eq!(k.hook(mail("<c2@x>", "Hi", "after")).await.status, 201);
 }
