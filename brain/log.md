@@ -1,5 +1,13 @@
 # Changelog
 
+## [2026-11-07] P3 deploy verify + ops
+
+- **Verified natively (no docker)**: both Caddyfiles `caddy validate` + `caddy fmt` clean. Dockerfile steps replayed in a clean temp dir: `cargo build --release -p api --locked` (54 s, binary `api`), `bun install --frozen-lockfile` + `bun run build` with `NEXT_PUBLIC_API_URL=` `NEXT_PUBLIC_API_VERSION=v3` -> `out/index.html`, `widget/`, `_next/`; layout matches Dockerfile (`/usr/local/bin/api`, `/srv`), `deploy/web.Caddyfile` (`root * /srv`), host Caddyfile (`/srv/senddesk/web`). Release binary (SD_ENV=production, migrate, bootstrap, serve) behind the production Caddyfile (local TLS, only address/root changed): `scripts/smoke.sh` 100% green incl. 41 MB proxy cap (413), 64 KB api cap (413), CORS allow/deny, CSP/HSTS/nosniff/XFO, widget frameable.
+- **Created**: `docs/OPERATIONS.md`, `scripts/smoke.sh` (re-runnable on a real host), `scripts/backup.sh` (pg_dump custom + files tar, retention, refuses client/server major mismatch), `scripts/deploy-check.sh` + `make deploy-check` (caddy, compose/.env.example/systemd/Dockerfile vs `config.rs`, backup->restore round trip).
+- **Fixed (deploy only, no app code)**: `SD_FIRST_USER_ADMIN` was read by `config.rs` but missing from compose and `.env.example`; `.env.example` set `SD_ALLOW_SIGNUP=true` while code default is false, and `docs/API.md` claimed default true (both now false); systemd `EnvironmentFile` does not strip inline `# comments` (copying `.env.example` raw breaks `SD_ENV` etc.): documented `sed` strip; env file `STORAGE_DIR` overrides the unit's `Environment=` and the example's `./data/storage` is read-only under `ProtectSystem=strict`: documented.
+- **Findings, not fixed**: api binds `0.0.0.0:$PORT` with no bind setting (firewall port 3000 on host installs); `SD_SECRET_KEY` rotation has no re-seal tool (mail passwords must be re-entered); `docker build` and compose still never run here (no docker); systemd unit only syntax-checked by parsing (no `systemd-analyze` on macOS). No app bug found.
+- **Lesson**: [pg_dump newer than the server is not restorable](/wisdom/time-traps.md); the Homebrew default `pg_dump` here is 18 against a 16 server.
+
 ## [2026-11-07] R50 backend fixes
 
 - **Creation**: SSRF check at connect time, IMAP timeouts and size-bounded fetch, ingest sanitising and sender check, signup off by default, client scope on tickets, status race, no reflected text in auto-responses, mailbox approval by a global admin (migration 0003), attachment mail after commit (same rule as `/messages`), streamed downloads, summed attachment size cap, per-account login throttle, bounded hashing queue.

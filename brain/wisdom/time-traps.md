@@ -38,3 +38,6 @@ Carried over from bunfiiliate:
 
 - Static export (`output: "export"`) cannot run under `next start`. Serve `out/` with Caddy; check the Docker target, not just the e2e Caddy path.
 - **login to a chosen server proves nothing**: neither a login nor a code mailed through the tenant's own SMTP proves an address; only the operator (or DNS) can, so the operator approves.
+
+- **pg_dump newer than the server**: a dump from `pg_dump` 18 fails to restore on PG 16 (`unrecognized configuration parameter "transaction_timeout"`). Use matching client tools; `scripts/backup.sh` refuses a mismatch.
+- **systemd `EnvironmentFile` keeps inline `# comments` in the value** and lets the file override `Environment=`. Strip comments when installing `.env.example`.

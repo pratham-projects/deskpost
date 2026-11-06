@@ -1,6 +1,7 @@
 # /etc/systemd/system/senddesk-api.service
 # Install: copy the release binary to /usr/local/bin/api, put secrets in /etc/senddesk/env (chmod 600),
-# run `api migrate` once, then `systemctl enable --now senddesk-api`.
+# set STORAGE_DIR=/var/lib/senddesk/storage in that file (it overrides Environment= below), create the user
+# (`useradd --system --home /var/lib/senddesk --shell /usr/sbin/nologin senddesk`), run `api migrate` once, then `systemctl enable --now senddesk-api`.
 [Unit]
 Description=SendDesk API
 After=network-online.target postgresql.service
