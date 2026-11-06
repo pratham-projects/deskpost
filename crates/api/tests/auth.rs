@@ -779,20 +779,18 @@ async fn bootstrap_validates_and_refuses_duplicates(pool: PgPool) {
 async fn one_account_cannot_be_guessed_from_many_addresses(pool: PgPool) {
     let t = TestApp::new(pool).await;
     t.user("victim@example.com", Role::Agent).await;
-    let mut last = StatusCode::OK;
-    for n in 0..25u8 {
+    let attempt = |n: u8, email: &'static str, pw: &'static str| {
         let req = t.post("/auth/signin").peer(&format!("198.51.100.{n}"));
-        let r = t
-            .send_json(
-                req,
-                json!({ "email": "Victim@Example.com", "password": "wrong-password" }),
-            )
-            .await;
-        last = r.status;
+        t.send_json(req, json!({ "email": email, "password": pw }))
+    };
+    for n in 0..25u8 {
+        let r = attempt(n, "Victim@Example.com", "wrong-password").await;
+        assert_eq!(r.status, StatusCode::UNAUTHORIZED);
     }
-    assert_eq!(
-        last,
-        StatusCode::TOO_MANY_REQUESTS,
-        "per-account throttle applies across addresses"
-    );
+    // Throttled: even the right password from a fresh address is refused, with the same answer an
+    // unknown email gets, so the throttle is no account oracle.
+    let blocked = attempt(200, "victim@example.com", PASSWORD).await;
+    let unknown = attempt(201, "nobody@example.com", "wrong-password").await;
+    assert_eq!(blocked.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(blocked.json(), unknown.json());
 }
