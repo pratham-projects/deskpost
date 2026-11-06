@@ -13,7 +13,7 @@
 | R23 | feat/api-mail-attach | done, merged |
 | R30 | feat/web-live | done (static export `apps/web/out`; API/Caddy serving left to R31) |
 | R31 | feat/deploy-docs | done, merged |
-| R40 | feat/e2e | todo |
+| R40 | feat/e2e | done (`make e2e`: `scripts/e2e.sh` + `e2e/` Playwright; 5 flows green) |
 | R50 | review + fixes | todo |
 | R60 | final gate | todo |
 

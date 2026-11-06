@@ -37,3 +37,9 @@ next-env.d.ts
 # web deps
 apps/web/node_modules/
 apps/web/.next/
+
+# e2e harness
+/.tools/
+/e2e/node_modules/
+/e2e/test-results/
+/e2e/.run/
