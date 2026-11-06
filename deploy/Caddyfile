@@ -1,5 +1,7 @@
 # One domain: API and health under the same origin, everything else is the Next.js UI.
-# Set FRONTEND_URL=https://desk.example.com and SD_TRUSTED_PROXIES=127.0.0.1 for the api.
+# Caddy runs on the host next to the api, so the api sees it as 127.0.0.1: SD_TRUSTED_PROXIES=127.0.0.1.
+# If Caddy runs in a container instead, trust that container's network address, not 127.0.0.1.
+# Also set FRONTEND_URL=https://desk.example.com.
 desk.example.com {
 	encode zstd gzip
 
@@ -10,6 +12,13 @@ desk.example.com {
 			max_size 40MB
 		}
 		reverse_proxy 127.0.0.1:3000
+	}
+
+	# /widget is the embeddable customer form, so it must stay frameable; everything else is not.
+	@app not path /widget /widget/*
+	header @app {
+		X-Frame-Options DENY
+		Content-Security-Policy "frame-ancestors 'none'"
 	}
 
 	handle {

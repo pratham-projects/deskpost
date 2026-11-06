@@ -1,4 +1,5 @@
 # Quick start: cp .env.example .env, fill the secrets, then `docker compose up --build`.
+# To use mailpit as a project's SMTP server set SD_ALLOW_PRIVATE_MAIL_HOSTS=true in .env (dev only).
 # Mailpit catches all outbound mail (UI on :8025) so nothing leaves the machine.
 services:
   postgres:
@@ -27,7 +28,6 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgres://senddesk:${POSTGRES_PASSWORD}@postgres:5432/senddesk
-      SD_ALLOW_PRIVATE_MAIL_HOSTS: "true" # lets project settings point at the mailpit container
     ports: ["127.0.0.1:3000:3000"]
     volumes: [storage:/var/lib/senddesk/storage]
     depends_on:

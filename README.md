@@ -25,7 +25,7 @@ docker compose run --rm app bootstrap --email admin@example.com --name Admin
 | API | http://localhost:3000 (`/health`, `/api/v3/...`) |
 | Mailpit (caught mail) | http://localhost:8025 (SMTP `mailpit:1025`, no TLS, no auth) |
 
-Set `FRONTEND_URL=http://localhost:4000` in `.env` so the browser may call the API. `NEXT_PUBLIC_*` values
+To send through mailpit set `SD_ALLOW_PRIVATE_MAIL_HOSTS=true` in `.env` (dev only). Set `FRONTEND_URL=http://localhost:4000` in `.env` so the browser may call the API. `NEXT_PUBLIC_*` values
 are baked into the web image at build time (`PUBLIC_URL` in `.env`).
 
 ## Run locally (no Docker)

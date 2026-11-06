@@ -18,7 +18,7 @@ vulnerabilities. Expect an acknowledgement within a few days.
 - Set `SD_ALLOW_SIGNUP=false` after creating the first admin with `api bootstrap`, unless open signup is intended.
 - Pass the bootstrap password through `SD_BOOTSTRAP_PASSWORD`, not `--password` (visible in `ps`).
 - Set `SD_WEBHOOK_SECRET` if you expose the inbound mail webhook; requests are signature-checked.
-- Postgres: dedicated role and password, not exposed publicly. Compose binds all ports to 127.0.0.1.
+- Postgres: dedicated role and password, not exposed publicly. Compose binds all ports to 127.0.0.1 and leaves `SD_ALLOW_PRIVATE_MAIL_HOSTS` unset (false).
 - `.env` holds secrets: never commit it, `chmod 600`.
 - Back up Postgres and `STORAGE_DIR` (attachments) together.
 
