@@ -363,9 +363,10 @@ pub async fn find_by_api_key_hash(pool: &Pool, api_key_hash: &str) -> Result<Opt
         .await
 }
 
-/// Inbound mail routing: the one active, non-archived project whose mailbox address is `email`.
+/// Inbound mail routing: the one active, non-archived project whose mailbox address is `email` and
+/// whose owner read a code mailed to it (`confirm_mail_verification`).
 pub async fn find_by_smtp_email(pool: &Pool, email: &str) -> Result<Option<Id>> {
-    sqlx::query_scalar("SELECT id FROM projects WHERE lower(smtp_email) = lower($1) AND status = 'active' AND NOT is_archived")
+    sqlx::query_scalar("SELECT id FROM projects WHERE lower(smtp_email) = lower($1) AND status = 'active' AND NOT is_archived AND mail_verified_at IS NOT NULL")
         .bind(email)
         .fetch_optional(pool)
         .await
@@ -405,4 +406,48 @@ pub async fn set_imap_cursor(
             .execute(pool)
             .await?;
     Ok(r.rows_affected() == 1)
+}
+
+/// Store the hash of a code that was mailed to the project's current mailbox address.
+/// `None` when the project has no address.
+pub async fn start_mail_verification(
+    pool: &Pool,
+    id: Id,
+    code_hash: &str,
+    ttl_secs: i64,
+) -> Result<Option<String>> {
+    sqlx::query_scalar(
+        "UPDATE projects SET mail_verify_hash = $2, mail_verify_email = smtp_email,
+                mail_verify_expires_at = now() + make_interval(secs => $3)
+         WHERE id = $1 AND smtp_email IS NOT NULL RETURNING smtp_email",
+    )
+    .bind(id)
+    .bind(code_hash)
+    .bind(ttl_secs as f64)
+    .fetch_optional(pool)
+    .await
+}
+
+/// Accept the code if it matches, is fresh and was sent to the address the project still has.
+pub async fn confirm_mail_verification(pool: &Pool, id: Id, code_hash: &str) -> Result<bool> {
+    let n = sqlx::query(
+        "UPDATE projects SET mail_verified_at = now(), mail_verify_hash = NULL,
+                mail_verify_email = NULL, mail_verify_expires_at = NULL
+         WHERE id = $1 AND mail_verify_hash = $2 AND mail_verify_expires_at > now()
+           AND mail_verify_email IS NOT DISTINCT FROM smtp_email",
+    )
+    .bind(id)
+    .bind(code_hash)
+    .execute(pool)
+    .await?
+    .rows_affected();
+    Ok(n == 1)
+}
+
+/// Whether the project's current address was proven.
+pub async fn mail_is_verified(pool: &Pool, id: Id) -> Result<bool> {
+    sqlx::query_scalar("SELECT mail_verified_at IS NOT NULL FROM projects WHERE id = $1")
+        .bind(id)
+        .fetch_one(pool)
+        .await
 }

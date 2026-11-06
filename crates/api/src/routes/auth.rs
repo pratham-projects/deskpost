@@ -89,7 +89,7 @@ async fn signup(
     let (email, name) = validate_account(&req.email, &req.password, &req.name)?;
     // Hash before touching the table so a taken email costs the same as a free one.
     let hash = s.hasher.hash(req.password).await?;
-    let user = users::register(&s.pool, &email, &name, &hash)
+    let user = users::register(&s.pool, &email, &name, &hash, s.config.first_user_admin)
         .await
         .map_err(conflict_on_email)?;
     Ok(Envelope::created(serde_json::json!({
@@ -146,6 +146,7 @@ async fn signin(
         f.add("password", "Password is required.");
     }
     f.finish()?;
+    s.limiter.check_name(Rule::LoginAccount, req.email.trim())?;
 
     let found = users::get_by_email(&s.pool, req.email.trim()).await?;
     let matched = s

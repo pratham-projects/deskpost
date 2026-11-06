@@ -61,6 +61,8 @@ pub fn env_with(extra: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
 
 pub fn test_config() -> Config {
     let mut c = Config::from_lookup(env_with(&[])).expect("test config is valid");
+    c.allow_signup = true;
+    c.first_user_admin = true;
     c.argon2 = Argon2Cost {
         memory_kib: 8,
         iterations: 1,

@@ -31,8 +31,20 @@ impl Hasher {
         })
     }
 
+    /// Waits briefly for a hashing slot; a flood gets 429 instead of an unbounded queue of tasks.
+    async fn permit(&self) -> Result<tokio::sync::SemaphorePermit<'_>, ApiError> {
+        match tokio::time::timeout(std::time::Duration::from_secs(5), self.permits.acquire()).await
+        {
+            Ok(Ok(p)) => Ok(p),
+            Ok(Err(e)) => Err(ApiError::internal(e)),
+            Err(_) => Err(ApiError::RateLimited {
+                retry_after_secs: 5,
+            }),
+        }
+    }
+
     pub async fn hash(&self, password: String) -> Result<String, ApiError> {
-        let _permit = self.permits.acquire().await.map_err(ApiError::internal)?;
+        let _permit = self.permit().await?;
         let argon2 = self.argon2.clone();
         tokio::task::spawn_blocking(move || hash_sync(&argon2, &password))
             .await
@@ -42,7 +54,7 @@ impl Hasher {
 
     /// `stored = None` (unknown account) burns the same time and always returns false.
     pub async fn verify(&self, password: String, stored: Option<String>) -> bool {
-        let Ok(_permit) = self.permits.acquire().await else {
+        let Ok(_permit) = self.permit().await else {
             return false;
         };
         let known = stored.is_some();

@@ -73,21 +73,29 @@ pub async fn create(
     .await
 }
 
-/// Self-service sign-up. The very first user becomes the global admin, everyone after is an agent.
-pub async fn register(pool: &Pool, email: &str, name: &str, password_hash: &str) -> Result<User> {
+/// Self-service sign-up. Always an agent, except that the very first user becomes the global admin
+/// when `first_user_admin` is set (explicit opt-in; the `bootstrap` command is the safe default).
+pub async fn register(
+    pool: &Pool,
+    email: &str,
+    name: &str,
+    password_hash: &str,
+    first_user_admin: bool,
+) -> Result<User> {
     let mut tx = pool.begin().await?;
     sqlx::query("SELECT pg_advisory_xact_lock(7001)")
         .execute(&mut *tx)
         .await?;
     let user = sqlx::query_as(&format!(
         "INSERT INTO users (id, email, name, password_hash, role)
-         VALUES ($1, $2, $3, $4, CASE WHEN EXISTS (SELECT 1 FROM users) THEN 'agent' ELSE 'admin' END)
+         VALUES ($1, $2, $3, $4, CASE WHEN $5 AND NOT EXISTS (SELECT 1 FROM users) THEN 'admin' ELSE 'agent' END)
          RETURNING {COLS}"
     ))
     .bind(new_id())
     .bind(email)
     .bind(name)
     .bind(password_hash)
+    .bind(first_user_admin)
     .fetch_one(&mut *tx)
     .await?;
     tx.commit().await?;

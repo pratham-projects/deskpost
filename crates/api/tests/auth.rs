@@ -170,6 +170,25 @@ async fn signup_can_be_disabled(pool: PgPool) {
     assert_eq!(res.json()["data"]["signupEnabled"], false);
 }
 
+#[sqlx::test(migrations = "../db/migrations")]
+async fn signup_defaults_are_closed_and_never_mint_an_admin(pool: PgPool) {
+    // Production defaults: sign-up off.
+    let mut c = test_config();
+    c.allow_signup = false;
+    c.first_user_admin = false;
+    let t = TestApp::with_config(pool.clone(), c).await;
+    assert_eq!(
+        signup(&t, "ada@example.com").await.status,
+        StatusCode::FORBIDDEN
+    );
+    // Sign-up opened but no explicit first-admin opt-in: first user is an agent.
+    let mut c = test_config();
+    c.first_user_admin = false;
+    let t = TestApp::with_config(pool, c).await;
+    let res = signup(&t, "ada@example.com").await;
+    assert_eq!(res.json()["data"]["role"], "agent");
+}
+
 async fn common_count(t: &TestApp) -> i64 {
     sqlx::query_scalar("SELECT count(*) FROM users")
         .fetch_one(&t.pool)
@@ -754,4 +773,26 @@ async fn bootstrap_validates_and_refuses_duplicates(pool: PgPool) {
         .await
         .unwrap_err();
     assert_eq!(e.code(), "CONFLICT");
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn one_account_cannot_be_guessed_from_many_addresses(pool: PgPool) {
+    let t = TestApp::new(pool).await;
+    t.user("victim@example.com", Role::Agent).await;
+    let mut last = StatusCode::OK;
+    for n in 0..25u8 {
+        let req = t.post("/auth/signin").peer(&format!("198.51.100.{n}"));
+        let r = t
+            .send_json(
+                req,
+                json!({ "email": "Victim@Example.com", "password": "wrong-password" }),
+            )
+            .await;
+        last = r.status;
+    }
+    assert_eq!(
+        last,
+        StatusCode::TOO_MANY_REQUESTS,
+        "per-account throttle applies across addresses"
+    );
 }

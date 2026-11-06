@@ -15,8 +15,13 @@ pub struct Client {
 }
 
 const COLS: &str = "c.id, c.project_id, c.email, c.name, c.phone, c.created_at, c.updated_at";
+/// A member sees every client, unless restricted to their own tickets (`can_view_all_tickets` off):
+/// then only the clients of tickets assigned to or created by them, like the tickets themselves.
 const ACTOR_IS_MEMBER: &str = "EXISTS (SELECT 1 FROM project_members m
-    WHERE m.project_id = c.project_id AND m.user_id = $1)";
+    WHERE m.project_id = c.project_id AND m.user_id = $1
+      AND (m.can_view_all_tickets OR EXISTS (
+            SELECT 1 FROM tickets t WHERE t.client_id = c.id
+              AND (t.assigned_to_user_id = m.user_id OR t.created_by_user_id = m.user_id))))";
 
 /// One client per (project, lower(email)). The first name seen wins; later calls only fill a missing name.
 pub(crate) async fn get_or_create(

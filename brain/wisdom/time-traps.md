@@ -37,3 +37,4 @@ Carried over from bunfiiliate:
 - Turbopack does not dead-code-eliminate `require()`/`import()` behind `process.env.X === "1"`; the mock stayed in the bundle. Swap modules with `turbopack.resolveAlias` in `next.config.mjs` and grep `out/` for a seed string.
 
 - Static export (`output: "export"`) cannot run under `next start`. Serve `out/` with Caddy; check the Docker target, not just the e2e Caddy path.
+- **login to a chosen server proves nothing**: a mailbox claim must be checked by a code sent to the address itself; an IMAP/SMTP login only shows the user controls some server.

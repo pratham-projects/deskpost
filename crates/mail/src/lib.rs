@@ -4,6 +4,7 @@
 //! many projects with different mail servers.
 
 mod error;
+pub mod guard;
 mod imap;
 mod inbound;
 mod outbound;

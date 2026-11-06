@@ -20,7 +20,7 @@ async fn migrate_twice_is_a_no_op(pool: Pool) {
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(applied, 2);
+    assert_eq!(applied, 3);
 }
 
 #[sqlx::test(migrations = "./migrations")]

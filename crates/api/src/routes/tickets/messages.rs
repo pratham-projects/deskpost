@@ -97,7 +97,7 @@ pub async fn create(
 
 /// Hand the saved reply to the mailer. Delivery failures are recorded in `email_logs` by the mailer;
 /// other failures are recorded here. Nothing here fails the request.
-async fn deliver(s: &AppState, actor: Id, message: &messages::Message) {
+pub async fn deliver(s: &AppState, actor: Id, message: &messages::Message) {
     let ticket = match tickets::get(&s.pool, actor, message.ticket_id).await {
         Ok(Some(t)) => t,
         Ok(None) => return,

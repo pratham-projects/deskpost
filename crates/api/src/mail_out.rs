@@ -26,7 +26,6 @@ pub const MAX_ATTEMPTS: i32 = 5;
 const OUTBOX_BATCH: i64 = 20;
 const LEASE_SECS: i64 = 300;
 const ERROR_LEN: usize = 300;
-const EXCERPT_CHARS: usize = 300;
 
 /// AAD binding a sealed password to its project and field. `routes::projects` must seal with the same.
 pub fn smtp_aad(project: Id) -> Vec<u8> {
@@ -209,6 +208,7 @@ fn smtp_config(
     s: &MailSettings,
     secrets: &SecretBox,
     plaintext: bool,
+    allow_private: bool,
 ) -> Result<(SmtpConfig, String), MailError> {
     let (Some(host), Some(from)) = (s.smtp_host.as_deref(), s.smtp_email.as_deref()) else {
         return Err(MailError::NotConfigured);
@@ -221,6 +221,7 @@ fn smtp_config(
         None => String::new(),
     };
     let mut cfg = SmtpConfig::new(host, port, tls_for(port, plaintext, 465), from);
+    cfg.allow_private = allow_private;
     cfg.from_name = Some(s.email_from_name.clone());
     if let Some(user) = s.smtp_username.as_deref().filter(|u| !u.is_empty()) {
         cfg.username = Some(user.to_string());
@@ -245,6 +246,12 @@ impl SmtpMailer {
             &mail.attachment_ids,
         )
         .await?;
+        let total: i64 = rows.iter().map(|a| a.size_bytes.max(0)).sum();
+        if total as usize > self.config.mail.max_request_bytes {
+            return Err(MailError::Internal(
+                "attachments are larger than the mail size limit".into(),
+            ));
+        }
         if rows.len() != mail.attachment_ids.len() {
             return Err(MailError::Internal(
                 "attachment does not belong to the ticket".into(),
@@ -282,7 +289,12 @@ impl OutboundMailer for SmtpMailer {
         let settings = projects::mail_settings(&self.pool, mail.project_id)
             .await?
             .ok_or(MailError::NotConfigured)?;
-        let (smtp, password) = smtp_config(&settings, &self.secrets, self.config.mail.plaintext)?;
+        let (smtp, password) = smtp_config(
+            &settings,
+            &self.secrets,
+            self.config.mail.plaintext,
+            self.config.allow_private_mail_hosts,
+        )?;
         let ticket = mailq::ticket_mail(&self.pool, mail.project_id, mail.ticket_id)
             .await?
             .ok_or_else(|| MailError::Internal("ticket not found".into()))?;
@@ -417,8 +429,13 @@ async fn send_job(state: &AppState, job: &mailq::OutboxJob) -> Result<String, (S
         .await
         .map_err(db)?
         .ok_or_else(|| fatal("project not found"))?;
-    let (smtp, password) = smtp_config(&settings, &state.secrets, state.config.mail.plaintext)
-        .map_err(|_| fatal("SMTP not configured"))?;
+    let (smtp, password) = smtp_config(
+        &settings,
+        &state.secrets,
+        state.config.mail.plaintext,
+        state.config.allow_private_mail_hosts,
+    )
+    .map_err(|_| fatal("SMTP not configured"))?;
     let kind = job
         .kind
         .parse::<EmailResponseStatus>()
@@ -447,15 +464,8 @@ async fn send_job(state: &AppState, job: &mailq::OutboxJob) -> Result<String, (S
             (mid, parent, refs)
         }
     };
-    let mut text = resp.body.clone();
-    if let Some(d) = t.description.as_deref().filter(|d| !d.trim().is_empty()) {
-        // Only a short excerpt: the address may be spoofed, and we must not reflect a whole mail at it.
-        text.push_str("\n\n---\nYour message:\n");
-        text.push_str(&d.chars().take(EXCERPT_CHARS).collect::<String>());
-        if d.chars().count() > EXCERPT_CHARS {
-            text.push('…');
-        }
-    }
+    // Only what the project controls: the address may be spoofed, so no sender text is reflected.
+    let text = resp.body.clone();
     let email = OutboundEmail {
         to: vec![t.client_email.clone()],
         subject: auto_subject(&resp.subject, &t.project_name, t.ticket_number),
@@ -469,4 +479,34 @@ async fn send_job(state: &AppState, job: &mailq::OutboxJob) -> Result<String, (S
         .await
         .map(|id| bare(&id))
         .map_err(|e| (redact(&e.to_string(), &[&password]), true))
+}
+
+/// Mail the mailbox-ownership code to `to` through the project's own SMTP settings.
+pub async fn send_mailbox_code(
+    state: &AppState,
+    project_id: Id,
+    to: &str,
+    code: &str,
+) -> Result<(), MailError> {
+    let settings = projects::mail_settings(&state.pool, project_id)
+        .await?
+        .ok_or(MailError::NotConfigured)?;
+    let (smtp, password) = smtp_config(
+        &settings,
+        &state.secrets,
+        state.config.mail.plaintext,
+        state.config.allow_private_mail_hosts,
+    )?;
+    let email = OutboundEmail {
+        to: vec![to.to_string()],
+        subject: "Confirm your SendDesk mailbox".into(),
+        text: Some(format!(
+            "Your SendDesk mailbox confirmation code is {code}\n\nIt expires in 15 minutes. If you did not ask for it, ignore this mail."
+        )),
+        ..Default::default()
+    };
+    sd_mail::send(&smtp, &email)
+        .await
+        .map(|_| ())
+        .map_err(|e| MailError::Delivery(redact(&e.to_string(), &[&password])))
 }

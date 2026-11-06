@@ -21,7 +21,6 @@ use tokio::io::AsyncReadExt;
 use crate::dto::ts;
 use crate::error::{ApiError, Envelope, Fields};
 use crate::extract::{ApiPath, AuthUser};
-use crate::mail_out::{OutboundMailer, ReplyMail};
 use crate::state::AppState;
 
 const MAX_MESSAGE_CHARS: usize = 50_000;
@@ -206,33 +205,23 @@ async fn save_message(
         None if names.len() == 1 => format!("Sent an attachment: {}", names[0]),
         None => format!("Sent {} attachments", names.len()),
     };
-    let mut new = NewAgentMessage {
-        body: body.clone(),
+    let new = NewAgentMessage {
+        body,
         attachment_ids: ids.to_vec(),
         ..Default::default()
     };
+    let message = match sd_db::messages::post_agent(&state.pool, user, ticket.id, &new).await? {
+        Posted::Ok(m) => m,
+        Posted::NoAccess => return Err(ApiError::not_found("Ticket")),
+        Posted::BadAttachments => {
+            return Err(ApiError::internal("attachments could not be linked"));
+        }
+    };
+    // Same rule as `/messages`: mail goes out after the commit and a failure never fails the upload.
     if send_email {
-        let sent = state
-            .mailer
-            .send_reply(ReplyMail {
-                project_id: ticket.project_id,
-                ticket_id: ticket.id,
-                sent_by: Some(user),
-                body,
-                attachment_ids: ids.to_vec(),
-            })
-            .await?;
-        new.email_message_id = Some(sent.email_message_id);
-        new.email_in_reply_to = sent.in_reply_to;
-        new.email_references = sent.references;
-        new.email_to = Some(sent.to);
-        new.email_subject = Some(sent.subject);
+        crate::routes::tickets::deliver_reply(state, user, &message).await;
     }
-    match sd_db::messages::post_agent(&state.pool, user, ticket.id, &new).await? {
-        Posted::Ok(m) => Ok(m.id),
-        Posted::NoAccess => Err(ApiError::not_found("Ticket")),
-        Posted::BadAttachments => Err(ApiError::internal("attachments could not be linked")),
-    }
+    Ok(message.id)
 }
 
 fn header_str<'a>(h: &'a HeaderMap, name: &str) -> Option<&'a str> {
@@ -403,15 +392,15 @@ async fn download(
         sd_storage::Error::NotFound => ApiError::not_found("Attachment"),
         e => ApiError::internal(e),
     })?;
-    let mut bytes = Vec::new();
-    reader
-        .take(att.size_bytes.max(0) as u64 + 1)
-        .read_to_end(&mut bytes)
-        .await
-        .map_err(ApiError::internal)?;
+    // Streamed, never held in memory; the length is the recorded size, so a file that changed on
+    // disk cannot be served longer than what was uploaded.
+    let size = att.size_bytes.max(0) as u64;
     let inline = token_inline && inline_ok(&att.mime_type);
-    let mut res = Response::new(Body::from(bytes));
+    let mut res = Response::new(Body::from_stream(tokio_util::io::ReaderStream::new(
+        reader.take(size),
+    )));
     let h = res.headers_mut();
+    h.insert(header::CONTENT_LENGTH, HeaderValue::from(size));
     h.insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static(content_type::served_content_type(&att.mime_type)),

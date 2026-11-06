@@ -389,6 +389,18 @@ fn uid_command(state: &Mutex<ImapState>, tag: &str, sub: &str, args: &str) -> Ve
                 .enumerate()
                 .filter(|(_, m)| matches_set(set, m.uid, max))
             {
+                if args.contains("RFC822.SIZE") {
+                    out.extend_from_slice(
+                        format!(
+                            "* {} FETCH (UID {} RFC822.SIZE {})\r\n",
+                            i + 1,
+                            m.uid,
+                            m.bytes.len()
+                        )
+                        .as_bytes(),
+                    );
+                    continue;
+                }
                 out.extend_from_slice(
                     format!(
                         "* {} FETCH (UID {} BODY[] {{{}}}\r\n",

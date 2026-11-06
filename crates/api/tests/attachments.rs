@@ -568,51 +568,41 @@ async fn multipart_with_email_sends_attachments_and_threads(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
-async fn failed_mail_saves_nothing(pool: PgPool) {
+async fn failed_mail_is_logged_and_never_fails_the_upload(pool: PgPool) {
     let k = Kit::new(pool).await;
     let (_, project, ticket, s) = k.tenant("owner@example.com", "acme").await;
-    // Not configured at all: 422.
-    let r = k
-        .multipart(
-            &s.access_token,
-            ticket.id,
-            &[("a.txt", "text/plain", b"x")],
-            &[("sendEmail", "true")],
-        )
-        .await;
-    assert_eq!(
-        (r.status.as_u16(), r.error_code().as_str()),
-        (422, "VALIDATION_ERROR")
-    );
-    // Server unreachable: 502, and the SMTP password is nowhere in the answer or the log.
+    let up = |name: &'static str| {
+        let (k, tok, id) = (&k, s.access_token.clone(), ticket.id);
+        async move {
+            k.multipart(
+                &tok,
+                id,
+                &[(name, "text/plain", b"x")],
+                &[("sendEmail", "true")],
+            )
+            .await
+        }
+    };
+    // Not configured at all, then server unreachable: the upload and message are saved either way.
+    assert_eq!(up("a.txt").await.status.as_u16(), 201);
     k.configure_mail(project.id, closed_port(), None).await;
-    let r = k
-        .multipart(
-            &s.access_token,
-            ticket.id,
-            &[("a.txt", "text/plain", b"x")],
-            &[("sendEmail", "true")],
-        )
-        .await;
-    assert_eq!(
-        (r.status.as_u16(), r.error_code().as_str()),
-        (502, "MAIL_DELIVERY_FAILED")
-    );
+    let r = up("b.txt").await;
+    assert_eq!(r.status.as_u16(), 201);
     assert!(!r.text().contains("smtp-secret-pw"));
     assert_eq!(
-        (
-            k.count("attachments").await,
-            k.count("messages").await,
-            k.stored_files()
-        ),
-        (0, 1, 0)
+        (k.count("attachments").await, k.count("messages").await),
+        (2, 3)
     );
-    let log: (String, Option<String>) = sqlx::query_as("SELECT status, error FROM email_logs")
-        .fetch_one(&k.t.pool)
-        .await
-        .unwrap();
-    assert_eq!(log.0, "failed");
-    assert!(!log.1.unwrap().contains("smtp-secret-pw"));
+    let logs: Vec<(String, Option<String>)> =
+        sqlx::query_as("SELECT status, error FROM email_logs ORDER BY created_at")
+            .fetch_all(&k.t.pool)
+            .await
+            .unwrap();
+    assert_eq!(logs.len(), 2);
+    for (status, error) in logs {
+        assert_eq!(status, "failed");
+        assert!(!error.unwrap_or_default().contains("smtp-secret-pw"));
+    }
 }
 
 #[sqlx::test(migrations = "../db/migrations")]

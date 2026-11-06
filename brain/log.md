@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-11-07] R50 backend fixes
+
+- **Creation**: SSRF check at connect time, IMAP timeouts and size-bounded fetch, ingest sanitising and sender check, signup off by default, client scope on tickets, status race, no reflected text in auto-responses, mailbox ownership by emailed code (migration 0003), attachment mail after commit (same rule as `/messages`), streamed downloads, summed attachment size cap, per-account login throttle, bounded hashing queue.
+- **Decision**: attachment upload with `sendEmail` no longer fails or rolls back when mail fails; it saves, then logs the failure like replies. Ownership of a mailbox is proven by reading a mailed code, never by logging in to a server of the user's choosing.
+- **Lesson**: [login to a chosen server proves nothing](/wisdom/time-traps.md).
+
 ## [2026-11-06] R50 fix web-deploy
 
 - **Fixed**: H1 web image is now `caddy:2-alpine` serving the static export (`deploy/web.Caddyfile`, proxies `/api` to `app:3000`, same origin); host `deploy/Caddyfile` serves `/srv/senddesk/web` directly. H2 one name `NEXT_PUBLIC_API_URL` (empty = same origin) in Dockerfile, compose, `.env.example`. H3 no localStorage tokens; access token in memory, session restored via `/auth/refresh` cookie (demo-mock restore gated on `NEXT_PUBLIC_USE_MOCK`). M1 `lib/debug.ts` no-op in prod replaces all `console.log`. M2 typed `AuthExpiredError`, match 401 + TOKEN_* codes only, `ApiRequestError` carries `details`. M3 single-flight + `navigator.locks` refresh. M4 CSP Report-Only + Permissions-Policy. M5 widget `Referrer-Policy: no-referrer`. M6 UI types = server list, contract test `e2e/tests/attachment-types.spec.ts`. M7 blob URL revoke + stale guard. L1 jar sha256 pin, L2 e2e refuses non-local db (`E2E_DATABASE_URL`), L3 trap INT/TERM + child kill, L5 compose env allow-list, mailpit profile `dev`, `.dockerignore`, L6 proxy health/timeouts.

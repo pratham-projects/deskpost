@@ -21,6 +21,8 @@ pub enum Rule {
     MailProbe,
     /// Password changes by a signed-in user (guessing the current password).
     PasswordChange,
+    /// Sign-in attempts against one account, from anywhere (keyed by the lower-cased email).
+    LoginAccount,
 }
 
 impl Rule {
@@ -34,13 +36,20 @@ impl Rule {
             Self::Webhook => (120, Duration::from_secs(60)),
             Self::MailProbe => (5, Duration::from_secs(60)),
             Self::PasswordChange => (6, Duration::from_secs(60)),
+            Self::LoginAccount => (20, Duration::from_secs(600)),
         }
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum Key {
+    Ip(IpAddr),
+    Name(String),
+}
+
 pub struct RateLimiter {
     max_keys: usize,
-    hits: Mutex<HashMap<(Rule, IpAddr), VecDeque<Instant>>>,
+    hits: Mutex<HashMap<(Rule, Key), VecDeque<Instant>>>,
 }
 
 impl RateLimiter {
@@ -52,7 +61,15 @@ impl RateLimiter {
     }
 
     pub fn check(&self, rule: Rule, ip: IpAddr) -> Result<(), ApiError> {
-        self.check_at(rule, ip, Instant::now())
+        self.check_key_at(rule, Key::Ip(bucket(ip)), Instant::now())
+            .map_err(|retry| ApiError::RateLimited {
+                retry_after_secs: retry.as_secs_f64().ceil().max(1.0) as u64,
+            })
+    }
+
+    /// Limit by a name (an account), not by address.
+    pub fn check_name(&self, rule: Rule, name: &str) -> Result<(), ApiError> {
+        self.check_key_at(rule, Key::Name(name.to_lowercase()), Instant::now())
             .map_err(|retry| ApiError::RateLimited {
                 retry_after_secs: retry.as_secs_f64().ceil().max(1.0) as u64,
             })
@@ -60,8 +77,12 @@ impl RateLimiter {
 
     /// `Err(wait)` when the client is over quota. Rejected requests are not recorded.
     pub fn check_at(&self, rule: Rule, ip: IpAddr, now: Instant) -> Result<(), Duration> {
+        self.check_key_at(rule, Key::Ip(bucket(ip)), now)
+    }
+
+    fn check_key_at(&self, rule: Rule, key: Key, now: Instant) -> Result<(), Duration> {
         let (limit, window) = rule.quota();
-        let key = (rule, bucket(ip));
+        let key = (rule, key);
         let mut hits = self.hits.lock().unwrap_or_else(|e| e.into_inner());
         if !hits.contains_key(&key) && hits.len() >= self.max_keys {
             hits.retain(|(r, _), q| {
@@ -72,7 +93,7 @@ impl RateLimiter {
                 let oldest = hits
                     .iter()
                     .min_by_key(|(_, q)| q.back().copied())
-                    .map(|(k, _)| *k);
+                    .map(|(k, _)| k.clone());
                 if let Some(k) = oldest {
                     hits.remove(&k);
                 }

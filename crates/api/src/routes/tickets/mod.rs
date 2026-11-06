@@ -17,6 +17,8 @@ use crate::state::AppState;
 mod create;
 mod dto;
 mod messages;
+
+pub use messages::deliver as deliver_reply;
 mod read;
 mod unread;
 mod viewers;
