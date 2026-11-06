@@ -239,6 +239,17 @@ struct ProbeReq {
     password: Option<String>,
 }
 
+impl ProbeReq {
+    /// The probe used the saved settings only, so a success proves the saved mailbox.
+    fn is_saved_only(&self) -> bool {
+        self.host.is_none()
+            && self.port.is_none()
+            && self.tls.is_none()
+            && self.username.is_none()
+            && self.password.is_none()
+    }
+}
+
 #[derive(Serialize)]
 struct ProbeResult {
     ok: bool,
@@ -368,6 +379,7 @@ async fn test_smtp(
     ApiJson(req): ApiJson<ProbeReq>,
 ) -> Result<Envelope<ProbeResult>, ApiError> {
     let cur = load(&s, ip, user.id, id).await?;
+    let saved_only = req.is_saved_only();
     let t = resolve(&s, req, &cur, Kind::Smtp)?;
     guard(&s, &t).await?;
     let from = cur
@@ -381,6 +393,9 @@ async fn test_smtp(
     cfg.io_timeout = PROBE_TIMEOUT;
     cfg.total_timeout = PROBE_TIMEOUT * 2;
     let r = sd_mail::check_smtp(&cfg).await;
+    if r.is_ok() && saved_only && cfg.username.is_some() {
+        sd_db::projects::mark_mail_verified(&s.pool, id).await?;
+    }
     Ok(Envelope::ok(result(r)))
 }
 
@@ -392,6 +407,7 @@ async fn test_imap(
     ApiJson(req): ApiJson<ProbeReq>,
 ) -> Result<Envelope<ProbeResult>, ApiError> {
     let cur = load(&s, ip, user.id, id).await?;
+    let saved_only = req.is_saved_only();
     let t = resolve(&s, req, &cur, Kind::Imap)?;
     guard(&s, &t).await?;
     let mut cfg = ImapConfig::new(
@@ -412,6 +428,9 @@ async fn test_imap(
         }
         Err(e) => Err(e),
     };
+    if r.is_ok() && saved_only {
+        sd_db::projects::mark_mail_verified(&s.pool, id).await?;
+    }
     Ok(Envelope::ok(result(r)))
 }
 

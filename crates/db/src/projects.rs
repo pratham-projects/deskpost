@@ -363,9 +363,10 @@ pub async fn find_by_api_key_hash(pool: &Pool, api_key_hash: &str) -> Result<Opt
         .await
 }
 
-/// Inbound mail routing: the one active, non-archived project whose mailbox address is `email`.
+/// Inbound mail routing: the one active, non-archived project whose mailbox address is `email` and
+/// whose login to that mailbox was proven (`mark_mail_verified`).
 pub async fn find_by_smtp_email(pool: &Pool, email: &str) -> Result<Option<Id>> {
-    sqlx::query_scalar("SELECT id FROM projects WHERE lower(smtp_email) = lower($1) AND status = 'active' AND NOT is_archived")
+    sqlx::query_scalar("SELECT id FROM projects WHERE lower(smtp_email) = lower($1) AND status = 'active' AND NOT is_archived AND mail_verified_at IS NOT NULL")
         .bind(email)
         .fetch_optional(pool)
         .await
@@ -405,4 +406,16 @@ pub async fn set_imap_cursor(
             .execute(pool)
             .await?;
     Ok(r.rows_affected() == 1)
+}
+
+/// Record that the saved mail settings logged in successfully. Cleared again by a trigger when the
+/// address or the servers change.
+pub async fn mark_mail_verified(pool: &Pool, id: Id) -> Result<()> {
+    sqlx::query(
+        "UPDATE projects SET mail_verified_at = now() WHERE id = $1 AND smtp_email IS NOT NULL",
+    )
+    .bind(id)
+    .execute(pool)
+    .await?;
+    Ok(())
 }

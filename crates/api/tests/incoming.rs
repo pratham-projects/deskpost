@@ -635,3 +635,31 @@ async fn identical_mails_with_different_dates_are_not_duplicates(pool: PgPool) {
         true
     );
 }
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn unverified_mailbox_does_not_receive_webhook_mail(pool: PgPool) {
+    let k = Kit::new(pool).await;
+    let (_, project) = k.acme().await;
+    // Squatter: a mailbox address that was typed in but never proven by a login.
+    sqlx::query("UPDATE projects SET mail_verified_at = NULL WHERE id = $1")
+        .bind(project.id)
+        .execute(&k.t.pool)
+        .await
+        .unwrap();
+    let r = k.hook(mail("<sq1@x>", "Hello", "for the victim")).await;
+    assert_eq!(r.status, 404, "{}", r.text());
+    assert!(tickets(&k).await.is_empty());
+    // Changing the address of a verified project drops the proof again.
+    sqlx::query("UPDATE projects SET mail_verified_at = now() WHERE id = $1")
+        .bind(project.id)
+        .execute(&k.t.pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE projects SET smtp_email = 'other@acme.test' WHERE id = $1")
+        .bind(project.id)
+        .execute(&k.t.pool)
+        .await
+        .unwrap();
+    let r = k.hook(mail("<sq2@x>", "Hello", "again")).await;
+    assert_eq!(r.status, 404);
+}

@@ -108,7 +108,7 @@ impl Kit {
         let smtp_pw = s.secrets.seal("smtp-secret-pw", &smtp_aad(project));
         sqlx::query(
             "UPDATE projects SET smtp_email = 'support@' || slug || '.test', smtp_host = '127.0.0.1',
-                    smtp_port = $2, smtp_username = 'u', smtp_password_encrypted = $3 WHERE id = $1",
+                    smtp_port = $2, smtp_username = 'u', smtp_password_encrypted = $3, mail_verified_at = now() WHERE id = $1",
         )
         .bind(project)
         .bind(i32::from(smtp_port))
@@ -119,7 +119,7 @@ impl Kit {
         if let Some((port, user, pass)) = imap {
             sqlx::query(
                 "UPDATE projects SET imap_host = '127.0.0.1', imap_port = $2, imap_username = $3,
-                        imap_password_encrypted = $4 WHERE id = $1",
+                        imap_password_encrypted = $4, mail_verified_at = now() WHERE id = $1",
             )
             .bind(project)
             .bind(i32::from(port))

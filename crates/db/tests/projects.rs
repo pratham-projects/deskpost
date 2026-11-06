@@ -437,6 +437,14 @@ async fn inbound_routing_and_imap_cursor(pool: Pool) {
         .await
         .unwrap()
         .unwrap();
+    assert!(
+        projects::find_by_smtp_email(&pool, "HELP@acme.com")
+            .await
+            .unwrap()
+            .is_none(),
+        "unverified mailboxes do not route"
+    );
+    projects::mark_mail_verified(&pool, pa.id).await.unwrap();
     assert_eq!(
         projects::find_by_smtp_email(&pool, "HELP@acme.com")
             .await
