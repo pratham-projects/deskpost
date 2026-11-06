@@ -59,6 +59,8 @@ pub struct Config {
     pub upload_limit: usize,
     pub webhook_limit: usize,
     pub allow_signup: bool,
+    /// With sign-up open, the first account becomes the global admin (`SD_FIRST_USER_ADMIN`).
+    pub first_user_admin: bool,
     /// `SD_ALLOW_PRIVATE_MAIL_HOSTS`: let SMTP/IMAP settings point at loopback/private addresses.
     pub allow_private_mail_hosts: bool,
     pub argon2: Argon2Cost,
@@ -198,7 +200,8 @@ impl Config {
                 MAX_LIMIT_BYTES,
                 &mut errs,
             ),
-            allow_signup: flag(&get, "SD_ALLOW_SIGNUP", true, &mut errs),
+            allow_signup: flag(&get, "SD_ALLOW_SIGNUP", false, &mut errs),
+            first_user_admin: flag(&get, "SD_FIRST_USER_ADMIN", false, &mut errs),
             allow_private_mail_hosts: flag(&get, "SD_ALLOW_PRIVATE_MAIL_HOSTS", false, &mut errs),
             argon2: Argon2Cost::PRODUCTION,
             mail: crate::mail_config::MailConfig::from_lookup(&get, &mut errs),

@@ -20,7 +20,8 @@ fn valid_config_and_defaults() {
     assert_eq!(c.port, 3000);
     assert_eq!(c.api_version, "v3");
     assert_eq!(c.body_limit, 64 * 1024);
-    assert!(c.allow_signup);
+    assert!(!c.allow_signup, "sign-up is off unless configured");
+    assert!(!c.first_user_admin);
     assert!(!c.production);
     assert_eq!(c.cors_origins, vec!["http://localhost:3001"]);
     assert_eq!(c.trusted_proxies.len(), 1);

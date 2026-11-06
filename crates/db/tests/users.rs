@@ -62,15 +62,15 @@ async fn check_constraints_reject_bad_values(pool: Pool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn register_first_user_is_admin_then_agents(pool: Pool) {
-    let first = users::register(&pool, "first@example.com", "First", "h")
+    let first = users::register(&pool, "first@example.com", "First", "h", true)
         .await
         .unwrap();
-    let second = users::register(&pool, "second@example.com", "Second", "h")
+    let second = users::register(&pool, "second@example.com", "Second", "h", true)
         .await
         .unwrap();
     assert_eq!(first.role, Role::Admin);
     assert_eq!(second.role, Role::Agent);
-    let dup = users::register(&pool, "FIRST@example.com", "Again", "h")
+    let dup = users::register(&pool, "FIRST@example.com", "Again", "h", true)
         .await
         .unwrap_err();
     assert!(is_unique_violation(&dup));
@@ -82,7 +82,7 @@ async fn concurrent_register_makes_exactly_one_admin(pool: Pool) {
     for i in 0..8 {
         let pool = pool.clone();
         set.spawn(async move {
-            users::register(&pool, &format!("u{i}@example.com"), "U", "h")
+            users::register(&pool, &format!("u{i}@example.com"), "U", "h", true)
                 .await
                 .unwrap()
         });
@@ -388,4 +388,12 @@ async fn concurrent_demotions_cannot_remove_every_admin(pool: Pool) {
         .await
         .unwrap();
     assert_eq!(admins, 1);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn register_without_opt_in_never_makes_an_admin(pool: Pool) {
+    let first = users::register(&pool, "first@example.com", "First", "h", false)
+        .await
+        .unwrap();
+    assert_eq!(first.role, Role::Agent);
 }
