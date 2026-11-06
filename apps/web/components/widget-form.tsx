@@ -11,14 +11,11 @@ import { CheckCircle, Send } from "lucide-react"
 import { ticketsApi } from "@/lib/api"
 
 interface WidgetFormProps {
-  // Matches mock/seed.ts's first demo project — upstream shipped this widget
-  // form pointed at a placeholder "proj_1" that never actually submitted
-  // anywhere (see the note in UPSTREAM.md). Wired to ticketsApi.create here
-  // so a real ticket lands in the inbox, same as production would.
-  projectId?: string
+  projectId: string
+  projectKey: string
 }
 
-export function WidgetForm({ projectId = "proj_nimbus" }: WidgetFormProps) {
+export function WidgetForm({ projectId, projectKey }: WidgetFormProps) {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [subject, setSubject] = useState("")
@@ -41,7 +38,7 @@ export function WidgetForm({ projectId = "proj_nimbus" }: WidgetFormProps) {
         description: message,
         priority: "normal",
         sendNotification: false,
-      })
+      }, undefined, projectKey)
       setIsSubmitted(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message")

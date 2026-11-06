@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
-import { useTicketStore, useUnreadStore } from "./store"
+import { useAuthStore, useTicketStore, useUnreadStore } from "./store"
+import { API_PREFIX } from "./api/config"
 import { viewersApi, Viewer } from "./api"
 
 const LG_BREAKPOINT = 1024
@@ -302,10 +303,14 @@ export function useTicketViewers(ticketId: string | null) {
     const handleBeforeUnload = () => {
       // Only send beacon if we actually started tracking
       if (currentTicketIdRef.current && isTrackingRef.current) {
-        // Use sendBeacon for reliable delivery on page close
-        const apiVersion = process.env.NEXT_PUBLIC_API_VERSION || 'v2'
-        const url = `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000'}/api/${apiVersion}/viewers/${currentTicketIdRef.current}`
-        navigator.sendBeacon(url, JSON.stringify({ _method: 'DELETE' }))
+        // sendBeacon can only POST (which would register a heartbeat), so use keepalive DELETE
+        const token = useAuthStore.getState().token
+        void fetch(`${API_PREFIX}/viewers/${currentTicketIdRef.current}`, {
+          method: 'DELETE',
+          keepalive: true,
+          credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        }).catch(() => {})
       }
     }
 

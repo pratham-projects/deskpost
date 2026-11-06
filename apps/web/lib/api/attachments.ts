@@ -2,8 +2,7 @@
  * Attachments API Service (JWT-based auth)
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000";
-const API_VERSION = process.env.NEXT_PUBLIC_API_VERSION || "v2";
+import { API_PREFIX } from "./config";
 
 // Function to get JWT token - will be set by the store
 let getToken: (() => string | null) | null = null;
@@ -26,14 +25,14 @@ export const attachmentsApi = {
    * Get attachment file URL
    */
   getFileUrl: (attachmentId: string): string => {
-    return `${API_BASE_URL}/api/${API_VERSION}/attachments/file/${attachmentId}`;
+    return `${API_PREFIX}/attachments/file/${attachmentId}`;
   },
 
   /**
    * Fetch attachment as blob with authorization
    */
   getFile: async (attachmentId: string): Promise<Blob> => {
-    const url = `${API_BASE_URL}/api/${API_VERSION}/attachments/file/${attachmentId}`;
+    const url = `${API_PREFIX}/attachments/file/${attachmentId}`;
     const token = getToken?.();
     
     const headers: Record<string, string> = {};
@@ -63,8 +62,8 @@ export const attachmentsApi = {
     ticketId: string,
     file: File,
     options?: { message?: string; sendEmail?: boolean }
-  ): Promise<{ attachmentId: string }> => {
-    const url = `${API_BASE_URL}/api/${API_VERSION}/attachments/${ticketId}`;
+  ): Promise<{ attachmentId: string; messageId?: string }> => {
+    const url = `${API_PREFIX}/attachments/${ticketId}`;
     const token = getToken?.();
     
     const headers: Record<string, string> = {
@@ -102,7 +101,8 @@ export const attachmentsApi = {
       throw new Error(errorMessage);
     }
     
-    return response.json();
+    const body = await response.json();
+    return body.data ?? body;
   },
 
   /**
@@ -115,8 +115,8 @@ export const attachmentsApi = {
     ticketId: string,
     files: File[],
     options?: { message?: string; sendEmail?: boolean }
-  ): Promise<{ attachmentIds: string[] }> => {
-    const url = `${API_BASE_URL}/api/${API_VERSION}/attachments/${ticketId}/multiple`;
+  ): Promise<{ attachmentIds: string[]; messageId?: string }> => {
+    const url = `${API_PREFIX}/attachments/${ticketId}/multiple`;
     const token = getToken?.();
     
     const formData = new FormData();
@@ -158,6 +158,7 @@ export const attachmentsApi = {
       throw new Error(errorMessage);
     }
     
-    return response.json();
+    const body = await response.json();
+    return body.data ?? body;
   },
 };
