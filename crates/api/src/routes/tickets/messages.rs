@@ -12,7 +12,7 @@ use super::Params;
 use super::dto::MessageDto;
 use crate::error::{ApiError, Envelope, Fields, Pagination};
 use crate::extract::{ApiJson, ApiPath, AuthUser};
-use crate::mailer::ReplyMail;
+use crate::mail_out::{MailError, OutboundMailer, ReplyMail};
 use crate::state::AppState;
 
 const MAX_BODY: usize = 50_000;
@@ -95,7 +95,8 @@ pub async fn create(
     )))
 }
 
-/// Hand the saved reply to the mailer. A failure is logged and recorded in `email_logs`.
+/// Hand the saved reply to the mailer. Delivery failures are recorded in `email_logs` by the mailer;
+/// other failures are recorded here. Nothing here fails the request.
 async fn deliver(s: &AppState, actor: Id, message: &messages::Message) {
     let ticket = match tickets::get(&s.pool, actor, message.ticket_id).await {
         Ok(Some(t)) => t,
@@ -108,26 +109,43 @@ async fn deliver(s: &AppState, actor: Id, message: &messages::Message) {
     let mail = ReplyMail {
         project_id: ticket.project_id,
         ticket_id: ticket.id,
-        ticket_number: ticket.ticket_number,
-        message_id: message.id,
-        sent_by: actor,
-        to: ticket.client_email,
-        ticket_subject: ticket.subject,
+        sent_by: Some(actor),
         body: message.body.clone(),
+        attachment_ids: message.attachment_ids.clone(),
     };
-    let error = match tokio::time::timeout(MAIL_TIMEOUT, s.mailer.send_reply(&mail)).await {
-        Ok(Ok(())) => return,
-        Ok(Err(e)) => e.to_string(),
+    let error = match tokio::time::timeout(MAIL_TIMEOUT, s.mailer.send_reply(mail)).await {
+        Ok(Ok(sent)) => {
+            if let Err(e) = messages::set_email_headers(
+                &s.pool,
+                message.id,
+                &sent.email_message_id,
+                sent.in_reply_to.as_deref(),
+                sent.references.as_deref(),
+                &sent.to,
+                &sent.subject,
+            )
+            .await
+            {
+                tracing::error!(error = %e, "reply sent but mail headers not stored");
+            }
+            return;
+        }
+        Ok(Err(MailError::Delivery(e))) => {
+            tracing::warn!(ticket_id = %ticket.id, error = %e, "reply email failed");
+            return;
+        }
+        Ok(Err(MailError::NotConfigured)) => "SMTP not configured".to_string(),
+        Ok(Err(MailError::Internal(e))) => e,
         Err(_) => "mailer timed out".to_string(),
     };
-    tracing::warn!(ticket_id = %mail.ticket_id, %error, "reply email failed");
+    tracing::warn!(ticket_id = %ticket.id, %error, "reply email failed");
     let error: String = error.chars().take(MAX_LOGGED_ERROR).collect();
     let log = email_logs::NewEmailLog {
-        project_id: mail.project_id,
-        ticket_id: mail.ticket_id,
-        message_id: Some(mail.message_id),
-        to_email: mail.to,
-        subject: Some(mail.ticket_subject),
+        project_id: ticket.project_id,
+        ticket_id: ticket.id,
+        message_id: Some(message.id),
+        to_email: ticket.client_email,
+        subject: Some(ticket.subject),
         sent_by_user_id: Some(actor),
     };
     let recorded = async {

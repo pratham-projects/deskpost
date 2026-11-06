@@ -20,6 +20,7 @@ pub mod attachments;
 pub mod clients;
 pub mod email_logs;
 pub mod email_responses;
+pub mod mailq;
 pub mod members;
 pub mod messages;
 pub mod projects;

@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-11-06] R23 api mail attach
+
+- **Creation**: attachments routes, inbound webhook and IMAP poll worker, outbound reply mail, auto-response outbox (migration 0002), `email_logs`; see [API tickets](/architecture/api-tickets.md).
+- **Decision**: merged with R22 by keeping R23's `Mailer` (SMTP + recording double) in `AppState`; ticket replies still save first and mail after commit, then store the sent headers on the message (`messages::set_email_headers`). Migration renamed 0023 to 0002. `deny.toml` allows CDLA-Permissive-2.0 and ignores RUSTSEC-2026-0441 (pin-utils via async-imap).
+- **Lesson**: two workers building the same seam in parallel need the trait named in the plan; reconcile at merge, not at review.
+
 ## [2026-10-27] R22 api tickets
 
 - **Creation**: tickets (create admin + widget, list/search/counts, get, patch, delete), messages and internal notes, unread, viewers with GC task, `OutboundMailer` seam; see [API tickets](/architecture/api-tickets.md). 50 new integration tests.

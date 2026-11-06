@@ -27,6 +27,8 @@ pub enum ApiError {
         retry_after_secs: u64,
     },
     /// Details are logged where the error is created, never sent to the client.
+    /// Outbound SMTP failed (`502 MAIL_DELIVERY_FAILED`).
+    MailDeliveryFailed,
     Internal,
 }
 
@@ -46,6 +48,7 @@ impl ApiError {
             Self::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
+            Self::MailDeliveryFailed => StatusCode::BAD_GATEWAY,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -65,6 +68,7 @@ impl ApiError {
             Self::UnsupportedMediaType => "UNSUPPORTED_MEDIA_TYPE",
             Self::Validation(_) => "VALIDATION_ERROR",
             Self::RateLimited { .. } => "RATE_LIMITED",
+            Self::MailDeliveryFailed => "MAIL_DELIVERY_FAILED",
             Self::Internal => "INTERNAL",
         }
     }
@@ -83,6 +87,7 @@ impl ApiError {
             Self::UnsupportedMediaType => "Unsupported media type.".into(),
             Self::Validation(_) => "Validation failed.".into(),
             Self::RateLimited { .. } => "Too many requests. Try again later.".into(),
+            Self::MailDeliveryFailed => "The email could not be delivered.".into(),
             Self::Internal => "Internal server error.".into(),
         }
     }

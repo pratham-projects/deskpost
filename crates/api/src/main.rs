@@ -63,8 +63,10 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Serve => {
             let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
-            api::routes::tickets::spawn_presence_gc(pool.clone());
-            let app = build_app(AppState::new(pool, config)?);
+            let state = AppState::new(pool, config)?;
+            api::routes::tickets::spawn_presence_gc(state.pool.clone());
+            let jobs = api::workers::spawn(state.clone());
+            let app = build_app(state);
             let listener = tokio::net::TcpListener::bind(addr).await?;
             tracing::info!(%addr, "listening");
             axum::serve(
@@ -73,6 +75,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             )
             .with_graceful_shutdown(shutdown())
             .await?;
+            jobs.iter().for_each(|j| j.abort());
             tracing::info!("shut down");
         }
     }

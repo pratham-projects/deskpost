@@ -17,7 +17,8 @@ pub struct Attachment {
     pub created_at: DateTime<Utc>,
 }
 
-const COLS: &str = "a.id, a.project_id, a.ticket_id, a.message_id, a.filename, a.mime_type,
+pub(crate) const COLS: &str =
+    "a.id, a.project_id, a.ticket_id, a.message_id, a.filename, a.mime_type,
     a.size_bytes, a.storage_key, a.uploaded_by_user_id, a.created_at";
 
 #[derive(Debug, Clone)]

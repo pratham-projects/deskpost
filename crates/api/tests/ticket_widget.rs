@@ -196,10 +196,10 @@ async fn widget_response_and_mail_never_expose_internal_notes(pool: PgPool) {
     e.reply(&id, &e.owner, j("public reply")).await;
     assert!(!r.text().contains("TOP-SECRET-NOTE"));
     // the only customer-facing paths: the mail and the widget response
-    for m in e.mailer.sent() {
+    for m in e.mailer.sent.lock().unwrap().iter() {
         assert!(!m.body.contains("TOP-SECRET-NOTE"));
     }
-    assert_eq!(e.mailer.sent().len(), 1);
+    assert_eq!(e.mailer.sent.lock().unwrap().len(), 1);
     // and the public endpoint cannot read threads at all
     let g =
         e.t.send(

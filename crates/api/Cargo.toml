@@ -37,6 +37,7 @@ uuid = { version = "1", features = ["serde", "v4"] }
 
 [dev-dependencies]
 sd-mail = { workspace = true, features = ["testing"] }
+tempfile = "3"
 http-body-util = "0.1"
 proptest = "1.12.0"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "macros", "uuid", "chrono"] }

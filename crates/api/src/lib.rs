@@ -20,12 +20,16 @@ pub mod config;
 pub mod dto;
 pub mod error;
 pub mod extract;
+pub mod ingest;
 pub mod jwt;
-pub mod mailer;
+pub mod mail_config;
+pub mod mail_out;
 pub mod password;
 pub mod ratelimit;
 pub mod routes;
 pub mod state;
+pub mod store;
+pub mod workers;
 
 pub use state::AppState;
 
@@ -53,6 +57,11 @@ pub fn build_app_with(state: AppState, extra: Router<AppState>) -> Router {
     let cfg = state.config.clone();
     let versioned = Router::new()
         .nest("/auth", routes::auth::router())
+        .nest(
+            "/attachments",
+            routes::attachments::router(cfg.upload_limit),
+        )
+        .merge(routes::incoming::router(cfg.webhook_limit))
         .merge(routes::tickets::router())
         .merge(routes::project_routes())
         .merge(extra);

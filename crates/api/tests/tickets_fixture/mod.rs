@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use api::mailer::RecordingMailer;
+use api::mail_out::{Mailer, RecordingMailer};
 use api::{AppState, build_app_with};
 use axum::Router;
 use axum::body::Body;
@@ -31,7 +31,7 @@ pub struct Env {
 
 pub fn app_with_mailer(pool: Pool, mailer: Arc<RecordingMailer>) -> TestApp {
     let mut state = AppState::new(pool.clone(), test_config()).unwrap();
-    state.mailer = mailer;
+    state.mailer = Mailer::Recording(mailer);
     let app = build_app_with(state.clone(), Router::new());
     TestApp { app, state, pool }
 }

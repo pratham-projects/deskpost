@@ -1,5 +1,7 @@
+pub mod attachments;
 pub mod auth;
 pub mod health;
+pub mod incoming;
 pub mod tickets;
 
 // R21: projects, members, users, clients, templates, email responses, project mail settings.

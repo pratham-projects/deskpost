@@ -62,6 +62,7 @@ pub struct Config {
     /// `SD_ALLOW_PRIVATE_MAIL_HOSTS`: let SMTP/IMAP settings point at loopback/private addresses.
     pub allow_private_mail_hosts: bool,
     pub argon2: Argon2Cost,
+    pub mail: crate::mail_config::MailConfig,
 }
 
 /// Secrets and the database URL (which carries a password) stay out of logs.
@@ -200,6 +201,7 @@ impl Config {
             allow_signup: flag(&get, "SD_ALLOW_SIGNUP", true, &mut errs),
             allow_private_mail_hosts: flag(&get, "SD_ALLOW_PRIVATE_MAIL_HOSTS", false, &mut errs),
             argon2: Argon2Cost::PRODUCTION,
+            mail: crate::mail_config::MailConfig::from_lookup(&get, &mut errs),
         };
         if errs.is_empty() {
             Ok(config)
@@ -209,7 +211,11 @@ impl Config {
     }
 }
 
-fn secret(get: &impl Fn(&str) -> Option<String>, name: &str, errs: &mut Vec<String>) -> Vec<u8> {
+pub(crate) fn secret(
+    get: &impl Fn(&str) -> Option<String>,
+    name: &str,
+    errs: &mut Vec<String>,
+) -> Vec<u8> {
     let Some(v) = get(name) else {
         errs.push(format!("{name} is required"));
         return Vec::new();
@@ -228,7 +234,7 @@ fn secret(get: &impl Fn(&str) -> Option<String>, name: &str, errs: &mut Vec<Stri
     v.into_bytes()
 }
 
-fn num(
+pub(crate) fn num(
     get: &impl Fn(&str) -> Option<String>,
     name: &str,
     default: usize,
@@ -246,7 +252,7 @@ fn num(
     }
 }
 
-fn flag(
+pub(crate) fn flag(
     get: &impl Fn(&str) -> Option<String>,
     name: &str,
     default: bool,

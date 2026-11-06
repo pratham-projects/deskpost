@@ -3,7 +3,7 @@ mod tickets_fixture;
 
 use std::sync::Arc;
 
-use api::mailer::RecordingMailer;
+use api::mail_out::{MailError, RecordingMailer};
 use axum::http::Method;
 use serde_json::json;
 use sqlx::PgPool;
@@ -20,12 +20,18 @@ async fn reply_happy_path_mails_after_commit(pool: PgPool) {
     assert_eq!(m["messageType"], "reply");
     assert_eq!(m["isInternal"], false);
     assert_eq!(m["sender"]["id"], e.agent_id.to_string());
-    let sent = e.mailer.sent();
+    let sent = e.mailer.sent.lock().unwrap().clone();
     assert_eq!(sent.len(), 1);
-    assert_eq!(sent[0].to, "client@example.com");
     assert_eq!(sent[0].body, "We are on it");
-    assert_eq!(sent[0].ticket_number, 1);
-    assert_eq!(sent[0].message_id.to_string(), m["id"].as_str().unwrap());
+    assert_eq!(sent[0].ticket_id.to_string(), id);
+    assert_eq!(sent[0].sent_by, Some(e.agent_id));
+    let stored: Option<String> =
+        sqlx::query_scalar("SELECT email_message_id FROM messages WHERE id = $1")
+            .bind(uuid::Uuid::parse_str(m["id"].as_str().unwrap()).unwrap())
+            .fetch_one(&e.t.pool)
+            .await
+            .unwrap();
+    assert_eq!(stored.as_deref(), Some("recorded-1@test.invalid"));
     // thread: newest first
     let list = e.get(&format!("/tickets/{id}/messages"), &e.owner).await;
     let data = list.json()["data"].clone();
@@ -61,12 +67,13 @@ async fn send_email_false_and_internal_notes_are_never_mailed(pool: PgPool) {
         json!({"body":"still internal","isInternal":true,"sendEmail":true}),
     )
     .await;
-    assert!(e.mailer.sent().is_empty());
+    assert!(e.mailer.sent.lock().unwrap().is_empty());
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn mail_failure_is_recorded_not_surfaced(pool: PgPool) {
-    let mailer = Arc::new(RecordingMailer::failing("smtp down"));
+    let mailer = Arc::new(RecordingMailer::default());
+    *mailer.fail_next.lock().unwrap() = Some(MailError::Internal("smtp down".into()));
     let e = Env::with_mailer(pool, mailer).await;
     let id = e.ticket_id(&e.owner, "Failing mail").await;
     let r = e.reply(&id, &e.owner, j("hello")).await;
@@ -122,7 +129,7 @@ async fn message_validation_roles_and_isolation(pool: PgPool) {
         .post(&path, &e.agent, json!({"body":"hi","senderType":"client"}))
         .await;
     assert_eq!(r.json()["data"]["senderType"], "agent");
-    assert!(e.mailer.sent().len() == 1);
+    assert!(e.mailer.sent.lock().unwrap().len() == 1);
 }
 
 #[sqlx::test(migrations = "../db/migrations")]

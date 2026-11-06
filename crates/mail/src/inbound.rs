@@ -49,6 +49,23 @@ pub struct InboundEmail {
     pub attachments: Vec<InboundAttachment>,
     /// Unix seconds (UTC).
     pub date: Option<i64>,
+    /// Machine-generated (`Auto-Submitted` other than `no`, `Precedence: bulk/junk/list/auto_reply`,
+    /// `X-Autoreply`): answering it would start a mail loop.
+    pub auto_generated: bool,
+}
+
+fn is_auto_generated(msg: &mail_parser::Message<'_>) -> bool {
+    let headers = msg.headers();
+    let text = |name: &str| {
+        headers
+            .value(name)
+            .and_then(|h| h.as_text())
+            .map(|v| v.trim().to_ascii_lowercase())
+    };
+    text("Auto-Submitted").is_some_and(|v| v != "no")
+        || text("Precedence")
+            .is_some_and(|v| matches!(v.as_str(), "bulk" | "junk" | "list" | "auto_reply"))
+        || headers.contains("X-Autoreply")
 }
 
 fn strip_brackets(s: &str) -> String {
@@ -157,5 +174,6 @@ pub fn parse_inbound(raw: &[u8], limits: &Limits) -> Result<InboundEmail, ParseE
             .map(|c| c.into_owned()),
         attachments,
         date: msg.date().map(|d| d.to_timestamp()),
+        auto_generated: is_auto_generated(&msg),
     })
 }
