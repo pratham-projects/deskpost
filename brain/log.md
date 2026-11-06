@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-11-06] R30 web live
+
+- **Creation**: `apps/web/lib/api/config.ts` (`NEXT_PUBLIC_API_URL`, default same origin; `NEXT_PUBLIC_API_VERSION`, default v3); `output: "export"` to `apps/web/out`; `.env.example`.
+- **Decision**: mock API and demo badge only with `NEXT_PUBLIC_USE_MOCK=1` (turbopack alias swaps in a stub otherwise; verified absent from the default bundle). Auth client reads the `{success,data,error}` envelope; signup then signs in (API returns no tokens); widget takes `/widget?project=&key=` and sends `X-Project-Key`; attachment upload reads `.data`; role picker removed (first user is admin). Unused `ui/chart`, `resizable`, `calendar` deleted, `ignoreBuildErrors` removed, so `make web` typechecks clean. `vercel.json` and Vercel analytics dropped.
+- **Lesson**: [unload-time DELETE](/wisdom/time-traps.md) and bundler dead-code.
+
 ## [2026-11-06] R23 api mail attach
 
 - **Creation**: attachments routes, inbound webhook and IMAP poll worker, outbound reply mail, auto-response outbox (migration 0002), `email_logs`; see [API tickets](/architecture/api-tickets.md).

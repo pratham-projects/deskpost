@@ -11,7 +11,7 @@
 | R21 | feat/api-projects | done, merged |
 | R22 | feat/api-tickets | done, merged |
 | R23 | feat/api-mail-attach | done, merged |
-| R30 | feat/web-live | todo |
+| R30 | feat/web-live | done (static export `apps/web/out`; API/Caddy serving left to R31) |
 | R31 | feat/deploy-docs | todo |
 | R40 | feat/e2e | todo |
 | R50 | review + fixes | todo |

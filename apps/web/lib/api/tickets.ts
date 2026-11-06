@@ -3,6 +3,7 @@
  */
 
 import { apiClient, ApiResponse, API_VERSION } from './client';
+import { API_PREFIX } from './config';
 
 export interface Client {
   id: string;
@@ -106,7 +107,6 @@ export interface AddMessageRequest {
 }
 
 // Get API base URL and session for multipart requests
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000";
 
 export const ticketsApi = {
   /**
@@ -116,7 +116,8 @@ export const ticketsApi = {
    */
   create: async (
     data: CreateTicketRequest & { sendNotification?: boolean },
-    files?: File[]
+    files?: File[],
+    projectKey?: string
   ): Promise<ApiResponse<Ticket>> => {
     // Check if user is authenticated (admin/agent)
     const { useAuthStore } = await import("@/lib/store");
@@ -124,8 +125,8 @@ export const ticketsApi = {
 
     // Use admin endpoint for authenticated users
     const endpoint = isAuthenticated
-      ? `${API_BASE_URL}/api/${API_VERSION}/tickets/admin`
-      : `${API_BASE_URL}/api/${API_VERSION}/tickets`;
+      ? `${API_PREFIX}/tickets/admin`
+      : `${API_PREFIX}/tickets`;
 
     // Use multipart form data to support optional attachments
     const formData = new FormData();
@@ -149,6 +150,8 @@ export const ticketsApi = {
     const headers: Record<string, string> = {};
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
+    } else if (projectKey) {
+      headers["X-Project-Key"] = projectKey;
     }
 
     const response = await fetch(endpoint, {

@@ -1,10 +1,8 @@
 import type React from "react"
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
-import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "@/components/ui/toaster"
 import { MockMount } from "@/components/demo/mock-mount"
-import { DemoBadge } from "@/components/demo/demo-badge"
 import "./globals.css"
 
 const _geist = Geist({ subsets: ["latin"] })
@@ -35,8 +33,6 @@ export default function RootLayout({
         <MockMount />
         {children}
         <Toaster />
-        <DemoBadge />
-        <Analytics />
       </body>
     </html>
   )

@@ -18,7 +18,7 @@ interface AuthStore {
   refreshToken: () => Promise<boolean>
   tryAutoLogin: () => Promise<boolean>
   login: (email: string, password: string) => Promise<boolean>
-  signup: (name: string, email: string, password: string, role: AgentRole) => Promise<boolean>
+  signup: (name: string, email: string, password: string) => Promise<boolean>
   logout: () => Promise<void>
   clearError: () => void
 }
@@ -44,7 +44,7 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
       console.log("[Auth] Starting token refresh, current token:", get().token?.substring(0, 30) + "...")
 
       const response = await authApi.refresh()
-      if (response.status !== 'success' || !response.data) {
+      if (!response.success || !response.data) {
         // eslint-disable-next-line no-console
         console.log("[Auth] Refresh failed - response:", response)
         return false
@@ -164,8 +164,8 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
     try {
       const response = await authApi.signIn({ email, password })
 
-      if (response.status !== 'success' || !response.data) {
-        const errorMsg = response.message || "Login failed"
+      if (!response.success || !response.data) {
+        const errorMsg = response.error?.message || "Login failed"
         set({ error: errorMsg, isLoading: false })
         return false
       }
@@ -219,26 +219,15 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
     try {
       const response = await authApi.signUp({ name, email, password })
 
-      if (response.status !== 'success' || !response.data) {
-        const errorMsg = response.message || "Signup failed"
+      if (!response.success || !response.data) {
+        const errorMsg = response.error?.message || "Signup failed"
         set({ error: errorMsg, isLoading: false })
         return false
       }
 
-      const user = response.data
-
-      set({
-        agent: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: (user.role as AgentRole) || "agent",
-          createdAt: new Date(user.createdAt || Date.now()),
-        },
-        isAuthenticated: true,
-        isLoading: false,
-      })
-      return true
+      // Signup returns no tokens: sign in with the same credentials to get a session.
+      set({ isLoading: false })
+      return await get().login(email, password)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Signup failed"
       set({ error: message, isLoading: false })

@@ -2,10 +2,10 @@
  * API Client - Centralized HTTP client for all API calls (JWT-based auth with refresh)
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000";
-const API_VERSION = process.env.NEXT_PUBLIC_API_VERSION || "v2";
+import { API_BASE_URL, API_VERSION } from "./config";
 
 export interface ApiResponse<T> {
+  success: boolean;
   data: T;
 }
 
@@ -57,7 +57,6 @@ class ApiClient {
     if (!endpoint.includes('/auth/') && isTokenExpired?.() && refreshToken) {
       // eslint-disable-next-line no-console
       console.log("[API] Token expired, attempting refresh...");
-      console.log("[API] Token before refresh:", getToken?.()?.substring(0, 30) + "...");
       const refreshed = await refreshToken();
       if (!refreshed) {
         // eslint-disable-next-line no-console
@@ -69,13 +68,10 @@ class ApiClient {
       }
       // eslint-disable-next-line no-console
       console.log("[API] Token refreshed successfully, continuing request...");
-      console.log("[API] Token after refresh:", getToken?.()?.substring(0, 30) + "...");
     }
 
     // Get JWT token if available
     const token = getToken?.();
-    // eslint-disable-next-line no-console
-    console.log("[API] Using token for request:", token?.substring(0, 30) + "...");
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -93,12 +89,6 @@ class ApiClient {
       credentials: 'include', // Include cookies for refresh token
     };
 
-    // Log request
-    const method = options.method || "GET";
-    const body = options.body ? JSON.parse(options.body as string) : "";
-    const tokenInfo = token ? "(token: " + token.substring(0, 20) + "...)" : "(no token)";
-    // eslint-disable-next-line no-console
-    console.log("[API] " + method + " " + endpoint, body, tokenInfo);
 
     let response: Response;
     try {

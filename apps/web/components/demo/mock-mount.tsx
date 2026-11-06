@@ -1,13 +1,12 @@
 "use client"
 
 import { installMockApi } from "@/mock/install"
+import { DemoBadge } from "./demo-badge"
 
-// Module scope — runs once at import time, before any child component's
-// effects fire, which is what lets tryAutoLogin() (called from app/page.tsx,
-// app/settings/page.tsx, app/templates/page.tsx on mount) find a valid
-// pre-seeded session already sitting in localStorage. See mock/install.ts.
+// Demo build only (NEXT_PUBLIC_USE_MOCK=1, see app/layout.tsx). Runs at import time,
+// before any child effect calls tryAutoLogin().
 installMockApi()
 
 export function MockMount() {
-  return null
+  return <DemoBadge />
 }

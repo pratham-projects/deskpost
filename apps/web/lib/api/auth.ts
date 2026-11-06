@@ -2,9 +2,7 @@
  * Auth API Service (JWT-based with refresh token rotation)
  */
 
-import { API_VERSION } from './client';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000";
+import { API_PREFIX } from './config';
 
 export interface User {
   id: string;
@@ -45,12 +43,28 @@ export interface RefreshResponse {
   refreshToken?: string; // New refresh token (token rotation) - for cross-origin/cross-subdomain setups
 }
 
+// Real envelope: { success: true, data } | { success: false, error: { code, message } }
 export interface AuthApiResponse<T> {
-  status: 'success' | 'error';
+  success: boolean;
   data?: T;
-  message?: string;
-  code?: string;
+  error?: { code?: string; message?: string };
 }
+
+const failure = (message: string, code: string): AuthApiResponse<never> => ({
+  success: false,
+  error: { code, message },
+});
+
+// Parse the envelope; a non-JSON body (proxy error page, 502) becomes a failure instead of throwing.
+const parse = async <T>(response: Response): Promise<AuthApiResponse<T>> => {
+  try {
+    const body = await response.json();
+    if (typeof body?.success === 'boolean') return body;
+  } catch {
+    // fall through
+  }
+  return failure(`Request failed (${response.status})`, 'BAD_RESPONSE');
+};
 
 // Auth API uses credentials: 'include' for refresh token cookies
 export const authApi = {
@@ -58,13 +72,13 @@ export const authApi = {
    * Create a new user account
    */
   signUp: async (data: SignUpRequest): Promise<AuthApiResponse<User>> => {
-    const response = await fetch(`${API_BASE_URL}/api/${API_VERSION}/auth/signup`, {
+    const response = await fetch(`${API_PREFIX}/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify(data),
     });
-    return response.json();
+    return parse<User>(response);
   },
 
   /**
@@ -72,27 +86,17 @@ export const authApi = {
    */
   signIn: async (data: SignInRequest): Promise<AuthApiResponse<SignInResponse>> => {
     try {
-      console.log("[AuthAPI] Sending signIn request to:", `${API_BASE_URL}/api/${API_VERSION}/auth/signin`)
-      const response = await fetch(`${API_BASE_URL}/api/${API_VERSION}/auth/signin`, {
+      const response = await fetch(`${API_PREFIX}/auth/signin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify(data),
       });
-      console.log("[AuthAPI] Response status:", response.status, response.statusText)
-      
-      const result = await response.json();
-      console.log("[AuthAPI] Response body:", result)
-      
-      return result;
+      return await parse<SignInResponse>(response);
     } catch (err) {
       console.error("[AuthAPI] SignIn request failed:", err)
       // Return error response format
-      return {
-        status: 'error',
-        message: err instanceof Error ? err.message : 'Network error',
-        code: 'NETWORK_ERROR'
-      };
+      return failure(err instanceof Error ? err.message : 'Network error', 'NETWORK_ERROR');
     }
   },
 
@@ -100,11 +104,11 @@ export const authApi = {
    * Sign out and invalidate refresh token
    */
   signOut: async (): Promise<AuthApiResponse<{ message: string }>> => {
-    const response = await fetch(`${API_BASE_URL}/api/${API_VERSION}/auth/signout`, {
+    const response = await fetch(`${API_PREFIX}/auth/signout`, {
       method: 'POST',
       credentials: 'include',
     });
-    return response.json();
+    return parse<{ message: string }>(response);
   },
 
   /**
@@ -125,7 +129,7 @@ export const authApi = {
     // Only add header if we have a stored token (cross-origin dev mode)
     // Otherwise rely on the cookie being sent automatically
     if (storedRefreshToken) {
-      headers["x-refresh-token"] = storedRefreshToken;
+      headers["X-Refresh-Token"] = storedRefreshToken;
       // eslint-disable-next-line no-console
       console.log("[Auth] Using x-refresh-token header");
     } else {
@@ -136,30 +140,26 @@ export const authApi = {
     // eslint-disable-next-line no-console
     console.log("[Auth] Request headers:", headers);
 
-    const response = await fetch(`${API_BASE_URL}/api/${API_VERSION}/auth/refresh`, {
+    const response = await fetch(`${API_PREFIX}/auth/refresh`, {
       method: "POST",
       headers: Object.keys(headers).length > 0 ? headers : undefined,
       credentials: "include",
     });
     
-    const result = await response.json();
-    // eslint-disable-next-line no-console
-    console.log("[Auth] Refresh response:", result);
-    
-    return result;
+    return parse<RefreshResponse>(response);
   },
 
   /**
    * Get current authenticated user
    */
   me: async (accessToken: string): Promise<AuthApiResponse<{ user: User }>> => {
-    const response = await fetch(`${API_BASE_URL}/api/${API_VERSION}/auth/me`, {
+    const response = await fetch(`${API_PREFIX}/auth/me`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
       },
       credentials: 'include',
     });
-    return response.json();
+    return parse<{ user: User }>(response);
   },
 };

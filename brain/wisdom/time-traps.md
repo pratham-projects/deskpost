@@ -33,3 +33,5 @@ Carried over from bunfiiliate:
 - A route that writes two column groups (project + mail settings) must do it in one transaction, or a unique clash on the second half leaves the first applied; a `cat >>` heredoc run twice silently duplicated a whole test file (check `wc -l` after appending).
 - macOS `sed -i` needs `''` and an `&&` chain stops at its failure: the following heredoc never ran.
 - Limiter buckets are per IP and per rule: tests that sign in many times hit `Login` (10/min); give new endpoints their own `Rule`, and use `.peer(ip)` in tests that need a fresh bucket.
+- `navigator.sendBeacon` can only POST: a "DELETE" via `_method` body registers a heartbeat instead. Use `fetch(..., {method:'DELETE', keepalive:true})` on unload.
+- Turbopack does not dead-code-eliminate `require()`/`import()` behind `process.env.X === "1"`; the mock stayed in the bundle. Swap modules with `turbopack.resolveAlias` in `next.config.mjs` and grep `out/` for a seed string.

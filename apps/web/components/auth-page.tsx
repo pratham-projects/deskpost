@@ -4,22 +4,17 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { useAuthStore } from "@/lib/store"
-import type { AgentRole } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PasswordInput } from "@/components/ui/password-input"
 import { Label } from "@/components/ui/label"
-import { Inbox, AlertCircle, Shield, User, Loader2 } from "lucide-react"
+import { Inbox, AlertCircle, Loader2 } from "lucide-react"
 
 export function AuthPage() {
   const [isLogin, setIsLogin] = useState(true)
   const [name, setName] = useState("")
-  // Prefilled with demo credentials (see mock/seed.ts DEMO_AGENTS) — the demo
-  // auto-authenticates on load already, so this screen is mainly reachable
-  // after a manual "Logout", and shouldn't be a dead end when it is.
-  const [email, setEmail] = useState("priya@sendesk-demo.dev")
-  const [password, setPassword] = useState("demodemo123")
-  const [role, setRole] = useState<AgentRole>("developer")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
 
   const { login, signup, isLoading, error, clearError } = useAuthStore()
 
@@ -37,7 +32,7 @@ export function AuthPage() {
       if (!name.trim()) {
         return
       }
-      await signup(name, email, password, role)
+      await signup(name, email, password)
     }
   }
 
@@ -67,41 +62,6 @@ export function AuthPage() {
                   onChange={(e) => setName(e.target.value)}
                   className="mt-2"
                 />
-              </div>
-
-              <div>
-                <Label>Role</Label>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => setRole("admin")}
-                    className={`flex items-center justify-center gap-2 p-3 rounded-lg border transition-colors ${
-                      role === "admin"
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border hover:border-muted-foreground"
-                    }`}
-                  >
-                    <Shield className="w-4 h-4" />
-                    <span className="text-sm font-medium">Admin</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole("developer")}
-                    className={`flex items-center justify-center gap-2 p-3 rounded-lg border transition-colors ${
-                      role === "developer"
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border hover:border-muted-foreground"
-                    }`}
-                  >
-                    <User className="w-4 h-4" />
-                    <span className="text-sm font-medium">Developer</span>
-                  </button>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  {role === "admin"
-                    ? "Admins can manage projects and all settings"
-                    : "Developers can reply to tickets and change statuses"}
-                </p>
               </div>
             </>
           )}
