@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 // Contract: every type the UI offers must be accepted by the server (UI list is a subset).
-const root = join(__dirname, "..", "..")
+const root = join(process.cwd(), "..") // playwright runs from e2e/
 const quoted = (src: string) => [...src.matchAll(/["']([a-z]+\/[A-Za-z0-9.+-]+)["']/g)].map((m) => m[1])
 
 test("UI attachment types are a subset of the server allow-list", () => {
