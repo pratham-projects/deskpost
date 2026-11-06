@@ -9,24 +9,26 @@ use axum::http::{HeaderMap, StatusCode};
 use sd_core::api_key::hash_api_key;
 use sd_core::email_addr::is_valid_email;
 use sd_db::tickets::{self, Access, NewTicket};
-use sd_db::{Id, Priority, TicketSource};
+use sd_db::{EmailResponseStatus, Id, Priority, TicketSource};
 
 use super::dto::TicketDto;
 use crate::client_ip::ClientIp;
 use crate::error::{ApiError, Envelope, Fields};
 use crate::extract::{AuthUser, project_role};
+use crate::mail_out::enqueue_auto_response;
 use crate::ratelimit::Rule;
 use crate::state::AppState;
 
 pub const MAX_DESCRIPTION: usize = 20_000;
 const MAX_PARTS: usize = 40;
-const TEXT_FIELDS: [&str; 6] = [
+const TEXT_FIELDS: [&str; 7] = [
     "projectId",
     "clientEmail",
     "clientName",
     "subject",
     "description",
     "priority",
+    "sendNotification",
 ];
 
 /// Trimmed subject of 5..=255 characters.
@@ -66,6 +68,28 @@ async fn read_fields(
         fields.entry(name).or_insert(text);
     }
     Err(ApiError::BadRequest("Too many form fields.".into()))
+}
+
+/// `sendNotification`: absent means yes; only "false" (any case) or "0" turns it off.
+fn wants_notification(fields: &HashMap<String, String>) -> bool {
+    fields.get("sendNotification").is_none_or(|v| {
+        let v = v.trim();
+        !(v.eq_ignore_ascii_case("false") || v == "0")
+    })
+}
+
+/// Queue the confirmation mail after commit; a failure is logged and never fails the request.
+async fn confirm(s: &AppState, ticket: &tickets::Ticket) {
+    if let Err(e) = enqueue_auto_response(
+        &s.pool,
+        ticket.project_id,
+        ticket.id,
+        EmailResponseStatus::Created,
+    )
+    .await
+    {
+        tracing::warn!(error = %e, "created auto-response not queued");
+    }
 }
 
 /// Validated form: the ticket to create with `source` and `created_by` still unset.
@@ -122,12 +146,16 @@ pub async fn admin(
     AuthUser(user): AuthUser,
     mp: Result<Multipart, MultipartRejection>,
 ) -> Result<Envelope<TicketDto>, ApiError> {
-    let mut new = validate(&read_fields(mp).await?)?;
+    let fields = read_fields(mp).await?;
+    let mut new = validate(&fields)?;
     project_role(&s, user.id, new.project_id).await?;
     new.created_by = Some(user.id);
     let ticket = tickets::create(&s.pool, &Access::Member(user.id), &new)
         .await?
         .ok_or_else(|| ApiError::not_found("Project"))?;
+    if wants_notification(&fields) {
+        confirm(&s, &ticket).await;
+    }
     Ok(Envelope::created(ticket.into()))
 }
 
@@ -145,11 +173,15 @@ pub async fn widget(
         .and_then(|v| v.to_str().ok())
         .filter(|k| !k.is_empty())
         .ok_or(ApiError::TokenInvalid)?;
-    let mut new = validate(&read_fields(mp).await?)?;
+    let fields = read_fields(mp).await?;
+    let mut new = validate(&fields)?;
     new.source = TicketSource::Web;
     let access = Access::ApiKeyHash(hash_api_key(key));
     let ticket = tickets::create(&s.pool, &access, &new)
         .await?
         .ok_or(ApiError::TokenInvalid)?;
+    if wants_notification(&fields) {
+        confirm(&s, &ticket).await;
+    }
     Ok(Envelope::created(ticket.into()))
 }

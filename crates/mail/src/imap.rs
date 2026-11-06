@@ -417,12 +417,13 @@ impl Mailbox for ImapMailbox {
             let fetches: Vec<_> = stream.try_collect().await?;
             Ok::<_, async_imap::error::Error>(fetches)
         };
+        let cap = self.max_message_bytes;
         let sizes: Vec<(u32, usize)> = timeout(io, sizes)
             .await
             .map_err(|_| Error::Timeout("imap size"))?
             .map_err(imap_err)?
             .iter()
-            .filter_map(|f| Some((f.uid?, f.size.unwrap_or(0) as usize)))
+            .filter_map(|f| Some((f.uid?, f.size.map_or(cap, |n| n as usize)))) // unknown size: assume the cap
             .collect();
         let mut out = Vec::with_capacity(sizes.len());
         // Download in groups of at most `max_message_bytes` (one message may exceed that alone only
@@ -462,11 +463,14 @@ impl Mailbox for ImapMailbox {
                 .await
                 .map_err(|_| Error::Timeout("imap fetch"))?
                 .map_err(imap_err)?;
+            // The declared size is the server's word: re-check what actually arrived.
             out.extend(fetches.iter().filter_map(|f| {
+                let body = f.body()?;
+                let big = body.len() > cap;
                 Some(RawMessage {
                     uid: f.uid?,
-                    bytes: f.body()?.to_vec(),
-                    oversize: None,
+                    bytes: if big { Vec::new() } else { body.to_vec() },
+                    oversize: big.then_some(body.len()),
                 })
             }));
         }

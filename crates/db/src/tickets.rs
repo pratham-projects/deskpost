@@ -352,6 +352,17 @@ pub async fn counts(pool: &Pool, actor: Id) -> Result<(TicketStats, Vec<(Id, Tic
     Ok((global, per_project))
 }
 
+/// Result of [`update_guarded`].
+#[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
+pub enum Guarded {
+    Done(TicketUpdate),
+    /// Missing or not visible to the actor.
+    NotFound,
+    /// The status under the row lock differs from the one the caller validated against.
+    Stale(TicketStatus),
+}
+
 /// Any visible ticket. Entering resolved/closed stamps `closed_at` once; leaving them clears it.
 /// An assignee that is not a member of the project fails with a foreign-key violation.
 pub async fn update(
@@ -360,6 +371,22 @@ pub async fn update(
     id: Id,
     patch: &TicketPatch,
 ) -> Result<Option<TicketUpdate>> {
+    Ok(match update_guarded(pool, actor, id, patch, None).await? {
+        Guarded::Done(u) => Some(u),
+        Guarded::NotFound | Guarded::Stale(_) => None,
+    })
+}
+
+/// Like [`update`], but when `expect` is set the change is applied only if the status found under
+/// the row lock equals it. A caller that validated a transition against a status it read earlier
+/// passes that status, so a concurrent change cannot turn the validation into a lie.
+pub async fn update_guarded(
+    pool: &Pool,
+    actor: Id,
+    id: Id,
+    patch: &TicketPatch,
+    expect: Option<TicketStatus>,
+) -> Result<Guarded> {
     let mut tx = pool.begin().await?;
     let previous: Option<TicketStatus> = sqlx::query_scalar(&format!(
         "SELECT t.status FROM tickets t {VISIBLE} WHERE t.id = $2 FOR UPDATE OF t"
@@ -369,8 +396,13 @@ pub async fn update(
     .fetch_optional(&mut *tx)
     .await?;
     let Some(previous_status) = previous else {
-        return Ok(None);
+        return Ok(Guarded::NotFound);
     };
+    if let Some(e) = expect
+        && e != previous_status
+    {
+        return Ok(Guarded::Stale(previous_status));
+    }
     let (set_assignee, assignee) = match patch.assignee {
         Some(a) => (true, a),
         None => (false, None),
@@ -398,7 +430,7 @@ pub async fn update(
         .fetch_one(&mut *tx)
         .await?;
     tx.commit().await?;
-    Ok(Some(TicketUpdate {
+    Ok(Guarded::Done(TicketUpdate {
         ticket,
         previous_status,
     }))

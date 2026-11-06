@@ -622,3 +622,16 @@ async fn body_size_cap_and_rate_limit(pool: PgPool) {
     );
     assert!(r.header("retry-after").is_some());
 }
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn identical_mails_with_different_dates_are_not_duplicates(pool: PgPool) {
+    let k = Kit::new(pool).await;
+    k.acme().await;
+    let at = |d: &str| json!({ "from": "bob@example.com", "to": MAILBOX, "subject": "Thanks", "body": "Thanks", "date": d });
+    assert_eq!(k.hook(at("2026-11-06T10:00:00Z")).await.status, 201);
+    assert_eq!(k.hook(at("2026-11-06T11:00:00Z")).await.status, 201);
+    assert_eq!(
+        k.hook(at("2026-11-06T11:00:00Z")).await.json()["data"]["duplicate"],
+        true
+    );
+}

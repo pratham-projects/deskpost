@@ -26,7 +26,6 @@ pub const MAX_ATTEMPTS: i32 = 5;
 const OUTBOX_BATCH: i64 = 20;
 const LEASE_SECS: i64 = 300;
 const ERROR_LEN: usize = 300;
-const EXCERPT_CHARS: usize = 300;
 
 /// AAD binding a sealed password to its project and field. `routes::projects` must seal with the same.
 pub fn smtp_aad(project: Id) -> Vec<u8> {
@@ -459,15 +458,8 @@ async fn send_job(state: &AppState, job: &mailq::OutboxJob) -> Result<String, (S
             (mid, parent, refs)
         }
     };
-    let mut text = resp.body.clone();
-    if let Some(d) = t.description.as_deref().filter(|d| !d.trim().is_empty()) {
-        // Only a short excerpt: the address may be spoofed, and we must not reflect a whole mail at it.
-        text.push_str("\n\n---\nYour message:\n");
-        text.push_str(&d.chars().take(EXCERPT_CHARS).collect::<String>());
-        if d.chars().count() > EXCERPT_CHARS {
-            text.push('…');
-        }
-    }
+    // Only what the project controls: the address may be spoofed, so no sender text is reflected.
+    let text = resp.body.clone();
     let email = OutboundEmail {
         to: vec![t.client_email.clone()],
         subject: auto_subject(&resp.subject, &t.project_name, t.ticket_number),

@@ -240,7 +240,7 @@ async fn created_auto_response_is_queued_then_sent_with_tagged_subject(pool: PgP
     assert_eq!(m.message_id, format!("ticket-{}@acme.test", ticket.id));
     let text = m.text.unwrap();
     assert!(
-        text.contains("Thanks, we got your request.") && text.contains("It is burning"),
+        text.contains("Thanks, we got your request.") && !text.contains("It is burning"),
         "{text}"
     );
     let log: (String, Option<String>) =

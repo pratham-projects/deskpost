@@ -2,8 +2,9 @@
 
 use axum::extract::State;
 use sd_core::status::{TicketStatus as Core, TransitionError};
-use sd_db::tickets::{self, TicketFilter, TicketPatch};
-use sd_db::{Id, Priority, TicketStatus, is_foreign_key_violation};
+use sd_db::tickets::{self, Guarded, TicketFilter, TicketPatch};
+use sd_db::{EmailResponseStatus, Id, Priority, TicketStatus, is_foreign_key_violation};
+use sd_storage::Storage;
 use serde::{Deserialize, Deserializer};
 use serde_json::{Value, json};
 
@@ -11,6 +12,7 @@ use super::dto::{TicketDto, stats_json};
 use super::{Params, create::MAX_DESCRIPTION, create::valid_subject};
 use crate::error::{ApiError, Envelope, Fields, Pagination};
 use crate::extract::{ApiJson, ApiPath, AuthUser, project_admin};
+use crate::mail_out::enqueue_auto_response;
 use crate::state::AppState;
 
 const MIN_SEARCH_CHARS: usize = 2;
@@ -162,34 +164,58 @@ pub async fn update(
     }
     f.finish()?;
 
-    let current = tickets::get(&s.pool, user.id, id)
-        .await?
-        .ok_or_else(|| ApiError::not_found("Ticket"))?;
-    if let Some(to) = status {
-        match core(current.status).transition(core(to)) {
-            Ok(_) => patch.status = Some(to),
-            // Re-sending the current status is a no-op, not an error (the UI sends whole forms).
-            Err(TransitionError::Unchanged) => {}
-            Err(TransitionError::ClosedIsFinal) => {
-                return Err(ApiError::Conflict(
-                    "A closed ticket can only be reopened to pending.".into(),
-                ));
+    // Validate the transition against the status read here, then apply it only if the row still has
+    // that status (checked under the row lock); on a concurrent change, re-read and validate again.
+    for _ in 0..3 {
+        let current = tickets::get(&s.pool, user.id, id)
+            .await?
+            .ok_or_else(|| ApiError::not_found("Ticket"))?;
+        patch.status = None;
+        if let Some(to) = status {
+            match core(current.status).transition(core(to)) {
+                Ok(_) => patch.status = Some(to),
+                // Re-sending the current status is a no-op, not an error (the UI sends whole forms).
+                Err(TransitionError::Unchanged) => {}
+                Err(TransitionError::ClosedIsFinal) => {
+                    return Err(ApiError::Conflict(
+                        "A closed ticket can only be reopened to pending.".into(),
+                    ));
+                }
             }
         }
-    }
-    match tickets::update(&s.pool, user.id, id, &patch).await {
-        Ok(Some(u)) => Ok(Envelope::ok(u.ticket.into())),
-        Ok(None) => Err(ApiError::not_found("Ticket")),
-        Err(e) if is_foreign_key_violation(&e) => {
-            let mut f = Fields::default();
-            f.add(
-                "assignedToUserId",
-                "Assignee must be a member of the ticket's project.",
-            );
-            Err(f.finish().unwrap_err())
+        let expect = status.map(|_| current.status);
+        match tickets::update_guarded(&s.pool, user.id, id, &patch, expect).await {
+            Ok(Guarded::Done(u)) => {
+                if patch.status == Some(TicketStatus::Resolved)
+                    && u.previous_status != TicketStatus::Resolved
+                    && let Err(e) = enqueue_auto_response(
+                        &s.pool,
+                        u.ticket.project_id,
+                        id,
+                        EmailResponseStatus::Resolved,
+                    )
+                    .await
+                {
+                    tracing::warn!(error = %e, "resolved auto-response not queued");
+                }
+                return Ok(Envelope::ok(u.ticket.into()));
+            }
+            Ok(Guarded::NotFound) => return Err(ApiError::not_found("Ticket")),
+            Ok(Guarded::Stale(_)) => continue,
+            Err(e) if is_foreign_key_violation(&e) => {
+                let mut f = Fields::default();
+                f.add(
+                    "assignedToUserId",
+                    "Assignee must be a member of the ticket's project.",
+                );
+                return Err(f.finish().unwrap_err());
+            }
+            Err(e) => return Err(e.into()),
         }
-        Err(e) => Err(e.into()),
     }
+    Err(ApiError::Conflict(
+        "The ticket was changed by someone else; try again.".into(),
+    ))
 }
 
 pub async fn delete(
@@ -201,8 +227,23 @@ pub async fn delete(
         .await?
         .ok_or_else(|| ApiError::not_found("Ticket"))?;
     project_admin(&s, user.id, ticket.project_id).await?;
+    let keys = sd_db::attachments::storage_keys_for_ticket(&s.pool, user.id, id).await?;
     if !tickets::delete(&s.pool, user.id, id).await? {
         return Err(ApiError::not_found("Ticket"));
+    }
+    // The rows are gone; files are removed best effort (a missing file is already what we want).
+    if !keys.is_empty() {
+        match s.store.fs().await {
+            Ok(fs) => {
+                for key in keys {
+                    match fs.delete(&key).await {
+                        Ok(()) | Err(sd_storage::Error::NotFound) => {}
+                        Err(e) => tracing::warn!(error = %e, "attachment file not removed"),
+                    }
+                }
+            }
+            Err(e) => tracing::warn!(error = ?e, "storage unavailable, attachment files kept"),
+        }
     }
     Ok(Envelope::ok(json!({ "success": true, "id": id })))
 }

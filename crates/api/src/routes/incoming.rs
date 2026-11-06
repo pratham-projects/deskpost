@@ -89,6 +89,8 @@ struct Payload {
     body_html: Option<String>,
     ticket_number: Option<i64>,
     message_id: Option<String>,
+    /// Sent date or provider event id; only feeds the fallback id so repeated identical mails differ.
+    date: Option<String>,
     in_reply_to: Option<String>,
     references: Option<String>,
     auto_submitted: Option<String>,
@@ -167,6 +169,7 @@ fn to_email(p: Payload, s: &AppState) -> Result<InboundEmail, ApiError> {
                 &p.subject,
                 p.body.as_deref().unwrap_or_default(),
                 p.body_html.as_deref().unwrap_or_default(),
+                p.date.as_deref().unwrap_or_default(),
             ] {
                 h.update((part.len() as u64).to_be_bytes());
                 h.update(part.as_bytes());
