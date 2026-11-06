@@ -22,6 +22,10 @@ use crate::state::AppState;
 
 const MAX_BODY_CHARS: usize = 50_000;
 const MAX_SUBJECT_CHARS: usize = 255;
+const MAX_NAME_CHARS: usize = 255;
+/// RFC 5322 line limit; caps every stored header-ish column.
+const MAX_HEADER_CHARS: usize = 998;
+const MAX_REFERENCES_CHARS: usize = 4000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
@@ -50,6 +54,25 @@ pub fn inbound_limits(cfg: &Config) -> Limits {
     }
 }
 
+/// Strip NUL and control characters (Postgres `text` rejects NUL) and cap the length, so no inbound
+/// value can violate a column constraint and wedge the mailbox. `keep_newlines` is for bodies.
+pub(crate) fn clean_text(raw: &str, max_chars: usize, keep_newlines: bool) -> String {
+    raw.chars()
+        .map(|c| match c {
+            '\n' | '\r' | '\t' if keep_newlines => c,
+            c if c.is_control() => ' ',
+            c => c,
+        })
+        .take(max_chars)
+        .collect()
+}
+
+fn opt_line(raw: &Option<String>, max_chars: usize) -> Option<String> {
+    raw.as_deref()
+        .map(|v| clean_text(v, max_chars, false))
+        .filter(|v| !v.trim().is_empty())
+}
+
 fn clean_subject(raw: &str) -> String {
     let s: String = strip_reply_prefixes(raw)
         .chars()
@@ -75,7 +98,8 @@ fn body_of(email: &InboundEmail) -> String {
             _ => String::new(),
         };
     }
-    let body: String = body.trim().chars().take(MAX_BODY_CHARS).collect();
+    let body = clean_text(body.trim(), MAX_BODY_CHARS, true);
+    let body = body.trim().to_string();
     if body.is_empty() {
         if email.attachments.is_empty() {
             "(empty message)".into()
@@ -87,6 +111,9 @@ fn body_of(email: &InboundEmail) -> String {
     }
 }
 
+/// The ticket this mail continues, if any. Every signal (explicit number, Message-ID we minted,
+/// `References`, subject tag) is only honoured when the sender is the ticket's client or an address
+/// that already wrote on it; otherwise the next signal is tried and finally a new ticket opens.
 async fn find_thread(
     state: &AppState,
     project_id: Id,
@@ -95,9 +122,10 @@ async fn find_thread(
     ticket_number: Option<i64>,
 ) -> sd_db::Result<Option<Id>> {
     let pool = &state.pool;
-    // The webhook is signed, so its explicit ticket number is trusted.
+    let allowed = |t: Id| mailq::sender_on_ticket(pool, project_id, t, from);
     if let Some(n) = ticket_number
         && let Some(id) = tickets::find_by_number(pool, project_id, n).await?
+        && allowed(id).await?
     {
         return Ok(Some(id));
     }
@@ -112,27 +140,28 @@ async fn find_thread(
         if let Some(t) = ticket_id_from_message_id(&format!("<{id}>"))
             && let Ok(t) = t.parse::<Id>()
             && mailq::ticket_in_project(pool, project_id, t).await?
+            && allowed(t).await?
         {
             return Ok(Some(t));
         }
     }
     if !ids.is_empty()
         && let Some(t) = mailq::find_ticket_by_refs(pool, project_id, &ids).await?
+        && allowed(t).await?
     {
         return Ok(Some(t));
     }
-    // The subject tag is the weakest signal (anyone can type it): only the ticket's own client may
-    // use it, so a stranger cannot inject messages into someone else's ticket.
     if let Some(n) = parse_ticket_number(&email.subject)
         && let Some(id) = tickets::find_by_number(pool, project_id, i64::from(n)).await?
-        && let Some(t) = mailq::ticket_mail(pool, project_id, id).await?
-        && t.client_email.eq_ignore_ascii_case(from)
+        && allowed(id).await?
     {
         return Ok(Some(id));
     }
     Ok(None)
 }
 
+/// Keep the mail's files. Files that cannot be kept (storage error, quota) are named in a note on
+/// the message so the loss is visible instead of silent.
 async fn store_attachments(
     state: &AppState,
     project_id: Id,
@@ -140,38 +169,59 @@ async fn store_attachments(
     message_id: Id,
     files: &[InboundAttachment],
 ) {
-    let Ok(fs) = state.store.fs().await else {
-        tracing::error!("storage unavailable; inbound attachments dropped");
+    if files.is_empty() {
         return;
-    };
-    for f in files {
-        let filename = sanitize_filename(&f.filename);
-        let mime = normalize(&f.content_type).unwrap_or_else(|| "application/octet-stream".into());
-        let meta = PutMeta {
-            original_filename: Some(filename.clone()),
-            content_type: Some(mime.clone()),
-        };
-        let obj = match fs.put(&f.bytes[..], meta).await {
-            Ok(o) => o,
-            Err(e) => {
-                tracing::warn!(error = %e, "inbound attachment not stored");
-                continue;
+    }
+    let mut dropped: Vec<String> = Vec::new();
+    match state.store.fs().await {
+        Err(e) => {
+            tracing::error!(error = ?e, "storage unavailable; inbound attachments dropped");
+            dropped.extend(files.iter().map(|f| sanitize_filename(&f.filename)));
+        }
+        Ok(fs) => {
+            for f in files {
+                let filename = sanitize_filename(&f.filename);
+                let mime =
+                    normalize(&f.content_type).unwrap_or_else(|| "application/octet-stream".into());
+                let meta = PutMeta {
+                    original_filename: Some(filename.clone()),
+                    content_type: Some(mime.clone()),
+                };
+                let obj = match fs.put(&f.bytes[..], meta).await {
+                    Ok(o) => o,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "inbound attachment not stored");
+                        dropped.push(filename);
+                        continue;
+                    }
+                };
+                let new = attachments::NewAttachment {
+                    filename: filename.clone(),
+                    mime_type: mime,
+                    size_bytes: obj.size as i64,
+                    storage_key: obj.key.clone(),
+                    message_id: Some(message_id),
+                };
+                let kept = matches!(
+                    attachments::create_for_project(&state.pool, project_id, ticket_id, &new).await,
+                    Ok(attachments::Stored::Ok(_))
+                );
+                if !kept {
+                    tracing::warn!(%ticket_id, "inbound attachment rejected (quota or database)");
+                    let _ = fs.delete(&obj.key).await;
+                    dropped.push(filename);
+                }
             }
-        };
-        let new = attachments::NewAttachment {
-            filename,
-            mime_type: mime,
-            size_bytes: obj.size as i64,
-            storage_key: obj.key.clone(),
-            message_id: Some(message_id),
-        };
-        let kept = matches!(
-            attachments::create_for_project(&state.pool, project_id, ticket_id, &new).await,
-            Ok(attachments::Stored::Ok(_))
+        }
+    }
+    if !dropped.is_empty() {
+        let note = format!(
+            "[{} attachment(s) could not be stored: {}]",
+            dropped.len(),
+            dropped.join(", ")
         );
-        if !kept {
-            tracing::warn!(%ticket_id, "inbound attachment rejected (quota or database)");
-            let _ = fs.delete(&obj.key).await;
+        if let Err(e) = messages::append_body(&state.pool, project_id, message_id, &note).await {
+            tracing::warn!(error = %e, "attachment note not saved");
         }
     }
 }
@@ -206,10 +256,25 @@ pub async fn ingest(
         return Ok(Outcome::Ignored("our own Message-ID"));
     }
 
+    // Files need the store; if it is down, fail before anything is committed so the poller does not
+    // advance its cursor and the webhook provider retries, instead of losing the files for good.
+    if !email.attachments.is_empty()
+        && let Err(e) = state.store.fs().await
+    {
+        return Err(sd_db::Error::Io(std::io::Error::other(format!(
+            "attachment storage unavailable: {e:?}"
+        ))));
+    }
     let body = body_of(email);
-    let references = (!email.references.is_empty()).then(|| email.references.join(" "));
+    let references = (!email.references.is_empty())
+        .then(|| clean_text(&email.references.join(" "), MAX_REFERENCES_CHARS, false));
+    let in_reply_to = opt_line(&email.in_reply_to, MAX_HEADER_CHARS);
+    let message_id = clean_text(&email.message_id, MAX_HEADER_CHARS, false);
+    let email_from = opt_line(&email.from, MAX_HEADER_CHARS);
+    let from_name = opt_line(&email.from_name, MAX_NAME_CHARS);
     let received = email.date.and_then(|t| DateTime::from_timestamp(t, 0));
-    let email_to = (!email.to.is_empty()).then(|| email.to.join(", "));
+    let email_to =
+        (!email.to.is_empty()).then(|| clean_text(&email.to.join(", "), MAX_HEADER_CHARS, false));
 
     if let Some(ticket_id) = find_thread(state, project_id, email, &from, ticket_number).await? {
         let posted = messages::post_inbound(
@@ -218,15 +283,15 @@ pub async fn ingest(
                 project_id,
                 ticket_id,
                 sender_email: from,
-                sender_name: email.from_name.clone(),
+                sender_name: from_name.clone(),
                 body,
                 html_body: None,
-                email_message_id: Some(email.message_id.clone()),
-                email_in_reply_to: email.in_reply_to.clone(),
+                email_message_id: Some(message_id.clone()),
+                email_in_reply_to: in_reply_to.clone(),
                 email_references: references,
-                email_from: email.from.clone(),
+                email_from: email_from.clone(),
                 email_to,
-                email_subject: Some(email.subject.clone()),
+                email_subject: Some(clean_text(&email.subject, MAX_HEADER_CHARS, false)),
                 email_received_at: received,
             },
         )
@@ -246,13 +311,13 @@ pub async fn ingest(
         &NewInboundTicket {
             project_id,
             client_email: from,
-            client_name: email.from_name.clone().filter(|n| !n.trim().is_empty()),
+            client_name: from_name,
             subject: clean_subject(&email.subject),
             body,
-            email_message_id: email.message_id.clone(),
-            email_in_reply_to: email.in_reply_to.clone(),
+            email_message_id: message_id,
+            email_in_reply_to: in_reply_to,
             email_references: references,
-            email_from: email.from.clone(),
+            email_from,
             email_to,
             email_received_at: received,
         },
@@ -289,6 +354,18 @@ pub async fn ingest(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stored_text_cannot_violate_column_rules() {
+        assert_eq!(clean_text("a\0b\u{7}c", 10, false), "a b c");
+        assert_eq!(clean_text("a\nb", 10, true), "a\nb");
+        assert_eq!(clean_text("a\nb", 10, false), "a b");
+        assert_eq!(
+            clean_text(&"x".repeat(300), 255, false).chars().count(),
+            255
+        );
+        assert!(!clean_text("a\0", 10, true).contains('\0'));
+    }
 
     #[test]
     fn subjects_are_cleaned_and_bounded() {

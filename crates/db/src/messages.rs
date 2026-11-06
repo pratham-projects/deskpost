@@ -257,6 +257,20 @@ pub async fn post_inbound(pool: &Pool, new: &NewInbound) -> Result<Option<Messag
     Ok(Some(message))
 }
 
+/// Append a line to a stored message (e.g. a note that an attachment could not be kept).
+pub async fn append_body(pool: &Pool, project_id: Id, message_id: Id, text: &str) -> Result<()> {
+    sqlx::query(
+        "UPDATE messages SET body = body || E'\\n\\n' || $3, updated_at = now()
+         WHERE id = $2 AND project_id = $1",
+    )
+    .bind(project_id)
+    .bind(message_id)
+    .bind(text)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 /// Threading: the ticket (within the project) owning any of the given Message-IDs.
 pub async fn find_ticket_by_message_ids(
     pool: &Pool,

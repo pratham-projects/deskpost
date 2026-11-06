@@ -4,56 +4,10 @@
 
 use std::net::IpAddr;
 
-use ipnet::IpNet;
-
-/// Reserved IPv4 ranges not covered by the std `is_*` helpers.
-const BLOCKED_V4: [&str; 8] = [
-    "0.0.0.0/8",
-    "100.64.0.0/10",   // carrier-grade NAT
-    "192.0.0.0/24",    // IETF protocol assignments
-    "192.0.2.0/24",    // documentation
-    "198.18.0.0/15",   // benchmarking
-    "198.51.100.0/24", // documentation
-    "203.0.113.0/24",  // documentation
-    "240.0.0.0/4",     // reserved + broadcast
-];
-const BLOCKED_V6: [&str; 5] = [
-    "::/128",
-    "fc00::/7",      // unique local
-    "fe80::/10",     // link local
-    "fec0::/10",     // deprecated site local
-    "2001:db8::/32", // documentation
-];
 /// Internal-only name suffixes; a host that has no dot at all is also internal.
 const INTERNAL_SUFFIXES: [&str; 5] = [".localhost", ".local", ".internal", ".localdomain", ".lan"];
 
-pub fn is_blocked_ip(ip: IpAddr) -> bool {
-    let ip = ip.to_canonical();
-    match ip {
-        IpAddr::V4(v4) => {
-            v4.is_loopback()
-                || v4.is_private()
-                || v4.is_link_local()
-                || v4.is_multicast()
-                || BLOCKED_V4
-                    .iter()
-                    .any(|n| n.parse::<IpNet>().is_ok_and(|n| n.contains(&ip)))
-        }
-        IpAddr::V6(v6) => {
-            // NAT64 (64:ff9b::/96) carries an IPv4 address in the last 32 bits.
-            let o = v6.octets();
-            let nat64 = o[..12] == [0, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0];
-            if nat64 {
-                return is_blocked_ip(IpAddr::from([o[12], o[13], o[14], o[15]]));
-            }
-            v6.is_loopback()
-                || v6.is_multicast()
-                || BLOCKED_V6
-                    .iter()
-                    .any(|n| n.parse::<IpNet>().is_ok_and(|n| n.contains(&ip)))
-        }
-    }
-}
+pub use sd_mail::guard::is_blocked_ip;
 
 /// Syntax and static policy check, no DNS. Returns the normalised (lower-case, no trailing dot) host.
 pub fn check_host(host: &str, allow_private: bool) -> Result<String, &'static str> {

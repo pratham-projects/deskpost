@@ -31,6 +31,10 @@ pub struct ImapConfig {
     pub connect_timeout: Duration,
     /// Per IMAP command.
     pub io_timeout: Duration,
+    /// Dial loopback/private addresses too. Off by default (SSRF guard); local test servers only.
+    pub allow_private: bool,
+    /// Messages bigger than this are not downloaded (and fetches are grouped to this many bytes).
+    pub max_message_bytes: usize,
 }
 
 impl fmt::Debug for ImapConfig {
@@ -62,6 +66,8 @@ impl ImapConfig {
             folder: "INBOX".into(),
             connect_timeout: DEFAULT_CONNECT_TIMEOUT,
             io_timeout: DEFAULT_IO_TIMEOUT,
+            allow_private: false,
+            max_message_bytes: 25 * 1024 * 1024,
         }
     }
 }
@@ -70,6 +76,9 @@ impl ImapConfig {
 pub struct RawMessage {
     pub uid: u32,
     pub bytes: Vec<u8>,
+    /// Set instead of `bytes` when the server said the message is bigger than the configured cap:
+    /// it is never downloaded and `poll` reports it as too large (and consumes it).
+    pub oversize: Option<usize>,
 }
 
 /// A selected folder. A trait so the poll logic is testable without a server.
@@ -167,7 +176,13 @@ pub async fn poll<M: Mailbox>(
         .into_iter()
         .map(|m| Polled {
             uid: m.uid,
-            email: parse_inbound(&m.bytes, &opts.limits),
+            email: match m.oversize {
+                Some(size) => Err(ParseError::MessageTooLarge {
+                    size,
+                    limit: opts.limits.max_message_bytes,
+                }),
+                None => parse_inbound(&m.bytes, &opts.limits),
+            },
         })
         .collect();
     if opts.mark_seen {
@@ -287,6 +302,7 @@ pub struct ImapMailbox {
     session: async_imap::Session<Stream>,
     uid_validity: Option<u32>,
     io_timeout: Duration,
+    max_message_bytes: usize,
 }
 
 fn imap_err(e: async_imap::error::Error) -> Error {
@@ -298,9 +314,17 @@ impl ImapMailbox {
     pub async fn connect(cfg: &ImapConfig) -> Result<Self, Error> {
         let io = cfg.io_timeout;
         let t = |what| move |_| Error::Timeout(what);
-        let mut tcp = timeout(
+        // Resolve, check and pin the address in one step; the hostname stays for TLS only.
+        let started = tokio::time::Instant::now();
+        let addr = timeout(
             cfg.connect_timeout,
-            TcpStream::connect((cfg.host.as_str(), cfg.port)),
+            crate::guard::resolve(&cfg.host, cfg.port, cfg.allow_private),
+        )
+        .await
+        .map_err(t("imap connect"))??;
+        let mut tcp = timeout(
+            cfg.connect_timeout.saturating_sub(started.elapsed()),
+            TcpStream::connect(addr),
         )
         .await
         .map_err(t("imap connect"))??;
@@ -327,9 +351,9 @@ impl ImapMailbox {
         let mut client = async_imap::Client::new(stream);
         if !greeted {
             // async-imap does not consume the greeting itself.
-            client
-                .read_response()
+            timeout(io, client.read_response())
                 .await
+                .map_err(t("imap greeting"))?
                 .map_err(|e| Error::Imap(e.to_string()))?;
         }
         let mut session = timeout(io, client.login(&cfg.username, &cfg.password))
@@ -344,6 +368,7 @@ impl ImapMailbox {
             session,
             uid_validity: mb.uid_validity,
             io_timeout: io,
+            max_message_bytes: cfg.max_message_bytes.max(1),
         })
     }
 
@@ -383,27 +408,69 @@ impl Mailbox for ImapMailbox {
             return Ok(vec![]);
         }
         let io = self.io_timeout;
-        let work = async {
+        // Sizes first: a huge message is skipped without being downloaded.
+        let sizes = async {
             let stream = self
                 .session
-                .uid_fetch(uid_set(uids), "(UID BODY.PEEK[])")
+                .uid_fetch(uid_set(uids), "(UID RFC822.SIZE)")
                 .await?;
             let fetches: Vec<_> = stream.try_collect().await?;
             Ok::<_, async_imap::error::Error>(fetches)
         };
-        let fetches = timeout(io, work)
+        let sizes: Vec<(u32, usize)> = timeout(io, sizes)
             .await
-            .map_err(|_| Error::Timeout("imap fetch"))?
-            .map_err(imap_err)?;
-        Ok(fetches
+            .map_err(|_| Error::Timeout("imap size"))?
+            .map_err(imap_err)?
             .iter()
-            .filter_map(|f| {
+            .filter_map(|f| Some((f.uid?, f.size.unwrap_or(0) as usize)))
+            .collect();
+        let mut out = Vec::with_capacity(sizes.len());
+        // Download in groups of at most `max_message_bytes` (one message may exceed that alone only
+        // when it is exactly at the cap), each group with its own timeout.
+        let mut group: Vec<u32> = Vec::new();
+        let mut group_bytes = 0usize;
+        let mut groups: Vec<Vec<u32>> = Vec::new();
+        for &(uid, size) in &sizes {
+            if size > self.max_message_bytes {
+                out.push(RawMessage {
+                    uid,
+                    bytes: Vec::new(),
+                    oversize: Some(size),
+                });
+                continue;
+            }
+            if !group.is_empty() && group_bytes + size > self.max_message_bytes {
+                groups.push(std::mem::take(&mut group));
+                group_bytes = 0;
+            }
+            group.push(uid);
+            group_bytes += size;
+        }
+        if !group.is_empty() {
+            groups.push(group);
+        }
+        for g in groups {
+            let work = async {
+                let stream = self
+                    .session
+                    .uid_fetch(uid_set(&g), "(UID BODY.PEEK[])")
+                    .await?;
+                let fetches: Vec<_> = stream.try_collect().await?;
+                Ok::<_, async_imap::error::Error>(fetches)
+            };
+            let fetches = timeout(io, work)
+                .await
+                .map_err(|_| Error::Timeout("imap fetch"))?
+                .map_err(imap_err)?;
+            out.extend(fetches.iter().filter_map(|f| {
                 Some(RawMessage {
                     uid: f.uid?,
                     bytes: f.body()?.to_vec(),
+                    oversize: None,
                 })
-            })
-            .collect())
+            }));
+        }
+        Ok(out)
     }
 
     async fn mark_seen(&mut self, uids: &[u32]) -> Result<(), Error> {

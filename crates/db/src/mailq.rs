@@ -163,6 +163,30 @@ pub async fn ticket_mail(pool: &Pool, project_id: Id, ticket_id: Id) -> Result<O
     .await
 }
 
+/// True when `from` is the ticket client's address or an address that already wrote on the ticket
+/// (case-insensitive). The gate for appending inbound mail to an existing ticket.
+pub async fn sender_on_ticket(
+    pool: &Pool,
+    project_id: Id,
+    ticket_id: Id,
+    from: &str,
+) -> Result<bool> {
+    sqlx::query_scalar(
+        "SELECT EXISTS (
+            SELECT 1 FROM tickets t JOIN clients c ON c.id = t.client_id
+             WHERE t.id = $2 AND t.project_id = $1 AND lower(c.email) = lower($3))
+         OR EXISTS (
+            SELECT 1 FROM messages m
+             WHERE m.project_id = $1 AND m.ticket_id = $2 AND m.sender_type = 'client'
+               AND lower(m.sender_email) = lower($3))",
+    )
+    .bind(project_id)
+    .bind(ticket_id)
+    .bind(from)
+    .fetch_one(pool)
+    .await
+}
+
 /// Message-IDs already used in the ticket's thread (stored messages and sent auto-responses),
 /// oldest first, at most 50: the `References` chain of the next reply.
 pub async fn thread_ids(pool: &Pool, project_id: Id, ticket_id: Id) -> Result<Vec<String>> {

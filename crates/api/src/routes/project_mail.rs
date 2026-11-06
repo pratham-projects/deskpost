@@ -375,6 +375,7 @@ async fn test_smtp(
         .clone()
         .unwrap_or_else(|| "probe@example.invalid".into());
     let mut cfg = SmtpConfig::new(&t.host, t.port, t.tls, from);
+    cfg.allow_private = s.config.allow_private_mail_hosts;
     cfg.username = t.username;
     cfg.password = t.password;
     cfg.io_timeout = PROBE_TIMEOUT;
@@ -401,6 +402,7 @@ async fn test_imap(
         t.password.unwrap_or_default(),
     );
     cfg.folder = cur.imap_folder.clone();
+    cfg.allow_private = s.config.allow_private_mail_hosts;
     cfg.connect_timeout = PROBE_TIMEOUT;
     cfg.io_timeout = PROBE_TIMEOUT;
     let r = match ImapMailbox::connect(&cfg).await {

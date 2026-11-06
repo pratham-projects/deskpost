@@ -43,6 +43,7 @@ impl Kit {
         config.storage_dir = dir.path().join("files");
         config.mail.webhook_secret = Some(WEBHOOK_SECRET.as_bytes().to_vec());
         config.mail.plaintext = true;
+        config.allow_private_mail_hosts = true;
         tweak(&mut config);
         let mut state = AppState::new(pool.clone(), config).unwrap();
         let recorder = Arc::new(RecordingMailer::default());

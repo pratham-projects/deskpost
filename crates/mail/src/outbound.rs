@@ -6,7 +6,7 @@ use std::time::Duration;
 use lettre::message::header::{ContentType, HeaderName, HeaderValue};
 use lettre::message::{Attachment, Mailbox, MultiPart, SinglePart};
 use lettre::transport::smtp::authentication::Credentials;
-use lettre::transport::smtp::client::Tls;
+use lettre::transport::smtp::client::{Tls, TlsParameters};
 use lettre::{Address, AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 
 use crate::{DEFAULT_IO_TIMEOUT, Error, TlsMode};
@@ -25,6 +25,8 @@ pub struct SmtpConfig {
     pub io_timeout: Duration,
     /// Whole `send` call, so a slow server cannot hold a worker forever.
     pub total_timeout: Duration,
+    /// Dial loopback/private addresses too. Off by default (SSRF guard); local test servers only.
+    pub allow_private: bool,
 }
 
 impl std::fmt::Debug for SmtpConfig {
@@ -57,6 +59,7 @@ impl SmtpConfig {
             from_address: from_address.into(),
             io_timeout: DEFAULT_IO_TIMEOUT,
             total_timeout: 2 * DEFAULT_IO_TIMEOUT,
+            allow_private: false,
         }
     }
 }
@@ -249,20 +252,26 @@ pub fn build_message(cfg: &SmtpConfig, mail: &OutboundEmail) -> Result<(Message,
     Ok((msg, message_id))
 }
 
-fn transport(cfg: &SmtpConfig) -> Result<AsyncSmtpTransport<Tokio1Executor>, Error> {
+/// Transport pinned to the checked address: lettre dials the IP, TLS verifies the hostname.
+async fn transport(cfg: &SmtpConfig) -> Result<AsyncSmtpTransport<Tokio1Executor>, Error> {
     let smtp = |e: lettre::transport::smtp::Error| Error::Smtp(e.to_string());
-    let builder = match cfg.tls {
-        TlsMode::None => {
-            AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&cfg.host).tls(Tls::None)
-        }
-        TlsMode::Implicit => {
-            AsyncSmtpTransport::<Tokio1Executor>::relay(&cfg.host).map_err(smtp)?
-        }
-        TlsMode::StartTls => {
-            AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&cfg.host).map_err(smtp)?
-        }
+    let addr = tokio::time::timeout(
+        cfg.io_timeout,
+        crate::guard::resolve(&cfg.host, cfg.port, cfg.allow_private),
+    )
+    .await
+    .map_err(|_| Error::Timeout("smtp connect"))??;
+    let ip = addr.ip().to_string();
+    let params = || TlsParameters::new(cfg.host.trim_end_matches('.').to_string()).map_err(smtp);
+    let tls = match cfg.tls {
+        TlsMode::None => Tls::None,
+        TlsMode::Implicit => Tls::Wrapper(params()?),
+        TlsMode::StartTls => Tls::Required(params()?),
     };
-    let mut builder = builder.port(cfg.port).timeout(Some(cfg.io_timeout));
+    let mut builder = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(ip)
+        .tls(tls)
+        .port(addr.port())
+        .timeout(Some(cfg.io_timeout));
     if let (Some(u), Some(p)) = (&cfg.username, &cfg.password) {
         builder = builder.credentials(Credentials::new(u.clone(), p.clone()));
     }
@@ -272,7 +281,7 @@ fn transport(cfg: &SmtpConfig) -> Result<AsyncSmtpTransport<Tokio1Executor>, Err
 /// Send one message; returns its Message-ID.
 pub async fn send(cfg: &SmtpConfig, mail: &OutboundEmail) -> Result<String, Error> {
     let (msg, id) = build_message(cfg, mail)?;
-    let t = transport(cfg)?;
+    let t = transport(cfg).await?;
     tokio::time::timeout(cfg.total_timeout, t.send(msg))
         .await
         .map_err(|_| Error::Timeout("smtp send"))?
@@ -282,7 +291,7 @@ pub async fn send(cfg: &SmtpConfig, mail: &OutboundEmail) -> Result<String, Erro
 
 /// Connect, secure and authenticate against the server without sending anything (settings check).
 pub async fn check(cfg: &SmtpConfig) -> Result<(), Error> {
-    let t = transport(cfg)?;
+    let t = transport(cfg).await?;
     let ok = tokio::time::timeout(cfg.total_timeout, t.test_connection())
         .await
         .map_err(|_| Error::Timeout("smtp check"))?

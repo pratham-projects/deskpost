@@ -209,6 +209,7 @@ fn smtp_config(
     s: &MailSettings,
     secrets: &SecretBox,
     plaintext: bool,
+    allow_private: bool,
 ) -> Result<(SmtpConfig, String), MailError> {
     let (Some(host), Some(from)) = (s.smtp_host.as_deref(), s.smtp_email.as_deref()) else {
         return Err(MailError::NotConfigured);
@@ -221,6 +222,7 @@ fn smtp_config(
         None => String::new(),
     };
     let mut cfg = SmtpConfig::new(host, port, tls_for(port, plaintext, 465), from);
+    cfg.allow_private = allow_private;
     cfg.from_name = Some(s.email_from_name.clone());
     if let Some(user) = s.smtp_username.as_deref().filter(|u| !u.is_empty()) {
         cfg.username = Some(user.to_string());
@@ -282,7 +284,12 @@ impl OutboundMailer for SmtpMailer {
         let settings = projects::mail_settings(&self.pool, mail.project_id)
             .await?
             .ok_or(MailError::NotConfigured)?;
-        let (smtp, password) = smtp_config(&settings, &self.secrets, self.config.mail.plaintext)?;
+        let (smtp, password) = smtp_config(
+            &settings,
+            &self.secrets,
+            self.config.mail.plaintext,
+            self.config.allow_private_mail_hosts,
+        )?;
         let ticket = mailq::ticket_mail(&self.pool, mail.project_id, mail.ticket_id)
             .await?
             .ok_or_else(|| MailError::Internal("ticket not found".into()))?;
@@ -417,8 +424,13 @@ async fn send_job(state: &AppState, job: &mailq::OutboxJob) -> Result<String, (S
         .await
         .map_err(db)?
         .ok_or_else(|| fatal("project not found"))?;
-    let (smtp, password) = smtp_config(&settings, &state.secrets, state.config.mail.plaintext)
-        .map_err(|_| fatal("SMTP not configured"))?;
+    let (smtp, password) = smtp_config(
+        &settings,
+        &state.secrets,
+        state.config.mail.plaintext,
+        state.config.allow_private_mail_hosts,
+    )
+    .map_err(|_| fatal("SMTP not configured"))?;
     let kind = job
         .kind
         .parse::<EmailResponseStatus>()

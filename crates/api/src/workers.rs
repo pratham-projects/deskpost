@@ -19,9 +19,18 @@ use crate::state::AppState;
 pub const IMAP_BATCH: usize = 50;
 /// Rounds per project and tick; a bigger backlog continues on the next tick.
 const MAX_ROUNDS: usize = 20;
+/// One project's whole poll; a hung server must not hold a permit (and the tick) for ever.
+const POLL_DEADLINE: Duration = Duration::from_secs(120);
 const OUTBOX_EVERY: Duration = Duration::from_secs(15);
 const HOUSEKEEPING_EVERY: Duration = Duration::from_secs(3600);
 const OUTBOX_RETENTION_DAYS: i32 = 30;
+
+/// The database refused the data itself (bad value, NUL byte, too long, check/not-null violation),
+/// as opposed to a pool, IO or serialization failure that a retry can fix.
+pub(crate) fn is_data_error(e: &sd_db::Error) -> bool {
+    matches!(e, sd_db::Error::Database(d)
+        if d.code().is_some_and(|c| c.starts_with("22") || c == "23514" || c == "23502"))
+}
 
 /// Poll one project's mailbox until it is drained (or `MAX_ROUNDS`). The cursor is stored after each
 /// round and only when every mail of the round was handled, so a database error replays the round
@@ -49,6 +58,8 @@ pub async fn poll_project(state: &AppState, s: &MailSettings) -> Result<usize, S
         &password,
     );
     cfg.folder = s.imap_folder.clone();
+    cfg.allow_private = state.config.allow_private_mail_hosts;
+    cfg.max_message_bytes = state.config.mail.max_request_bytes;
     let mut mailbox = ImapMailbox::connect(&cfg).await.map_err(|e| clean(&e))?;
 
     let opts = PollOptions {
@@ -70,6 +81,11 @@ pub async fn poll_project(state: &AppState, s: &MailSettings) -> Result<usize, S
                 Ok(email) => match ingest(state, s.project_id, email, None).await {
                     Ok(Outcome::Created { .. } | Outcome::Replied { .. }) => handled += 1,
                     Ok(_) => {}
+                    // A mail whose own content the database rejects can never succeed: consume it,
+                    // or it would wedge the mailbox. Connection-level errors still abort the round.
+                    Err(e) if is_data_error(&e) => {
+                        tracing::warn!(project = %s.project_id, uid = polled.uid, error = %e, "inbound mail not storable; skipped")
+                    }
                     Err(e) => return Err(clean(&e)),
                 },
                 // Consumed on purpose: retrying a hostile or oversize message forever helps nobody.
@@ -104,7 +120,9 @@ pub async fn poll_all(state: &AppState) -> sd_db::Result<usize> {
         let (state, permits) = (state.clone(), permits.clone());
         set.spawn(async move {
             let _permit = permits.acquire_owned().await;
-            let result = poll_project(&state, &s).await;
+            let result = tokio::time::timeout(POLL_DEADLINE, poll_project(&state, &s))
+                .await
+                .unwrap_or_else(|_| Err("polling timed out".to_string()));
             let note = result.as_ref().err().map(String::as_str);
             if let Err(e) = mailq::set_imap_status(&state.pool, s.project_id, note).await {
                 tracing::error!(error = %e, "cannot record IMAP status");

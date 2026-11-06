@@ -315,3 +315,76 @@ async fn spawned_jobs_send_the_queue(pool: PgPool) {
     jobs.iter().for_each(|j| j.abort());
     assert!(sent, "outbox worker delivered the queued auto-response");
 }
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn hostile_field_values_do_not_wedge_the_mailbox(pool: PgPool) {
+    let k = Kit::new(pool).await;
+    let imap = FakeImap::start("imapuser", IMAP_PW).await;
+    let p = project_with_imap(&k, "o@example.com", "acme", &imap).await;
+    let long_name = format!("\"{}\" <ann@example.com>", "N".repeat(400));
+    imap.push(&customer_mail(
+        "<poison@mail.example>",
+        "Name too long",
+        "body with a NUL \u{0} byte",
+        &[("From", &long_name)],
+    ));
+    let last = imap.push(&customer_mail("<after@mail.example>", "Next", "ok", &[]));
+    let s = projects::mail_settings(&k.t.pool, p)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(poll_project(&k.t.state, &s).await.is_ok());
+    assert_eq!(
+        cursor(&k, p).await.1,
+        i64::from(last),
+        "cursor moved past the poison mail"
+    );
+    assert_eq!(k.count("tickets").await, 2, "both mails became tickets");
+    let name_len: i32 = sqlx::query_scalar("SELECT max(length(name)) FROM clients")
+        .fetch_one(&k.t.pool)
+        .await
+        .unwrap();
+    assert!(name_len <= 255);
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn strangers_cannot_thread_into_a_ticket(pool: PgPool) {
+    let k = Kit::new(pool).await;
+    let imap = FakeImap::start("imapuser", IMAP_PW).await;
+    let p = project_with_imap(&k, "o@example.com", "acme", &imap).await;
+    imap.push(&customer_mail("<m1@mail.example>", "Printer", "first", &[]));
+    poll_all(&k.t.state).await.unwrap();
+    // Someone else holds the Message-ID and claims the thread via In-Reply-To and a subject tag.
+    imap.push(&customer_mail(
+        "<evil@mail.example>",
+        "Re: [Ticket #1] Printer",
+        "injected",
+        &[
+            ("From", "Mallory <mallory@evil.example>"),
+            ("In-Reply-To", "<m1@mail.example>"),
+            ("References", "<m1@mail.example>"),
+        ],
+    ));
+    // The real client still threads.
+    imap.push(&customer_mail(
+        "<m2@mail.example>",
+        "Re: Printer",
+        "second",
+        &[("In-Reply-To", "<m1@mail.example>")],
+    ));
+    poll_all(&k.t.state).await.unwrap();
+    let on_first: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM messages m JOIN tickets t ON t.id = m.ticket_id
+         WHERE t.ticket_number = 1 AND t.project_id = $1",
+    )
+    .bind(p)
+    .fetch_one(&k.t.pool)
+    .await
+    .unwrap();
+    assert_eq!(on_first, 2, "stranger mail did not join ticket 1");
+    assert_eq!(
+        k.count("tickets").await,
+        2,
+        "stranger mail opened its own ticket"
+    );
+}

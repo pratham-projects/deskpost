@@ -51,6 +51,7 @@ impl Mailbox for Fake {
             .map(|m| RawMessage {
                 uid: m.0,
                 bytes: m.1.clone(),
+                oversize: None,
             })
             .collect())
     }
@@ -207,7 +208,9 @@ async fn unparseable_message_is_reported_and_consumed() {
 // ---- real ImapMailbox against the in-process server ----
 
 fn cfg(port: u16, pass: &str) -> ImapConfig {
-    ImapConfig::new("127.0.0.1", port, TlsMode::None, "desk", pass)
+    let mut c = ImapConfig::new("127.0.0.1", port, TlsMode::None, "desk", pass);
+    c.allow_private = true;
+    c
 }
 
 #[tokio::test]
@@ -276,12 +279,13 @@ async fn smtp_to_imap_loop_through_fakes_keeps_threading() {
     // Outbound mail captured by the SMTP sink, delivered to the IMAP fake, polled back.
     let smtp = FakeSmtp::start().await;
     let imap = FakeImap::start("desk", "pw").await;
-    let c = SmtpConfig::new(
+    let mut c = SmtpConfig::new(
         "127.0.0.1",
         smtp.port(),
         TlsMode::None,
         "support@example.com",
     );
+    c.allow_private = true;
     let id = send(
         &c,
         &OutboundEmail {
@@ -321,7 +325,8 @@ async fn greenmail_round_trip() {
         eprintln!("GREENMAIL!=1, skipping");
         return;
     }
-    let smtp = SmtpConfig::new("127.0.0.1", 3025, TlsMode::None, "support@example.com");
+    let mut smtp = SmtpConfig::new("127.0.0.1", 3025, TlsMode::None, "support@example.com");
+    smtp.allow_private = true;
     let id = send(
         &smtp,
         &OutboundEmail {
@@ -333,15 +338,9 @@ async fn greenmail_round_trip() {
     )
     .await
     .unwrap();
-    let mut mb = ImapMailbox::connect(&ImapConfig::new(
-        "127.0.0.1",
-        3143,
-        TlsMode::None,
-        "desk",
-        "pw",
-    ))
-    .await
-    .unwrap();
+    let mut icfg = ImapConfig::new("127.0.0.1", 3143, TlsMode::None, "desk", "pw");
+    icfg.allow_private = true;
+    let mut mb = ImapMailbox::connect(&icfg).await.unwrap();
     let out = poll(&mut mb, PollState::default(), &opts(50, true))
         .await
         .unwrap();
@@ -350,4 +349,73 @@ async fn greenmail_round_trip() {
             .as_ref()
             .is_ok_and(|e| format!("<{}>", e.message_id) == id)
     }));
+}
+
+// ---- SSRF guard and hang protection ----
+
+#[tokio::test]
+async fn imap_refuses_internal_addresses_by_default() {
+    let server = FakeImap::start("desk", "pw").await;
+    let mut c = cfg(server.port(), "pw");
+    c.allow_private = false;
+    let e = ImapMailbox::connect(&c).await.err().expect("must refuse");
+    assert!(e.to_string().contains("internal"), "{e}");
+}
+
+#[tokio::test]
+async fn smtp_refuses_internal_addresses_by_default() {
+    let smtp = FakeSmtp::start().await;
+    let c = SmtpConfig::new("127.0.0.1", smtp.port(), TlsMode::None, "a@example.com");
+    let e = send(
+        &c,
+        &OutboundEmail {
+            to: vec!["cust@example.org".into()],
+            subject: "x".into(),
+            text: Some("x".into()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(e.to_string().contains("internal"), "{e}");
+}
+
+#[tokio::test]
+async fn a_server_that_never_greets_times_out() {
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = l.local_addr().unwrap().port();
+    let _held = tokio::spawn(async move {
+        let _conn = l.accept().await;
+        std::future::pending::<()>().await;
+    });
+    let mut c = cfg(port, "pw");
+    c.io_timeout = std::time::Duration::from_millis(200);
+    let started = std::time::Instant::now();
+    let e = ImapMailbox::connect(&c).await.err().expect("must time out");
+    assert!(matches!(e, Error::Timeout(_)), "{e}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+}
+
+#[tokio::test]
+async fn oversize_mail_is_skipped_without_download_and_consumed() {
+    let server = FakeImap::start("desk", "pw").await;
+    server.push(&vec![b'x'; 5000]);
+    let uid_ok =
+        server.push(b"From: a@example.org\r\nSubject: ok\r\nMessage-ID: <1@x>\r\n\r\nhi\r\n");
+    let mut c = cfg(server.port(), "pw");
+    c.max_message_bytes = 1000;
+    let mut mb = ImapMailbox::connect(&c).await.unwrap();
+    let mut o = opts(50, false);
+    o.limits.max_message_bytes = 1000;
+    let out = poll(&mut mb, PollState::default(), &o).await.unwrap();
+    assert!(matches!(
+        out.emails[0].email,
+        Err(ParseError::MessageTooLarge { size: 5000, .. })
+    ));
+    assert!(out.emails[1].email.is_ok());
+    assert_eq!(out.emails[1].uid, uid_ok);
+    assert_eq!(
+        out.state.last_uid, uid_ok,
+        "cursor moves past the oversize mail"
+    );
 }

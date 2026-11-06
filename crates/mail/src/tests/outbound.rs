@@ -11,6 +11,7 @@ use crate::{
 fn cfg(port: u16) -> SmtpConfig {
     let mut c = SmtpConfig::new("127.0.0.1", port, TlsMode::None, "support@example.com");
     c.from_name = Some("Support Desk".into());
+    c.allow_private = true;
     c
 }
 
