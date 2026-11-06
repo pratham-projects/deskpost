@@ -1,0 +1,9 @@
+target
+.git
+.tools
+.env
+data
+**/node_modules
+apps/web/.next
+brain
+.coord

@@ -1,0 +1,25 @@
+# One domain: API and health under the same origin, everything else is the Next.js UI.
+# Set FRONTEND_URL=https://desk.example.com and SD_TRUSTED_PROXIES=127.0.0.1 for the api.
+desk.example.com {
+	encode zstd gzip
+
+	@api path /api/* /health /health/*
+	handle @api {
+		# Large enough for SD_WEBHOOK_LIMIT_BYTES; the api enforces the real limits.
+		request_body {
+			max_size 40MB
+		}
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:4000
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
