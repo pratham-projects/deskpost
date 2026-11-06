@@ -86,6 +86,10 @@ cat >"$RUN/Caddyfile" <<CADDY
 {
 	admin off
 	auto_https off
+	# keep the test-supplied X-Forwarded-For so each spec gets its own rate-limit bucket
+	servers {
+		trusted_proxies static 127.0.0.1/8
+	}
 }
 http://127.0.0.1:$WEB_PORT {
 	@api path /api/* /health /health/*

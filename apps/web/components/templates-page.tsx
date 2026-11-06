@@ -2,12 +2,13 @@
 
 import Link from "next/link"
 import { useState, useMemo, useCallback, useEffect } from "react"
-import { useTemplateStore } from "@/lib/store"
+import { useTemplateStore, useProjectStore } from "@/lib/store"
 import type { TemplateResponse } from "@/lib/api"
 import { templatesApi } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,8 @@ export function TemplatesPage() {
     updateTemplate, 
     deleteTemplate 
   } = useTemplateStore()
+  const { projects } = useProjectStore()
+  const [projectId, setProjectId] = useState<string | null>(null)
   const [editingTemplate, setEditingTemplate] = useState<TemplateResponse | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [newTitle, setNewTitle] = useState("")
@@ -55,16 +58,20 @@ export function TemplatesPage() {
     return () => observer.disconnect()
   }, [templatesHasMore, isLoadingMore, isLoading, fetchMoreTemplates, debouncedSearch])
 
-  // Fetch templates on mount
+  // Templates are per project: default to the first project once the list is loaded
   useEffect(() => {
-    fetchTemplates()
-  }, [fetchTemplates])
+    if (!projectId && projects.length > 0) setProjectId(projects[0].id)
+  }, [projects, projectId])
+
+  useEffect(() => {
+    if (projectId) fetchTemplates(projectId)
+  }, [projectId, fetchTemplates])
 
   // Search templates when debounced query changes
   useEffect(() => {
-    if (debouncedSearch.trim().length >= 2) {
+    if (projectId && debouncedSearch.trim().length >= 2) {
       setIsSearching(true)
-      templatesApi.search({ q: debouncedSearch, limit: 50 })
+      templatesApi.search({ projectId, q: debouncedSearch, limit: 50 })
         .then(response => {
           setSearchResults(response.data || [])
         })
@@ -79,7 +86,7 @@ export function TemplatesPage() {
       setSearchResults([])
       setIsSearching(false)
     }
-  }, [debouncedSearch])
+  }, [debouncedSearch, projectId])
 
   // Use search results if searching, otherwise show all templates
   const filteredTemplates = useMemo(() => {
@@ -90,14 +97,14 @@ export function TemplatesPage() {
   }, [templates, searchResults, debouncedSearch])
 
   const handleSave = useCallback(async () => {
-    if (!newTitle.trim() || !newBody.trim()) return
+    if (!projectId || !newTitle.trim() || !newBody.trim()) return
 
     setIsSaving(true)
     try {
       if (editingTemplate) {
         await updateTemplate(editingTemplate.id, newTitle, newBody)
       } else {
-        await addTemplate(newTitle, newBody)
+        await addTemplate(projectId, newTitle, newBody)
       }
 
       setNewTitle("")
@@ -107,7 +114,7 @@ export function TemplatesPage() {
     } finally {
       setIsSaving(false)
     }
-  }, [newTitle, newBody, editingTemplate, updateTemplate, addTemplate])
+  }, [projectId, newTitle, newBody, editingTemplate, updateTemplate, addTemplate])
 
   const handleEdit = useCallback((template: TemplateResponse) => {
     setEditingTemplate(template)
@@ -143,6 +150,18 @@ export function TemplatesPage() {
 
         {/* Search and add section */}
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <Select value={projectId ?? undefined} onValueChange={setProjectId}>
+            <SelectTrigger className="w-full sm:w-52" aria-label="Project">
+              <SelectValue placeholder="Select a project" />
+            </SelectTrigger>
+            <SelectContent>
+              {projects.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -163,7 +182,7 @@ export function TemplatesPage() {
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={handleNewTemplate} className="w-full sm:w-auto">
+              <Button onClick={handleNewTemplate} className="w-full sm:w-auto" disabled={!projectId}>
                 <Plus className="w-4 h-4 mr-2" />
                 New Template
               </Button>

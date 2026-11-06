@@ -6,7 +6,9 @@ export interface Project {
   id: string
   name: string
   domain: string
-  apiKey: string
+  /** Full key: only known right after create/regenerate; the server stores a hash. */
+  apiKey?: string
+  apiKeyPrefix?: string
   smtpEmail?: string
   smtpUsername?: string
   smtpHost?: string

@@ -107,12 +107,6 @@ export function AuthPage() {
             )}
           </Button>
         </form>
-
-        {isLogin && (
-          <p className="text-center text-xs text-muted-foreground mt-4">
-            Demo credentials are prefilled above — just hit Sign In.
-          </p>
-        )}
       </div>
     </div>
   )

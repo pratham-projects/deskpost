@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useAuthStore, useTicketStore, useProjectStore, useTemplateStore, useUnreadStore } from "@/lib/store"
+import { useAuthStore, useTicketStore, useProjectStore, useUnreadStore } from "@/lib/store"
 import { AuthPage } from "@/components/auth-page"
 import { Sidebar } from "@/components/sidebar"
 import { TicketList } from "@/components/ticket-list"
@@ -12,7 +12,6 @@ export default function DashboardPage() {
   const { isAuthenticated, isInitializing, tryAutoLogin } = useAuthStore()
   const { fetchTickets } = useTicketStore()
   const { fetchProjects } = useProjectStore()
-  const { fetchTemplates } = useTemplateStore()
   const { fetchUnread } = useUnreadStore()
   const [isMounted, setIsMounted] = useState(false)
 
@@ -34,7 +33,6 @@ export default function DashboardPage() {
       debug("[Page] Authenticated, fetching data...")
       fetchTickets()
       fetchProjects()
-      fetchTemplates()
       fetchUnread().then(() => {
         // After fetching unread, check if focused ticket needs message refresh
         const { selectedTicketId, fetchMessages } = useTicketStore.getState()

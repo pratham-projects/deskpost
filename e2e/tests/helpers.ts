@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext, type Page } from "@playwright/test"
+import { expect, test as base, type APIRequestContext, type Page } from "@playwright/test"
 import { ImapFlow } from "imapflow"
 import nodemailer from "nodemailer"
 
@@ -53,3 +53,53 @@ export async function waitForMail(address: string, subjectPart: string, timeoutM
   }
   throw new Error(`no mail "${subjectPart}" for ${address}`)
 }
+
+export type Proj = { id: string; apiKey: string; name: string }
+
+export async function apiCreateProject(request: APIRequestContext, token: string, name: string): Promise<Proj> {
+  const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Math.random().toString(36).slice(2, 7)}`
+  const res = await request.post("/api/v3/projects", {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { name, slug },
+  })
+  expect(res.status(), await res.text()).toBe(201)
+  const d = (await res.json()).data
+  return { id: d.id, apiKey: d.apiKey, name }
+}
+
+/** Public (widget) ticket create; returns the ticket id. */
+export async function widgetTicket(
+  request: APIRequestContext,
+  p: Proj,
+  o: { email: string; subject: string; description: string; name?: string },
+): Promise<string> {
+  const res = await request.post("/api/v3/tickets", {
+    headers: { "X-Project-Key": p.apiKey },
+    multipart: { projectId: p.id, clientEmail: o.email, clientName: o.name ?? "Cust", subject: o.subject, description: o.description },
+  })
+  expect(res.status(), await res.text()).toBe(201)
+  return (await res.json()).data.id
+}
+
+export async function uiLoginAs(page: Page, email: string, password: string) {
+  await page.goto("/")
+  await page.getByLabel("Email").fill(email)
+  await page.getByLabel("Password").fill(password)
+  await page.getByRole("button", { name: /sign in/i }).click()
+  await expect(page.getByRole("link", { name: /settings/i })).toBeVisible()
+}
+
+let ipCounter = 0
+const ipBase = 1 + Math.floor(Math.random() * 200)
+/**
+ * `test` whose browser and request contexts each present a fresh client address (via the trusted
+ * proxy's X-Forwarded-For), so the per-IP sign-in limiter (10/min) is exercised by its own specs
+ * and not by the suite's many logins.
+ */
+export const test = base.extend({
+  extraHTTPHeaders: async ({}, use) => {
+    const n = ++ipCounter
+    await use({ "X-Forwarded-For": `10.${ipBase}.${(n >> 8) & 255}.${n & 255}` })
+  },
+})
+export { expect }

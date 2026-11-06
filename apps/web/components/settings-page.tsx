@@ -33,7 +33,7 @@ import { useDebounce } from "@/lib/hooks"
 import { debug } from "@/lib/debug"
 
 export function SettingsPage() {
-  const { projects, isLoading: projectsLoading, fetchProjects, addProject, updateProject, deleteProject, error: projectError } = useProjectStore()
+  const { projects, isLoading: projectsLoading, fetchProjects, addProject, updateProject, deleteProject, regenerateApiKey, error: projectError } = useProjectStore()
   const { agent, logout } = useAuthStore()
   const { members, isLoading: membersLoading, membersTotal, fetchMembers, addMember, deleteMember } = useTeamStore()
 
@@ -1494,15 +1494,34 @@ export function SettingsPage() {
 
                       <div className="flex items-center gap-2 p-2 bg-muted rounded text-sm overflow-hidden mt-2">
                         <Key className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <code className="flex-1 font-mono text-xs truncate">{project.apiKey}</code>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 shrink-0"
-                          onClick={() => copyToClipboard(project.apiKey)}
-                        >
-                          <Copy className="w-3 h-3" />
-                        </Button>
+                        <code className="flex-1 font-mono text-xs truncate" data-testid="api-key">
+                          {project.apiKey ?? `${project.apiKeyPrefix ?? "sdk_"}…`}
+                        </code>
+                        {project.apiKey && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 shrink-0"
+                            aria-label="Copy API key"
+                            onClick={() => copyToClipboard(project.apiKey!)}
+                          >
+                            <Copy className="w-3 h-3" />
+                          </Button>
+                        )}
+                        {isAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 shrink-0 text-xs"
+                            onClick={() => {
+                              if (window.confirm("Regenerate the API key? The current key stops working immediately.")) {
+                                regenerateApiKey(project.id)
+                              }
+                            }}
+                          >
+                            Regenerate key
+                          </Button>
+                        )}
                       </div>
 
                       {isAdmin && (

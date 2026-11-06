@@ -6,6 +6,7 @@ import { apiClient, ApiResponse, API_VERSION } from './client';
 
 export interface TemplateResponse {
   id: string;
+  projectId?: string;
   title: string;
   body: string;
   createdAt: string;
@@ -13,6 +14,7 @@ export interface TemplateResponse {
 }
 
 export interface CreateTemplateRequest {
+  projectId: string;
   title: string;
   body: string;
 }
@@ -23,11 +25,13 @@ export interface UpdateTemplateRequest {
 }
 
 export interface ListTemplatesParams {
+  projectId: string;
   limit?: number;
   offset?: number;
 }
 
 export interface SearchTemplatesParams {
+  projectId: string;
   q: string;
   limit?: number;
   offset?: number;
@@ -37,8 +41,8 @@ export const templatesApi = {
   /**
    * Get template responses with pagination
    */
-  list: async (params?: ListTemplatesParams): Promise<ApiResponse<TemplateResponse[]> & { pagination?: { total: number; limit: number; offset: number; hasMore: boolean } }> => {
-    const queryParams: Record<string, string> = {};
+  list: async (params: ListTemplatesParams): Promise<ApiResponse<TemplateResponse[]> & { pagination?: { total: number; limit: number; offset: number; hasMore: boolean } }> => {
+    const queryParams: Record<string, string> = { projectId: params.projectId };
     if (params?.limit) queryParams.limit = params.limit.toString();
     if (params?.offset) queryParams.offset = params.offset.toString();
     
@@ -71,6 +75,7 @@ export const templatesApi = {
    */
   search: async (params: SearchTemplatesParams): Promise<ApiResponse<TemplateResponse[]> & { pagination?: { total: number; limit: number; offset: number; hasMore: boolean } }> => {
     const queryParams: Record<string, string> = {
+      projectId: params.projectId,
       q: params.q,
     };
     if (params.limit) queryParams.limit = params.limit.toString();

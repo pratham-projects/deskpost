@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Send, Lock, Mail, Clock, MessageSquare, ArrowLeft, User, X, Loader2, Upload, Search } from "lucide-react"
 import { AttachmentButton } from "./attachment-viewer"
-import { attachmentsApi, isAllowedFileType } from "@/lib/api/attachments"
+import { attachmentsApi, isAllowedFileType, type AttachmentMeta } from "@/lib/api/attachments"
 import { useToast } from "@/hooks/use-toast"
 import { debug } from "@/lib/debug"
 
@@ -40,7 +40,7 @@ export function TicketDetail() {
     messagesHasMore,
   } = useTicketStore()
   const { projects } = useProjectStore()
-  const { templates } = useTemplateStore()
+  const { templates, templatesProjectId, fetchTemplates } = useTemplateStore()
   const { toast } = useToast()
   const [replyText, setReplyText] = useState("")
   const [isInternal, setIsInternal] = useState(false)
@@ -75,6 +75,31 @@ export function TicketDetail() {
   const ticket = useMemo(() => tickets.find((t) => t.id === selectedTicketId), [tickets, selectedTicketId])
 
   const project = useMemo(() => (ticket ? projects.find((p) => p.id === ticket.projectId) : null), [ticket, projects])
+
+  const [attachmentMeta, setAttachmentMeta] = useState<Record<string, AttachmentMeta>>({})
+  const attachmentCount = useMemo(
+    () => messages.reduce((n, m) => n + (m.ticketId === selectedTicketId ? (m.attachmentIds?.length ?? 0) : 0), 0),
+    [messages, selectedTicketId],
+  )
+  useEffect(() => {
+    if (!selectedTicketId || attachmentCount === 0) return
+    let cancelled = false
+    attachmentsApi
+      .listForTicket(selectedTicketId)
+      .then((list) => {
+        if (!cancelled) setAttachmentMeta(Object.fromEntries(list.map((a) => [a.id, a])))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [selectedTicketId, attachmentCount])
+
+  // Templates are per project: load this ticket's project's set when the picker opens
+  const ticketProjectId = tickets.find((t) => t.id === selectedTicketId)?.projectId
+  useEffect(() => {
+    if (showTemplates && ticketProjectId && templatesProjectId !== ticketProjectId) fetchTemplates(ticketProjectId)
+  }, [showTemplates, ticketProjectId, templatesProjectId, fetchTemplates])
 
   const ticketMessages = useMemo(
     () =>
@@ -694,7 +719,7 @@ export function TicketDetail() {
                   {attachments.length > 0 && (
                     <div className={cn("flex flex-wrap gap-2", message.body && "mt-3")}>
                       {attachments.map((attachment: { id: string; url?: string }) => (
-                        <AttachmentButton key={attachment.id} attachment={attachment} />
+                        <AttachmentButton key={attachment.id} attachment={{ ...attachment, filename: attachmentMeta[attachment.id]?.filename }} />
                       ))}
                     </div>
                   )}

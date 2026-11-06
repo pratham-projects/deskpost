@@ -222,12 +222,28 @@ interface ProjectStore {
   addProject: (name: string, domain: string, smtpAuth: SmtpAuth, smtpPassword: string, advancedOptions?: { smtpHost?: string; smtpPort?: number }) => Promise<boolean>
   updateProject: (id: string, name: string, domain: string, smtpAuth?: SmtpAuth, smtpPassword?: string, advancedOptions?: { smtpHost?: string; smtpPort?: number }) => Promise<boolean>
   deleteProject: (id: string) => Promise<boolean>
+  /** Issues a new key (the old one stops working); resolves to the full key, shown once. */
+  regenerateApiKey: (id: string) => Promise<string | null>
 }
 
 export const useProjectStore = create<ProjectStore>((set) => ({
   projects: [],
   isLoading: false,
   error: null,
+
+  regenerateApiKey: async (id) => {
+    try {
+      const response = await projectsApi.regenerateApiKey(id)
+      const apiKey = response.data.apiKey
+      set((state) => ({
+        projects: state.projects.map((p) => (p.id === id ? { ...p, apiKey } : p)),
+      }))
+      return apiKey
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Failed to regenerate API key" })
+      return null
+    }
+  },
 
   fetchProjects: async () => {
     set({ isLoading: true, error: null })
@@ -239,6 +255,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
         name: p.name,
         domain: p.domain || "",
         apiKey: p.apiKey,
+        apiKeyPrefix: p.apiKeyPrefix,
         smtpEmail: p.smtpEmail,
         smtpUsername: p.smtpUsername,
         smtpHost: p.smtpHost,
@@ -288,6 +305,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
             name: p.name,
             domain: p.domain || "",
             apiKey: p.apiKey,
+            apiKeyPrefix: p.apiKeyPrefix,
             createdAt: new Date(p.createdAt),
           },
         ],
@@ -1089,6 +1107,8 @@ export const useUnreadStore = create<UnreadStore>((set, get) => ({
 }))
 
 interface TemplateStore {
+  /** Templates belong to one project; this is the project `templates` was loaded for. */
+  templatesProjectId: string | null
   templates: TemplateResponse[]
   isLoading: boolean
   isLoadingMore: boolean
@@ -1096,9 +1116,9 @@ interface TemplateStore {
   templatesTotal: number
   templatesHasMore: boolean
   templatesOffset: number
-  fetchTemplates: (reset?: boolean) => Promise<void>
+  fetchTemplates: (projectId: string, reset?: boolean) => Promise<void>
   fetchMoreTemplates: () => Promise<void>
-  addTemplate: (title: string, body: string) => Promise<boolean>
+  addTemplate: (projectId: string, title: string, body: string) => Promise<boolean>
   updateTemplate: (id: string, title: string, body: string) => Promise<boolean>
   deleteTemplate: (id: string) => Promise<boolean>
 }
@@ -1106,6 +1126,7 @@ interface TemplateStore {
 const TEMPLATES_PAGE_SIZE = 10
 
 export const useTemplateStore = create<TemplateStore>((set, get) => ({
+  templatesProjectId: null,
   templates: [],
   isLoading: false,
   isLoadingMore: false,
@@ -1114,12 +1135,13 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
   templatesHasMore: true,
   templatesOffset: 0,
 
-  fetchTemplates: async (reset = true) => {
+  fetchTemplates: async (projectId, reset = true) => {
     if (reset) {
-      set({ isLoading: true, error: null, templates: [], templatesOffset: 0, templatesHasMore: true })
+      set({ isLoading: true, error: null, templates: [], templatesProjectId: projectId, templatesOffset: 0, templatesHasMore: true })
     }
     try {
-      const response = await templatesApi.list({ limit: TEMPLATES_PAGE_SIZE, offset: 0 })
+      const response = await templatesApi.list({ projectId, limit: TEMPLATES_PAGE_SIZE, offset: 0 })
+      if (get().templatesProjectId !== projectId) return // user switched project meanwhile
       debug("[Templates] Fetched templates:", response.data?.length, "pagination:", response.pagination)
 
       const templates = response.data || []
@@ -1139,12 +1161,16 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
   },
 
   fetchMoreTemplates: async () => {
-    const { templatesHasMore, isLoadingMore, templatesOffset } = get()
-    if (!templatesHasMore || isLoadingMore) return
+    const { templatesHasMore, isLoadingMore, templatesOffset, templatesProjectId } = get()
+    if (!templatesHasMore || isLoadingMore || !templatesProjectId) return
 
     set({ isLoadingMore: true })
     try {
-      const response = await templatesApi.list({ limit: TEMPLATES_PAGE_SIZE, offset: templatesOffset })
+      const response = await templatesApi.list({ projectId: templatesProjectId, limit: TEMPLATES_PAGE_SIZE, offset: templatesOffset })
+      if (get().templatesProjectId !== templatesProjectId) {
+        set({ isLoadingMore: false })
+        return
+      }
       debug("[Templates] Load more templates:", response.data?.length, "offset:", templatesOffset)
 
       const templates = response.data || []
@@ -1167,12 +1193,12 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
     }
   },
 
-  addTemplate: async (title, body) => {
+  addTemplate: async (projectId, title, body) => {
     set({ isLoading: true, error: null })
     try {
-      const response = await templatesApi.create({ title, body })
+      const response = await templatesApi.create({ projectId, title, body })
       set((state) => ({
-        templates: [...state.templates, response.data],
+        templates: state.templatesProjectId === projectId ? [...state.templates, response.data] : state.templates,
         isLoading: false,
       }))
       return true
