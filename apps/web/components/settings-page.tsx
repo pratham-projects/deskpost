@@ -30,6 +30,7 @@ import { ArrowLeft, Plus, Copy, Trash2, Globe, Key, Pencil, Check, X, LogOut, Sh
 import { EmailResponsesEditor } from "./email-responses-editor"
 import { projectsApi } from "@/lib/api"
 import { useDebounce } from "@/lib/hooks"
+import { debug } from "@/lib/debug"
 
 export function SettingsPage() {
   const { projects, isLoading: projectsLoading, fetchProjects, addProject, updateProject, deleteProject, error: projectError } = useProjectStore()
@@ -297,29 +298,24 @@ export function SettingsPage() {
     const memberProjects: string[] = []
     const memberNotifications: Record<string, boolean> = {}
 
-    // eslint-disable-next-line no-console
-    console.log(`[Settings] Checking member ${memberId} access across ${projects.length} projects`)
+    debug(`[Settings] Checking member ${memberId} access across ${projects.length} projects`)
 
     for (const project of projects) {
       try {
-        // eslint-disable-next-line no-console
-        console.log(`[Settings] Calling GET /api/v2/projects/${project.id}/members`)
+        debug(`[Settings] Calling GET /api/v2/projects/${project.id}/members`)
         const response = await projectsApi.getMembers(project.id)
-        // eslint-disable-next-line no-console
-        console.log(`[Settings] Project ${project.name} (${project.id}) members response:`, response)
+        debug(`[Settings] Project ${project.name} (${project.id}) members response:`, response)
 
         // Check if this member is in the project's member list
         const members = response.data || []
-        // eslint-disable-next-line no-console
-        console.log(`[Settings] Members array for project ${project.name}:`, members)
+        debug(`[Settings] Members array for project ${project.name}:`, members)
 
         // Find the member record
         // Find the member record
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const memberRecord = members.find((m: any) => m.userId === memberId)
 
-        // eslint-disable-next-line no-console
-        console.log(`[Settings] Member ${memberId} is ${memberRecord ? 'IN' : 'NOT IN'} project ${project.name}`)
+        debug(`[Settings] Member ${memberId} is ${memberRecord ? 'IN' : 'NOT IN'} project ${project.name}`)
 
         if (memberRecord) {
           memberProjects.push(project.id)
@@ -332,8 +328,7 @@ export function SettingsPage() {
         console.error(`[Settings] API ERROR for project ${project.id}:`, err)
       }
     }
-    // eslint-disable-next-line no-console
-    console.log(`[Settings] Member ${memberId} is assigned to projects:`, memberProjects)
+    debug(`[Settings] Member ${memberId} is assigned to projects:`, memberProjects)
     setEditMemberProjects(memberProjects)
     setInitialMemberProjects(memberProjects) // Save initial state for comparison
     setEditMemberNotifications(memberNotifications)
@@ -363,10 +358,8 @@ export function SettingsPage() {
         }
       }
 
-      // eslint-disable-next-line no-console
-      console.log(`[Settings] SAVE: Current state:`, currentMemberState)
-      // eslint-disable-next-line no-console
-      console.log(`[Settings] SAVE: Target projects: [${editMemberProjects.join(', ')}]`)
+      debug(`[Settings] SAVE: Current state:`, currentMemberState)
+      debug(`[Settings] SAVE: Target projects: [${editMemberProjects.join(', ')}]`)
 
       // Add new assignments or update existing
       for (const projectId of editMemberProjects) {
@@ -375,8 +368,7 @@ export function SettingsPage() {
 
         if (!current) {
           // Add member
-          // eslint-disable-next-line no-console
-          console.log(`[Settings] API CALL: POST /api/v2/projects/${projectId}/members - Adding member ${editingMemberId}`)
+          debug(`[Settings] API CALL: POST /api/v2/projects/${projectId}/members - Adding member ${editingMemberId}`)
           await projectsApi.addMember(projectId, {
             userId: editingMemberId,
             role: 'agent',
@@ -384,8 +376,7 @@ export function SettingsPage() {
           })
         } else if (current.shouldNotify !== targetNotify) {
           // Update member notification settings if changed
-          // eslint-disable-next-line no-console
-          console.log(`[Settings] API CALL: PATCH /api/v2/projects/${projectId}/members/${editingMemberId} - Update notify to ${targetNotify}`)
+          debug(`[Settings] API CALL: PATCH /api/v2/projects/${projectId}/members/${editingMemberId} - Update notify to ${targetNotify}`)
           await projectsApi.updateMember(projectId, editingMemberId, { shouldNotify: targetNotify })
         }
       }
@@ -393,8 +384,7 @@ export function SettingsPage() {
       // Remove old assignments
       for (const projectId of Object.keys(currentMemberState)) {
         if (!editMemberProjects.includes(projectId)) {
-          // eslint-disable-next-line no-console
-          console.log(`[Settings] API CALL: DELETE /api/v2/projects/${projectId}/members/${editingMemberId}`)
+          debug(`[Settings] API CALL: DELETE /api/v2/projects/${projectId}/members/${editingMemberId}`)
           await projectsApi.removeMember(projectId, editingMemberId)
         }
       }

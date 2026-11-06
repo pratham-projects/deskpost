@@ -11,13 +11,22 @@ export const setAttachmentSessionIdGetter = (getter: () => string | null) => {
   getToken = getter;
 };
 
-// Allowed file types for upload
-export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
-export const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'];
-export const ALLOWED_FILE_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES];
+// Allowed upload types. Must be a subset of the server list (crates/api/src/routes/attachments.rs
+// `upload_type_allowed`); e2e/tests/attachment-types.spec.ts checks it.
+export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'image/bmp'];
+export const ALLOWED_DOCUMENT_TYPES = [
+  'application/pdf', 'text/plain', 'text/csv', 'application/zip', 'application/x-zip-compressed',
+  'application/msword', 'application/vnd.ms-excel', 'application/vnd.ms-powerpoint',
+];
+export const ALLOWED_FILE_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_DOCUMENT_TYPES];
+// Server accepts these prefixes too (openxml / opendocument); File.type is matched by prefix.
+export const ALLOWED_TYPE_PREFIXES = [
+  'application/vnd.openxmlformats-officedocument.',
+  'application/vnd.oasis.opendocument.',
+];
 
 export const isAllowedFileType = (file: File): boolean => {
-  return ALLOWED_FILE_TYPES.includes(file.type);
+  return ALLOWED_FILE_TYPES.includes(file.type) || ALLOWED_TYPE_PREFIXES.some((p) => file.type.startsWith(p));
 };
 
 export const attachmentsApi = {

@@ -9,10 +9,15 @@ export interface ApiResponse<T> {
   data: T;
 }
 
-export interface ApiError {
-  error: string;
-  code: number;
+/** Thrown when the session is gone (refresh failed). The logout handler has already run. */
+export class AuthExpiredError extends Error {
+  constructor() {
+    super("Session expired");
+    this.name = "AuthExpiredError";
+  }
 }
+
+const AUTH_CODES = new Set(["TOKEN_EXPIRED", "TOKEN_INVALID", "TOKEN_MISSING"]);
 
 // Function to get JWT token from auth store (will be set after store is initialized)
 let getToken: (() => string | null) | null = null;
@@ -39,6 +44,19 @@ export const setLogoutHandler = (handler: () => void) => {
   handleLogout = handler;
 };
 
+/** Non-auth API failure; `details` carries 422 field messages from the server. */
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code: string,
+    public details?: unknown
+  ) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -54,20 +72,12 @@ class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
 
     // Proactively refresh token if expired (skip for auth endpoints)
-    if (!endpoint.includes('/auth/') && isTokenExpired?.() && refreshToken) {
-      // eslint-disable-next-line no-console
-      console.log("[API] Token expired, attempting refresh...");
-      const refreshed = await refreshToken();
-      if (!refreshed) {
-        // eslint-disable-next-line no-console
-        console.log("[API] Token refresh failed, logging out silently...");
+    const isAuthEndpoint = /^\/api\/[^/]+\/auth\//.test(endpoint);
+    if (!isAuthEndpoint && isTokenExpired?.() && refreshToken) {
+      if (!(await refreshToken())) {
         handleLogout?.();
-        // Return a rejected promise that won't show as unhandled error
-        // The UI will redirect to login, no need to show error
-        return new Promise(() => {});
+        throw new AuthExpiredError();
       }
-      // eslint-disable-next-line no-console
-      console.log("[API] Token refreshed successfully, continuing request...");
     }
 
     // Get JWT token if available
@@ -101,75 +111,24 @@ class ApiClient {
     }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({
-        error: "An unexpected error occurred",
-        code: response.status,
-      }));
-      // eslint-disable-next-line no-console
-      console.log("[API] Error " + response.status + ":", errorData);
+      // Envelope: { success: false, error: { code, message, details? } }
+      const errorData = await response.json().catch(() => ({}));
+      const errorCode: string = errorData?.error?.code ?? "";
+      const errorMessage: string =
+        errorData?.error?.message || errorData?.message || "An unexpected error occurred";
 
-      // Extract error message from various response formats:
-      // { success: false, error: { message: "...", code: "..." } }
-      // { error: "..." }
-      // { message: "..." }
-      const errorCode = errorData.error?.code || errorData.code || "";
-      const errorMessage =
-        errorData.error?.message ||
-        (typeof errorData.error === "string" ? errorData.error : "") ||
-        errorData.message ||
-        "An unexpected error occurred";
-      
-      // Check if this is an auth-related error
-      const isAuthError = 
-        response.status === 401 ||
-        errorCode === "TOKEN_EXPIRED" ||
-        errorCode === "TOKEN_INVALID" ||
-        errorCode === "TOKEN_MISSING" ||
-        errorCode === "UNAUTHORIZED" ||
-        errorMessage.toLowerCase().includes("invalid token") || 
-        errorMessage.toLowerCase().includes("token expired") ||
-        errorMessage.toLowerCase().includes("unauthorized");
-      
-      // If auth error and we haven't tried refreshing yet, attempt refresh
-      if (isAuthError && !isRetry && refreshToken) {
-        // eslint-disable-next-line no-console
-        console.log("[API] Auth error received, attempting token refresh...");
-        const refreshed = await refreshToken();
-        if (refreshed) {
-          // eslint-disable-next-line no-console
-          console.log("[API] Token refreshed successfully, retrying request...");
-          // Retry the original request with new token
+      if (response.status === 401 && AUTH_CODES.has(errorCode) && !isAuthEndpoint) {
+        if (!isRetry && refreshToken && (await refreshToken())) {
           return this.request<T>(endpoint, options, true);
         }
-        // Refresh failed - logout silently (UI will redirect to login)
-        // eslint-disable-next-line no-console
-        console.log("[API] Token refresh failed, logging out silently...");
         handleLogout?.();
-        return new Promise(() => {});
+        throw new AuthExpiredError();
       }
-      
-      // If auth error after retry (refresh already attempted), just logout
-      if (isAuthError && isRetry) {
-        // eslint-disable-next-line no-console
-        console.log("[API] Auth still failing after refresh, logging out silently...");
-        handleLogout?.();
-        return new Promise(() => {});
-      }
-      
-      // Handle validation errors
-      if (errorData.type === "validation" && errorData.message) {
-        throw new Error(errorData.message);
-      }
-      if (errorData.summary) {
-        throw new Error(errorData.summary);
-      }
-      throw new Error(errorMessage || "An unexpected error occurred");
+
+      throw new ApiRequestError(errorMessage, response.status, errorCode, errorData?.error?.details);
     }
 
-    const data = await response.json();
-    // eslint-disable-next-line no-console
-    console.log("[API] Response " + endpoint + ":", data);
-    return data;
+    return response.json();
   }
 
   async get<T>(endpoint: string, params?: Record<string, string>): Promise<T> {

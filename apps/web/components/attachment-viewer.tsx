@@ -62,6 +62,8 @@ export function AttachmentViewer({ attachment, onClose }: AttachmentViewerProps)
   const ext = attachment.url ? getExtensionFromUrl(attachment.url) : ''
 
   useEffect(() => {
+    let cancelled = false
+    let objectUrl: string | null = null
     const loadAttachment = async () => {
       try {
         setIsLoading(true)
@@ -69,8 +71,10 @@ export function AttachmentViewer({ attachment, onClose }: AttachmentViewerProps)
         
         // Always fetch via API using attachment ID
         const blob = await attachmentsApi.getFile(attachment.id)
-        const url = URL.createObjectURL(blob)
-        setContentUrl(url)
+        if (cancelled) return
+        // Only used for <img>/<video>. Never put a blob URL in an <iframe>/<object>: it inherits the app origin.
+        objectUrl = URL.createObjectURL(blob)
+        setContentUrl(objectUrl)
         setFileBlob(blob)
         
         // Determine file type from mime type
@@ -84,6 +88,7 @@ export function AttachmentViewer({ attachment, onClose }: AttachmentViewerProps)
         }
         setIsLoading(false)
       } catch {
+        if (cancelled) return
         setError(true)
         setIsLoading(false)
       }
@@ -92,9 +97,8 @@ export function AttachmentViewer({ attachment, onClose }: AttachmentViewerProps)
     loadAttachment()
 
     return () => {
-      if (contentUrl) {
-        URL.revokeObjectURL(contentUrl)
-      }
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
   }, [attachment.id])
 

@@ -23,7 +23,8 @@ export { attachmentsApi } from './attachments';
 export { viewersApi } from './viewers';
 
 // Re-export types
-export type { ApiResponse, ApiError } from './client';
+export type { ApiResponse } from './client';
+export { ApiRequestError, AuthExpiredError } from './client';
 export type { User, SignUpRequest, SignInRequest, SignInResponse } from './auth';
 export type { UpdateUserRequest, CreateUserRequest, ListUsersParams } from './users';
 export type { 
