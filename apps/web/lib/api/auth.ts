@@ -40,7 +40,6 @@ export interface RefreshResponse {
   user: User;
   accessToken: string;
   expiresIn: number;
-  refreshToken?: string; // New refresh token (token rotation) - for cross-origin/cross-subdomain setups
 }
 
 // Real envelope: { success: true, data } | { success: false, error: { code, message } }
@@ -112,40 +111,13 @@ export const authApi = {
   },
 
   /**
-   * Refresh access token using refresh token cookie (production) or x-refresh-token header (dev mode)
-   * Cookie-based flow is the default - header is only used for cross-origin dev environments
+   * Refresh the access token using the HttpOnly refresh cookie (same-origin deployment).
    */
-  refresh: async (refreshToken?: string): Promise<AuthApiResponse<RefreshResponse>> => {
-    const headers: Record<string, string> = {};
-
-    // Only use x-refresh-token header for cross-origin dev mode when we have a stored token
-    // In production (same-origin), the cookie will be sent automatically via credentials: 'include'
-    const storedRefreshToken =
-      refreshToken || (typeof window !== "undefined" ? localStorage.getItem("refreshToken") : null);
-
-    // eslint-disable-next-line no-console
-    console.log("[Auth] Refresh called, stored token:", storedRefreshToken ? storedRefreshToken.substring(0, 30) + "..." : "none (will use cookie)");
-
-    // Only add header if we have a stored token (cross-origin dev mode)
-    // Otherwise rely on the cookie being sent automatically
-    if (storedRefreshToken) {
-      headers["X-Refresh-Token"] = storedRefreshToken;
-      // eslint-disable-next-line no-console
-      console.log("[Auth] Using x-refresh-token header");
-    } else {
-      // eslint-disable-next-line no-console
-      console.log("[Auth] No stored token, relying on HTTP-only cookie");
-    }
-
-    // eslint-disable-next-line no-console
-    console.log("[Auth] Request headers:", headers);
-
+  refresh: async (): Promise<AuthApiResponse<RefreshResponse>> => {
     const response = await fetch(`${API_PREFIX}/auth/refresh`, {
       method: "POST",
-      headers: Object.keys(headers).length > 0 ? headers : undefined,
       credentials: "include",
     });
-    
     return parse<RefreshResponse>(response);
   },
 

@@ -1,4 +1,5 @@
-# One domain: API and health under the same origin, everything else is the Next.js UI.
+# One domain: API and health under the same origin, everything else is the static UI
+# (`cd apps/web && bun run build`, then copy out/ to /srv/senddesk/web).
 # Caddy runs on the host next to the api, so the api sees it as 127.0.0.1: SD_TRUSTED_PROXIES=127.0.0.1.
 # If Caddy runs in a container instead, trust that container's network address, not 127.0.0.1.
 # Also set FRONTEND_URL=https://desk.example.com.
@@ -11,24 +12,39 @@ desk.example.com {
 		request_body {
 			max_size 40MB
 		}
-		reverse_proxy 127.0.0.1:3000
+		reverse_proxy 127.0.0.1:3000 {
+			health_uri /health
+			health_interval 30s
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 60s
+			}
+		}
 	}
 
 	# /widget is the embeddable customer form, so it must stay frameable; everything else is not.
 	@app not path /widget /widget/*
 	header @app {
 		X-Frame-Options DENY
+		# Report-Only first: next export needs inline scripts. Promote to Content-Security-Policy once clean.
+		Content-Security-Policy-Report-Only "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 		Content-Security-Policy "frame-ancestors 'none'"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 	}
+	# Widget key sits in the query string: do not leak it via Referer.
+	@widget path /widget /widget/*
+	header @widget Referrer-Policy no-referrer
 
 	handle {
-		reverse_proxy 127.0.0.1:4000
+		root * /srv/senddesk/web
+		try_files {path} {path}/ {path}/index.html
+		file_server
 	}
 
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options nosniff
-		Referrer-Policy strict-origin-when-cross-origin
+		?Referrer-Policy strict-origin-when-cross-origin
 		-Server
 	}
 }

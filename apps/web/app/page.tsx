@@ -6,6 +6,7 @@ import { AuthPage } from "@/components/auth-page"
 import { Sidebar } from "@/components/sidebar"
 import { TicketList } from "@/components/ticket-list"
 import { TicketDetail } from "@/components/ticket-detail"
+import { debug } from "@/lib/debug"
 
 export default function DashboardPage() {
   const { isAuthenticated, isInitializing, tryAutoLogin } = useAuthStore()
@@ -30,8 +31,7 @@ export default function DashboardPage() {
   // Fetch data when authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      // eslint-disable-next-line no-console
-      console.log("[Page] Authenticated, fetching data...")
+      debug("[Page] Authenticated, fetching data...")
       fetchTickets()
       fetchProjects()
       fetchTemplates()
@@ -43,8 +43,7 @@ export default function DashboardPage() {
         if (selectedTicketId) {
           const hasUnread = unreadItems.some(item => item.ticketId === selectedTicketId)
           if (hasUnread) {
-            // eslint-disable-next-line no-console
-            console.log("[Page] Focused ticket has unread messages on load, refreshing:", selectedTicketId)
+            debug("[Page] Focused ticket has unread messages on load, refreshing:", selectedTicketId)
             fetchMessages(selectedTicketId)
           }
         }
@@ -62,8 +61,7 @@ export default function DashboardPage() {
       // Get the currently focused ticket BEFORE fetching unread
       const { selectedTicketId, fetchMessages } = useTicketStore.getState()
 
-      // eslint-disable-next-line no-console
-      console.log("[Page] Polling unread items...", selectedTicketId ? `(focused: ${selectedTicketId})` : "")
+      debug("[Page] Polling unread items...", selectedTicketId ? `(focused: ${selectedTicketId})` : "")
 
       await fetchUnread()
 
@@ -73,8 +71,7 @@ export default function DashboardPage() {
       if (selectedTicketId) {
         const hasUnread = unreadItems.some(item => item.ticketId === selectedTicketId)
         if (hasUnread) {
-          // eslint-disable-next-line no-console
-          console.log("[Page] Focused ticket has unread messages, refreshing:", selectedTicketId)
+          debug("[Page] Focused ticket has unread messages, refreshing:", selectedTicketId)
           fetchMessages(selectedTicketId)
         }
       }

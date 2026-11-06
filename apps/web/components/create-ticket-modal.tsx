@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useTicketStore, useProjectStore, useUnreadStore } from "@/lib/store"
 import { ticketsApi } from "@/lib/api"
-import { isAllowedFileType } from "@/lib/api/attachments"
+import { ALLOWED_FILE_TYPES, isAllowedFileType } from "@/lib/api/attachments"
 import { useToast } from "@/hooks/use-toast"
 
 interface CreateTicketModalProps {
@@ -292,7 +292,7 @@ export function CreateTicketModal({ isOpen, onClose }: CreateTicketModalProps) {
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept="image/*,video/*"
+                  accept={ALLOWED_FILE_TYPES.join(",") + ",.docx,.xlsx,.pptx,.odt,.ods,.odp"}
                   className="hidden"
                   onChange={(e) => e.target.files && handleFileSelect(e.target.files)}
                 />
@@ -307,7 +307,7 @@ export function CreateTicketModal({ isOpen, onClose }: CreateTicketModalProps) {
                       Drop files here or click to browse
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Max 5 files · Images and videos
+                      Max 5 files · Images, PDF, text, Office, zip
                     </p>
                   </div>
                 ) : (

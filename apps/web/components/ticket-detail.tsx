@@ -13,6 +13,7 @@ import { Send, Lock, Mail, Clock, MessageSquare, ArrowLeft, User, X, Loader2, Up
 import { AttachmentButton } from "./attachment-viewer"
 import { attachmentsApi, isAllowedFileType } from "@/lib/api/attachments"
 import { useToast } from "@/hooks/use-toast"
+import { debug } from "@/lib/debug"
 
 // Pending message type for optimistic UI
 interface PendingMessage {
@@ -101,7 +102,7 @@ export function TicketDetail() {
         scrollTop: container.scrollTop,
         scrollHeight: container.scrollHeight
       }
-      console.log("[Messages] Saved scroll position:", scrollPositionRef.current)
+      debug("[Messages] Saved scroll position:", scrollPositionRef.current)
     }
 
     // If we just finished loading more messages, restore scroll position
@@ -113,7 +114,7 @@ export function TicketDetail() {
       // Adjust scroll position to account for new content added at the top
       const newScrollTop = savedPosition.scrollTop + heightDifference
       
-      console.log("[Messages] Restoring scroll position:", {
+      debug("[Messages] Restoring scroll position:", {
         oldScrollTop: savedPosition.scrollTop,
         oldScrollHeight: savedPosition.scrollHeight,
         newScrollHeight,
@@ -162,11 +163,11 @@ export function TicketDetail() {
           // Debounce API calls - only allow one call per 1.5 seconds
           const now = Date.now()
           if (now - lastLoadTimeRef.current < 1500) {
-            console.log("[Messages] Debouncing auto-load request")
+            debug("[Messages] Debouncing auto-load request")
             return
           }
           
-          console.log("[Messages] Auto-loading more messages due to scroll")
+          debug("[Messages] Auto-loading more messages due to scroll")
           lastLoadTimeRef.current = now
           fetchMoreMessages(ticket.id)
         }
@@ -531,7 +532,7 @@ export function TicketDetail() {
           <div className="text-center">
             <Upload className="w-12 h-12 mx-auto mb-2 text-primary" />
             <p className="text-lg font-medium text-primary">Drop file to upload</p>
-            <p className="text-sm text-muted-foreground mt-1">Images and videos supported</p>
+            <p className="text-sm text-muted-foreground mt-1">Images, PDF, text, Office, zip supported</p>
           </div>
         </div>
       )}

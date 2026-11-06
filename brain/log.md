@@ -1,5 +1,12 @@
 # Changelog
 
+## [2026-11-06] R50 fix web-deploy
+
+- **Fixed**: H1 web image is now `caddy:2-alpine` serving the static export (`deploy/web.Caddyfile`, proxies `/api` to `app:3000`, same origin); host `deploy/Caddyfile` serves `/srv/senddesk/web` directly. H2 one name `NEXT_PUBLIC_API_URL` (empty = same origin) in Dockerfile, compose, `.env.example`. H3 no localStorage tokens; access token in memory, session restored via `/auth/refresh` cookie (demo-mock restore gated on `NEXT_PUBLIC_USE_MOCK`). M1 `lib/debug.ts` no-op in prod replaces all `console.log`. M2 typed `AuthExpiredError`, match 401 + TOKEN_* codes only, `ApiRequestError` carries `details`. M3 single-flight + `navigator.locks` refresh. M4 CSP Report-Only + Permissions-Policy. M5 widget `Referrer-Policy: no-referrer`. M6 UI types = server list, contract test `e2e/tests/attachment-types.spec.ts`. M7 blob URL revoke + stale guard. L1 jar sha256 pin, L2 e2e refuses non-local db (`E2E_DATABASE_URL`), L3 trap INT/TERM + child kill, L5 compose env allow-list, mailpit profile `dev`, `.dockerignore`, L6 proxy health/timeouts.
+- **Not done / notes**: M5 per-project frame-ancestors needs API change (crates untouched). M6: server serves PDF download-only (`content_type.rs`), so viewer "unknown" for PDF is correct; review claim wrong. Systemd hardening extras, image digest pins, API `healthcheck` subcommand (no curl) and 40MB body split in Caddy left. 422 field `details` now reach `ApiRequestError.details`, forms do not render them yet. Docker not installed: image and compose not built; Caddyfiles validated with `caddy validate`.
+- **Lesson**: `next start` + `output: export` fails at boot and e2e never touches the Docker target; add a docker smoke when docker is available.
+- **Verify**: `make web` ok, `make e2e` 6/6 pass.
+
 ## [2026-11-06] R40 e2e
 
 - **Creation**: `scripts/e2e.sh` (scratch db `sd_e2e` on :5433, GreenMail 2.1.15 jar in `.tools/`, api binary with migrate+bootstrap, Caddy serving `apps/web/out` and proxying `/api` + `/health`, then Playwright) and `e2e/` (`@playwright/test` on system Chrome, imapflow, nodemailer). Flows: bad/good login, create project in UI, widget ticket, agent reply -> mail out, customer email -> IMAP poll -> ticket -> reply -> mail out.

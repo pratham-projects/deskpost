@@ -6,7 +6,12 @@ cd "$(dirname "$0")/.."
 ROOT=$PWD
 export PATH=/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH
 
-BASE_DB=${DATABASE_URL:-postgres://pratham@localhost:5433/postgres}
+BASE_DB=${E2E_DATABASE_URL:-${DATABASE_URL:-postgres://pratham@localhost:5433/postgres}}
+# Creates and drops a scratch db: refuse anything that is not a local server.
+case "$BASE_DB" in
+  *@localhost[:/]*|*@127.0.0.1[:/]*|*//localhost[:/]*|*//127.0.0.1[:/]*) ;;
+  *) echo "refusing non-local database host in E2E_DATABASE_URL/DATABASE_URL" >&2; exit 1 ;;
+esac
 DB_NAME=sd_e2e
 DB_URL="${BASE_DB%/*}/$DB_NAME"
 API_PORT=${E2E_API_PORT:-3100}
@@ -14,18 +19,22 @@ WEB_PORT=${E2E_WEB_PORT:-4100}
 SMTP_PORT=3025
 IMAP_PORT=3143
 GREENMAIL_VERSION=2.1.15
+GREENMAIL_SHA256=91d58798698cac357f015365240383b936ced2f2a1a9f7db37d9e3e1a31391b1
 JAR=.tools/greenmail-standalone-$GREENMAIL_VERSION.jar
 RUN=e2e/.run
 ADMIN_EMAIL=admin@e2e.test
 ADMIN_PASS=e2e-admin-pass-1
 
+umask 077
 mkdir -p .tools "$RUN"
 PIDS=()
 cleanup() {
   for p in "${PIDS[@]:-}"; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done
+  pkill -P $$ 2>/dev/null || true # playwright/browser children
   wait 2>/dev/null || true
 }
 trap cleanup EXIT
+trap 'exit 130' INT TERM
 
 for port in $API_PORT $WEB_PORT $SMTP_PORT $IMAP_PORT; do
   if nc -z 127.0.0.1 "$port" 2>/dev/null; then echo "port $port busy" >&2; exit 1; fi
@@ -41,8 +50,10 @@ psql "$BASE_DB" -q -c "DROP DATABASE IF EXISTS $DB_NAME" -c "CREATE DATABASE $DB
 echo "== greenmail"
 if [ ! -f "$JAR" ]; then
   curl -fsSL -o "$JAR.tmp" "https://repo1.maven.org/maven2/com/icegreen/greenmail-standalone/$GREENMAIL_VERSION/greenmail-standalone-$GREENMAIL_VERSION.jar"
+  echo "$GREENMAIL_SHA256  $JAR.tmp" | shasum -a 256 -c - >/dev/null || { rm -f "$JAR.tmp"; echo "greenmail checksum mismatch" >&2; exit 1; }
   mv "$JAR.tmp" "$JAR"
 fi
+echo "$GREENMAIL_SHA256  $JAR" | shasum -a 256 -c - >/dev/null || { echo "cached greenmail jar checksum mismatch: delete $JAR" >&2; exit 1; }
 java -Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imap -Dgreenmail.hostname=127.0.0.1 \
   -Dgreenmail.auth.disabled -jar "$JAR" >"$RUN/greenmail.log" 2>&1 &
 PIDS+=($!)

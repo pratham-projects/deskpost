@@ -4,6 +4,7 @@ import { authApi, projectsApi, ticketsApi, unreadApi, templatesApi } from "./api
 import type { UnreadItem, TemplateResponse, TicketCounts } from "./api"
 import { setTokenGetter, setLogoutHandler, setTokenExpiredChecker, setTokenRefresher } from "./api/client"
 import { setAttachmentSessionIdGetter } from "./api/attachments"
+import { debug } from "@/lib/debug"
 
 interface AuthStore {
   agent: Agent | null
@@ -23,8 +24,62 @@ interface AuthStore {
   clearError: () => void
 }
 
-// No persist middleware - sessions are tab-specific and don't survive page reload
-// But we try to auto-login using refresh token cookie on app load
+type SetAuth = (partial: Partial<AuthStore>) => void
+
+const toAgent = (user: { id: string; email: string; name: string; role?: string; createdAt?: string }): Agent => ({
+  id: user.id,
+  email: user.email,
+  name: user.name,
+  role: (user.role as AgentRole) || "agent",
+  createdAt: new Date(user.createdAt || Date.now()),
+})
+
+async function doRefresh(set: SetAuth): Promise<boolean> {
+  try {
+    const response = await authApi.refresh()
+    if (!response.success || !response.data) return false
+    const { user, accessToken, expiresIn } = response.data
+    // Expire 30 seconds early to avoid edge cases
+    set({
+      agent: toAgent(user),
+      token: accessToken,
+      tokenExpiresAt: Date.now() + (expiresIn - 30) * 1000,
+      isAuthenticated: true,
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Demo build only (NEXT_PUBLIC_USE_MOCK=1): mock/write-session.ts seeds these keys. Dead code in real builds.
+function restoreMockSession(set: SetAuth): boolean {
+  if (typeof window === "undefined") return false
+  const token = localStorage.getItem("accessToken")
+  const expiry = localStorage.getItem("tokenExpiresAt")
+  const user = localStorage.getItem("user")
+  if (!token || !expiry || !user || Date.now() >= parseInt(expiry, 10) - 60000) return false
+  set({
+    agent: toAgent(JSON.parse(user)),
+    token,
+    tokenExpiresAt: parseInt(expiry, 10),
+    isAuthenticated: true,
+    isInitializing: false,
+  })
+  return true
+}
+
+// Tokens live in memory only (never localStorage). On load we restore the session by calling
+// /auth/refresh with the HttpOnly refresh cookie.
+const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "1"
+
+let refreshInflight: Promise<boolean> | null = null
+
+/** Single-flight + cross-tab lock: refresh tokens are single-use, so parallel refreshes would trip reuse detection. */
+const withRefreshLock = <T,>(fn: () => Promise<T>): Promise<T> =>
+  typeof navigator !== "undefined" && navigator.locks
+    ? navigator.locks.request("sd-refresh", fn)
+    : fn()
 export const useAuthStore = create<AuthStore>()((set, get) => ({
   agent: null,
   token: null,
@@ -38,122 +93,24 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
 
   isTokenExpired: () => Date.now() >= get().tokenExpiresAt,
 
-  refreshToken: async () => {
-    try {
-      // eslint-disable-next-line no-console
-      console.log("[Auth] Starting token refresh, current token:", get().token?.substring(0, 30) + "...")
-
-      const response = await authApi.refresh()
-      if (!response.success || !response.data) {
-        // eslint-disable-next-line no-console
-        console.log("[Auth] Refresh failed - response:", response)
-        return false
-      }
-
-      const { user, accessToken, expiresIn, refreshToken: newRefreshToken } = response.data
-      // Set expiry 30 seconds early to avoid edge cases
-      const tokenExpiresAt = Date.now() + (expiresIn - 30) * 1000
-
-      // eslint-disable-next-line no-console
-      console.log("[Auth] Token refreshed successfully!")
-      console.log("[Auth] New access token:", accessToken.substring(0, 30) + "...")
-      console.log("[Auth] Expires in:", expiresIn, "seconds")
-
-      // Save new refresh token (token rotation) - important for dev mode
-      if (newRefreshToken && typeof window !== "undefined") {
-        localStorage.setItem("refreshToken", newRefreshToken)
-        // eslint-disable-next-line no-console
-        console.log("[Auth] New refresh token saved (rotation)")
-      }
-
-      set({
-        agent: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: (user.role as AgentRole) || "agent",
-          createdAt: new Date(user.createdAt || Date.now()),
-        },
-        token: accessToken,
-        tokenExpiresAt,
-        isAuthenticated: true,
+  refreshToken: () => {
+    if (!refreshInflight) {
+      refreshInflight = withRefreshLock(() => doRefresh(set)).finally(() => {
+        refreshInflight = null
       })
-
-      // Verify the token was updated
-      // eslint-disable-next-line no-console
-      console.log("[Auth] Token in store after set:", get().token?.substring(0, 30) + "...")
-
-      return true
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log("[Auth] Refresh error:", err)
-      return false
     }
+    return refreshInflight
   },
 
-  // Try to auto-login using stored session or refresh token on app load
+  // Restore the session on app load from the refresh cookie.
   tryAutoLogin: async () => {
-    // eslint-disable-next-line no-console
-    console.log("[Auth] Attempting auto-login...")
     set({ isInitializing: true })
-
     try {
-      // First, try to restore session from localStorage (if token not expired)
-      if (typeof window !== "undefined") {
-        const storedToken = localStorage.getItem("accessToken")
-        const storedExpiry = localStorage.getItem("tokenExpiresAt")
-        const storedUser = localStorage.getItem("user")
-
-        if (storedToken && storedExpiry && storedUser) {
-          const expiresAt = parseInt(storedExpiry, 10)
-
-          // Check if token is still valid (with 60 second buffer)
-          if (Date.now() < expiresAt - 60000) {
-            const user = JSON.parse(storedUser)
-            // eslint-disable-next-line no-console
-            console.log("[Auth] Restored session from localStorage, expires in:", Math.round((expiresAt - Date.now()) / 1000), "seconds")
-
-            set({
-              agent: {
-                id: user.id,
-                email: user.email,
-                name: user.name,
-                role: (user.role as AgentRole) || "agent",
-                createdAt: new Date(user.createdAt || Date.now()),
-              },
-              token: storedToken,
-              tokenExpiresAt: expiresAt,
-              isAuthenticated: true,
-              isInitializing: false,
-            })
-            return true
-          } else {
-            // eslint-disable-next-line no-console
-            console.log("[Auth] Stored token expired, trying refresh...")
-          }
-        }
-      }
-
-      // If no valid stored session, try refresh token
+      if (USE_MOCK && restoreMockSession(set)) return true
       const success = await get().refreshToken()
-      if (success) {
-        // eslint-disable-next-line no-console
-        console.log("[Auth] Auto-login via refresh token successful")
-      } else {
-        // eslint-disable-next-line no-console
-        console.log("[Auth] Auto-login failed - no valid session or refresh token")
-        // Clear any stale localStorage data
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("accessToken")
-          localStorage.removeItem("tokenExpiresAt")
-          localStorage.removeItem("user")
-        }
-      }
       set({ isInitializing: false })
       return success
     } catch {
-      // eslint-disable-next-line no-console
-      console.log("[Auth] Auto-login failed with error")
       set({ isInitializing: false })
       return false
     }
@@ -170,28 +127,9 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
         return false
       }
 
-      const { user, accessToken, expiresIn, refreshToken } = response.data
+      const { user, accessToken, expiresIn } = response.data
       // Set expiry 30 seconds early to avoid edge cases
       const tokenExpiresAt = Date.now() + (expiresIn - 30) * 1000
-
-      // eslint-disable-next-line no-console
-      console.log("[Auth] Access token saved, expires in:", expiresIn, "seconds")
-
-      // Store tokens in localStorage for auto-login
-      if (typeof window !== "undefined") {
-        // Store refresh token if provided (preferred)
-        if (refreshToken) {
-          localStorage.setItem("refreshToken", refreshToken)
-          // eslint-disable-next-line no-console
-          console.log("[Auth] Refresh token saved to localStorage")
-        }
-        // Also store access token and expiry for session restoration
-        localStorage.setItem("accessToken", accessToken)
-        localStorage.setItem("tokenExpiresAt", tokenExpiresAt.toString())
-        localStorage.setItem("user", JSON.stringify(user))
-        // eslint-disable-next-line no-console
-        console.log("[Auth] Session data saved to localStorage for auto-login")
-      }
 
       set({
         agent: {
@@ -242,13 +180,6 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
     } catch {
       // Continue with logout even if API call fails
     }
-    // Clear all auth data from localStorage
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("refreshToken")
-      localStorage.removeItem("accessToken")
-      localStorage.removeItem("tokenExpiresAt")
-      localStorage.removeItem("user")
-    }
     // Clear local token state
     set({ agent: null, token: null, tokenExpiresAt: 0, isAuthenticated: false, isLoading: false, error: null })
   },
@@ -264,13 +195,6 @@ setAttachmentSessionIdGetter(() => useAuthStore.getState().token)
 
 // Initialize logout handler for API client (auto-logout on invalid/expired token)
 setLogoutHandler(() => {
-  // Clear all auth data from localStorage
-  if (typeof window !== "undefined") {
-    localStorage.removeItem("refreshToken")
-    localStorage.removeItem("accessToken")
-    localStorage.removeItem("tokenExpiresAt")
-    localStorage.removeItem("user")
-  }
   // Clear auth state immediately without waiting for API call
   // Don't set error message - just silently show login screen
   useAuthStore.setState({
@@ -309,8 +233,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
     set({ isLoading: true, error: null })
     try {
       const response = await projectsApi.list()
-      // eslint-disable-next-line no-console
-      console.log("[Projects] Fetched projects:", response.data)
+      debug("[Projects] Fetched projects:", response.data)
       const mappedProjects = response.data.map((p) => ({
         id: p.id,
         name: p.name,
@@ -322,15 +245,13 @@ export const useProjectStore = create<ProjectStore>((set) => ({
         smtpPort: p.smtpPort,
         createdAt: new Date(p.createdAt),
       }))
-      // eslint-disable-next-line no-console
-      console.log("[Projects] Mapped projects:", mappedProjects)
+      debug("[Projects] Mapped projects:", mappedProjects)
       set({
         projects: mappedProjects,
         isLoading: false,
       })
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log("[Projects] Error fetching projects:", err)
+      debug("[Projects] Error fetching projects:", err)
       const message = err instanceof Error ? err.message : "Failed to fetch projects"
       set({ error: message, isLoading: false })
     }
@@ -375,8 +296,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to create project"
-      // eslint-disable-next-line no-console
-      console.log("[Projects] Create error:", message)
+      debug("[Projects] Create error:", message)
       set({ error: message, isLoading: false })
       return false
     }
@@ -425,8 +345,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to update project"
-      // eslint-disable-next-line no-console
-      console.log("[Projects] Update error:", message)
+      debug("[Projects] Update error:", message)
       set({ error: message, isLoading: false })
       return false
     }
@@ -564,8 +483,7 @@ export const useTicketStore = create<TicketStore>((set, get) => ({
         ticketsApi.getCounts()
       ])
 
-      // eslint-disable-next-line no-console
-      console.log("[Tickets] Raw API response:", response.data, "pagination:", response.pagination)
+      debug("[Tickets] Raw API response:", response.data, "pagination:", response.pagination)
 
       const mappedTickets = (response.data || []).map((t) => ({
         id: t.id,
@@ -648,11 +566,9 @@ export const useTicketStore = create<TicketStore>((set, get) => ({
         }
       })
 
-      // eslint-disable-next-line no-console
-      console.log("[Tickets] Soft refresh merged, no UI reset.")
+      debug("[Tickets] Soft refresh merged, no UI reset.")
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log("[Tickets] Soft refresh failed (non-critical):", err)
+      debug("[Tickets] Soft refresh failed (non-critical):", err)
     }
   },
 
@@ -663,8 +579,7 @@ export const useTicketStore = create<TicketStore>((set, get) => ({
         set({ ticketCounts: response.data })
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log("[Tickets] Failed to fetch counts:", err)
+      debug("[Tickets] Failed to fetch counts:", err)
     }
   },
 
@@ -681,8 +596,7 @@ export const useTicketStore = create<TicketStore>((set, get) => ({
         projectId: projectFilter === "all" ? undefined : projectFilter,
         unreadFirst: get().unreadFirst,
       })
-      // eslint-disable-next-line no-console
-      console.log("[Tickets] Load more response:", response.data?.length, "items, offset:", ticketsOffset)
+      debug("[Tickets] Load more response:", response.data?.length, "items, offset:", ticketsOffset)
 
       const mappedTickets = (response.data || []).map((t) => ({
         id: t.id,
@@ -713,8 +627,7 @@ export const useTicketStore = create<TicketStore>((set, get) => ({
         }
       })
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log("[Tickets] Failed to load more:", err)
+      debug("[Tickets] Failed to load more:", err)
       set({ isLoadingMore: false })
     }
   },
@@ -724,19 +637,16 @@ export const useTicketStore = create<TicketStore>((set, get) => ({
       set({ isLoadingMessages: true, messages: [], messagesOffset: 0, messagesHasMore: false })
     }
     try {
-      // eslint-disable-next-line no-console
-      console.log("[Messages] Fetching messages for ticket:", ticketId, "with limit:", MESSAGES_PAGE_SIZE, "offset: 0")
+      debug("[Messages] Fetching messages for ticket:", ticketId, "with limit:", MESSAGES_PAGE_SIZE, "offset: 0")
       // Fetch latest messages first with pagination
       const response = await ticketsApi.getMessages(ticketId, { limit: MESSAGES_PAGE_SIZE, offset: 0 })
-      // eslint-disable-next-line no-console
-      console.log("[Messages] API response:", response)
+      debug("[Messages] API response:", response)
 
       // Response format: { data: TicketMessage[], pagination: {...} }
       const messages = response.data || []
       const pagination = response.pagination
 
-      // eslint-disable-next-line no-console
-      console.log("[Messages] Extracted", messages.length, "messages (expected max", MESSAGES_PAGE_SIZE, ") - pagination:", pagination)
+      debug("[Messages] Extracted", messages.length, "messages (expected max", MESSAGES_PAGE_SIZE, ") - pagination:", pagination)
 
       const mappedMessages = messages.map((m) => ({
         id: m.id,
@@ -750,8 +660,7 @@ export const useTicketStore = create<TicketStore>((set, get) => ({
         createdAt: new Date(m.createdAt),
       })) // No need to reverse - backend now returns latest first
 
-      // eslint-disable-next-line no-console
-      console.log("[Messages] Mapped messages:", mappedMessages)
+      debug("[Messages] Mapped messages:", mappedMessages)
 
       set({
         messages: mappedMessages,
@@ -761,8 +670,7 @@ export const useTicketStore = create<TicketStore>((set, get) => ({
         isLoadingMessages: false,
       })
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log("[Messages] Failed to fetch messages:", err)
+      debug("[Messages] Failed to fetch messages:", err)
       set({ isLoadingMessages: false })
     }
   },
@@ -773,16 +681,14 @@ export const useTicketStore = create<TicketStore>((set, get) => ({
 
     set({ isLoadingMoreMessages: true })
     try {
-      // eslint-disable-next-line no-console
-      console.log("[Messages] Loading more messages with limit:", MESSAGES_PAGE_SIZE, "offset:", messagesOffset)
+      debug("[Messages] Loading more messages with limit:", MESSAGES_PAGE_SIZE, "offset:", messagesOffset)
       const response = await ticketsApi.getMessages(ticketId, { limit: MESSAGES_PAGE_SIZE, offset: messagesOffset })
 
       // Response format: { data: TicketMessage[], pagination: {...} }
       const messages = response.data || []
       const pagination = response.pagination
 
-      // eslint-disable-next-line no-console
-      console.log("[Messages] Load more API returned", messages.length, "messages (expected max", MESSAGES_PAGE_SIZE, ") - pagination:", pagination)
+      debug("[Messages] Load more API returned", messages.length, "messages (expected max", MESSAGES_PAGE_SIZE, ") - pagination:", pagination)
 
       const mappedMessages = messages.map((m) => ({
         id: m.id,
@@ -810,8 +716,7 @@ export const useTicketStore = create<TicketStore>((set, get) => ({
         }
       })
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log("[Messages] Failed to load more:", err)
+      debug("[Messages] Failed to load more:", err)
       set({ isLoadingMoreMessages: false })
     }
   },
@@ -844,8 +749,7 @@ export const useTicketStore = create<TicketStore>((set, get) => ({
       }))
       await get().softRefreshTickets()
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log("[Tickets] Failed to update status:", err)
+      debug("[Tickets] Failed to update status:", err)
     }
   },
 
@@ -917,8 +821,7 @@ export const useTeamStore = create<TeamStore>((set, get) => ({
       const { usersApi } = await import("./api")
       // Fetch all members at once for client-side pagination (limit 1000 should cover most cases)
       const response = await usersApi.list({ limit: 1000, offset: 0 })
-      // eslint-disable-next-line no-console
-      console.log("[Team] Fetched members:", response.data?.length, "pagination:", response.pagination)
+      debug("[Team] Fetched members:", response.data?.length, "pagination:", response.pagination)
 
       const mappedMembers = (response.data || []).map((u) => ({
         id: u.id,
@@ -936,8 +839,7 @@ export const useTeamStore = create<TeamStore>((set, get) => ({
         isLoading: false,
       })
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log("[Team] Error fetching members:", err)
+      debug("[Team] Error fetching members:", err)
       const message = err instanceof Error ? err.message : "Failed to fetch team members"
       set({ error: message, isLoading: false })
     }
@@ -951,8 +853,7 @@ export const useTeamStore = create<TeamStore>((set, get) => ({
     try {
       const { usersApi } = await import("./api")
       const response = await usersApi.list({ limit: MEMBERS_PAGE_SIZE, offset: membersOffset })
-      // eslint-disable-next-line no-console
-      console.log("[Team] Load more members:", response.data?.length, "offset:", membersOffset)
+      debug("[Team] Load more members:", response.data?.length, "offset:", membersOffset)
 
       const mappedMembers = (response.data || []).map((u) => ({
         id: u.id,
@@ -976,8 +877,7 @@ export const useTeamStore = create<TeamStore>((set, get) => ({
         }
       })
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log("[Team] Failed to load more members:", err)
+      debug("[Team] Failed to load more members:", err)
       set({ isLoadingMore: false })
     }
   },
@@ -1059,8 +959,7 @@ export const useUnreadStore = create<UnreadStore>((set, get) => ({
   fetchUnread: async () => {
     try {
       const response = await unreadApi.list()
-      // eslint-disable-next-line no-console
-      console.log("[Unread] Fetched unread items:", response.data)
+      debug("[Unread] Fetched unread items:", response.data)
 
       const newUnreadItems = Array.isArray(response.data) ? response.data : []
 
@@ -1073,16 +972,14 @@ export const useUnreadStore = create<UnreadStore>((set, get) => ({
         .filter(ticketId => !currentTicketIds.has(ticketId))
 
       if (newTicketIds.length > 0) {
-        // eslint-disable-next-line no-console
-        console.log("[Unread] Found new ticket IDs not in current list:", newTicketIds)
+        debug("[Unread] Found new ticket IDs not in current list:", newTicketIds)
 
         // Refresh tickets based on current filter using soft refresh
         // (avoids clearing the list which would cause a UI flash and lose ticket focus)
         const { projectFilter } = ticketStore
 
         if (projectFilter === "all") {
-          // eslint-disable-next-line no-console
-          console.log("[Unread] Soft-refreshing all tickets to include new tickets")
+          debug("[Unread] Soft-refreshing all tickets to include new tickets")
           ticketStore.softRefreshTickets()
         } else {
           // Check if any new tickets belong to the currently filtered project
@@ -1091,12 +988,10 @@ export const useUnreadStore = create<UnreadStore>((set, get) => ({
           )
 
           if (newTicketsInCurrentProject.length > 0) {
-            // eslint-disable-next-line no-console
-            console.log("[Unread] New tickets found in current project filter, soft-refreshing tickets")
+            debug("[Unread] New tickets found in current project filter, soft-refreshing tickets")
             ticketStore.softRefreshTickets()
           } else {
-            // eslint-disable-next-line no-console
-            console.log("[Unread] New tickets found but not in current project filter, skipping refresh")
+            debug("[Unread] New tickets found but not in current project filter, skipping refresh")
           }
         }
       }
@@ -1109,8 +1004,7 @@ export const useUnreadStore = create<UnreadStore>((set, get) => ({
       })
 
       if (resolvedTicketsWithUnread.length > 0) {
-        // eslint-disable-next-line no-console
-        console.log("[Unread] Found unread messages for resolved tickets, refreshing:",
+        debug("[Unread] Found unread messages for resolved tickets, refreshing:",
           resolvedTicketsWithUnread.map(item => item.ticketId))
 
         // Refresh each resolved ticket individually to get updated status
@@ -1132,12 +1026,10 @@ export const useUnreadStore = create<UnreadStore>((set, get) => ({
                     : t
                 )
               }))
-              // eslint-disable-next-line no-console
-              console.log("[Unread] Refreshed ticket status:", updatedTicket.id, "->", updatedTicket.status)
+              debug("[Unread] Refreshed ticket status:", updatedTicket.id, "->", updatedTicket.status)
             }
           } catch (err) {
-            // eslint-disable-next-line no-console
-            console.log("[Unread] Failed to refresh ticket:", item.ticketId, err)
+            debug("[Unread] Failed to refresh ticket:", item.ticketId, err)
           }
         }
       }
@@ -1145,8 +1037,7 @@ export const useUnreadStore = create<UnreadStore>((set, get) => ({
       // Ensure we always set an array, even if response is malformed
       set({ unreadItems: newUnreadItems })
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log("[Unread] Failed to fetch unread items:", err)
+      debug("[Unread] Failed to fetch unread items:", err)
       // Don't clear existing items on fetch failure
     }
   },
@@ -1157,13 +1048,11 @@ export const useUnreadStore = create<UnreadStore>((set, get) => ({
     const isUnread = currentUnread.some((item) => item.ticketId === ticketId)
 
     if (!isUnread) {
-      // eslint-disable-next-line no-console
-      console.log("[Unread] Ticket already read, skipping:", ticketId)
+      debug("[Unread] Ticket already read, skipping:", ticketId)
       return
     }
 
-    // eslint-disable-next-line no-console
-    console.log("[Unread] markAsRead called for ticketId:", ticketId)
+    debug("[Unread] markAsRead called for ticketId:", ticketId)
 
     // Optimistically update UI first
     set((state) => ({
@@ -1172,18 +1061,16 @@ export const useUnreadStore = create<UnreadStore>((set, get) => ({
 
     try {
       await unreadApi.deleteByTicketId(ticketId)
-      // eslint-disable-next-line no-console
-      console.log("[Unread] Successfully marked as read:", ticketId)
+      debug("[Unread] Successfully marked as read:", ticketId)
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log("[Unread] Failed to mark as read:", err)
+      debug("[Unread] Failed to mark as read:", err)
       // Revert optimistic update on failure - re-fetch to get accurate state
       try {
         const response = await unreadApi.list()
         set({ unreadItems: response.data })
       } catch {
         // If re-fetch also fails, just log it
-        console.log("[Unread] Failed to re-fetch unread items after error")
+        debug("[Unread] Failed to re-fetch unread items after error")
       }
     }
   },
@@ -1233,8 +1120,7 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
     }
     try {
       const response = await templatesApi.list({ limit: TEMPLATES_PAGE_SIZE, offset: 0 })
-      // eslint-disable-next-line no-console
-      console.log("[Templates] Fetched templates:", response.data?.length, "pagination:", response.pagination)
+      debug("[Templates] Fetched templates:", response.data?.length, "pagination:", response.pagination)
 
       const templates = response.data || []
       const pagination = response.pagination
@@ -1246,8 +1132,7 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
         isLoading: false,
       })
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log("[Templates] Failed to fetch templates:", err)
+      debug("[Templates] Failed to fetch templates:", err)
       const message = err instanceof Error ? err.message : "Failed to fetch templates"
       set({ error: message, isLoading: false })
     }
@@ -1260,8 +1145,7 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
     set({ isLoadingMore: true })
     try {
       const response = await templatesApi.list({ limit: TEMPLATES_PAGE_SIZE, offset: templatesOffset })
-      // eslint-disable-next-line no-console
-      console.log("[Templates] Load more templates:", response.data?.length, "offset:", templatesOffset)
+      debug("[Templates] Load more templates:", response.data?.length, "offset:", templatesOffset)
 
       const templates = response.data || []
       const pagination = response.pagination
@@ -1278,8 +1162,7 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
         }
       })
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log("[Templates] Failed to load more templates:", err)
+      debug("[Templates] Failed to load more templates:", err)
       set({ isLoadingMore: false })
     }
   },
