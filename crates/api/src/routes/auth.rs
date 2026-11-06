@@ -146,7 +146,7 @@ async fn signin(
         f.add("password", "Password is required.");
     }
     f.finish()?;
-    s.limiter.check_name(Rule::LoginAccount, req.email.trim())?;
+    s.limiter.account_check(req.email.trim())?;
 
     let found = users::get_by_email(&s.pool, req.email.trim()).await?;
     let matched = s
@@ -156,10 +156,14 @@ async fn signin(
             found.as_ref().map(|u| u.password_hash.clone()),
         )
         .await;
+    if found.is_some() && !matched {
+        s.limiter.account_failed(req.email.trim());
+    }
     // One failure for unknown email, wrong password and inactive account alike.
     let user = found
         .filter(|u| matched && u.status == Status::Active)
         .ok_or(ApiError::InvalidCredentials)?;
+    s.limiter.account_ok(req.email.trim());
 
     let token = new_refresh_token();
     let now = Utc::now();

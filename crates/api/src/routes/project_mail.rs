@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use super::mail_guard;
 use crate::client_ip::ClientIp;
 use crate::error::{ApiError, Envelope, Fields};
-use crate::extract::{ApiJson, ApiPath, AuthUser, project_admin};
+use crate::extract::{ApiJson, ApiPath, AuthUser, GlobalAdmin, project_admin};
 use crate::ratelimit::Rule;
 use crate::state::AppState;
 
@@ -43,58 +43,21 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/{id}/test-smtp", post(test_smtp))
         .route("/{id}/test-imap", post(test_imap))
-        .route("/{id}/mailbox/send-code", post(send_code))
-        .route("/{id}/mailbox/verify", post(verify_code))
+        .route("/{id}/mailbox/approve", post(approve_mailbox))
 }
 
-const CODE_TTL_SECS: i64 = 15 * 60;
-
-/// Mail a one-time code to the project's mailbox address. Only whoever can read that mailbox can
-/// finish `verify`; logging in to a server of one's own choosing proves nothing.
-async fn send_code(
+/// Approve the project's mailbox address for inbound webhook routing. Global admins only: the
+/// operator controls the mail provider, a tenant cannot prove an address by logging in to a server
+/// of its own choosing or by receiving a code through it.
+async fn approve_mailbox(
     State(s): State<AppState>,
-    ClientIp(ip): ClientIp,
-    AuthUser(user): AuthUser,
+    GlobalAdmin(_): GlobalAdmin,
     ApiPath(id): ApiPath<sd_db::Id>,
 ) -> Result<Envelope<serde_json::Value>, ApiError> {
-    load(&s, ip, user.id, id).await?;
-    let code = uuid::Uuid::new_v4().simple().to_string()[..10].to_string();
-    let to = projects::start_mail_verification(
-        &s.pool,
-        id,
-        &sd_core::api_key::hash_api_key(&code),
-        CODE_TTL_SECS,
-    )
-    .await?
-    .ok_or_else(|| {
-        let mut f = Fields::default();
-        f.add("smtpEmail", "Save a mailbox address first.");
-        f.finish().unwrap_err()
-    })?;
-    crate::mail_out::send_mailbox_code(&s, id, &to, &code).await?;
-    Ok(Envelope::ok(serde_json::json!({ "sentTo": to })))
-}
-
-#[derive(Deserialize)]
-struct VerifyReq {
-    code: String,
-}
-
-async fn verify_code(
-    State(s): State<AppState>,
-    ClientIp(ip): ClientIp,
-    AuthUser(user): AuthUser,
-    ApiPath(id): ApiPath<sd_db::Id>,
-    ApiJson(req): ApiJson<VerifyReq>,
-) -> Result<Envelope<serde_json::Value>, ApiError> {
-    load(&s, ip, user.id, id).await?;
-    let hash = sd_core::api_key::hash_api_key(req.code.trim());
-    if !projects::confirm_mail_verification(&s.pool, id, &hash).await? {
-        let mut f = Fields::default();
-        f.add("code", "The code is wrong or expired.");
-        return Err(f.finish().unwrap_err());
+    if !projects::approve_mailbox(&s.pool, id).await? {
+        return Err(ApiError::not_found("Mailbox"));
     }
-    Ok(Envelope::ok(serde_json::json!({ "verified": true })))
+    Ok(Envelope::ok(serde_json::json!({ "approved": true })))
 }
 
 /// Mail part of the create/patch bodies. `None` = not sent = unchanged; `""` clears.

@@ -2,8 +2,8 @@
 
 ## [2026-11-07] R50 backend fixes
 
-- **Creation**: SSRF check at connect time, IMAP timeouts and size-bounded fetch, ingest sanitising and sender check, signup off by default, client scope on tickets, status race, no reflected text in auto-responses, mailbox ownership by emailed code (migration 0003), attachment mail after commit (same rule as `/messages`), streamed downloads, summed attachment size cap, per-account login throttle, bounded hashing queue.
-- **Decision**: attachment upload with `sendEmail` no longer fails or rolls back when mail fails; it saves, then logs the failure like replies. Ownership of a mailbox is proven by reading a mailed code, never by logging in to a server of the user's choosing.
+- **Creation**: SSRF check at connect time, IMAP timeouts and size-bounded fetch, ingest sanitising and sender check, signup off by default, client scope on tickets, status race, no reflected text in auto-responses, mailbox approval by a global admin (migration 0003), attachment mail after commit (same rule as `/messages`), streamed downloads, summed attachment size cap, per-account login throttle, bounded hashing queue.
+- **Decision**: attachment upload with `sendEmail` no longer fails or rolls back when mail fails; it saves, then logs the failure like replies. A mailbox is approved for webhook routing by the platform operator (global admin); a tenant cannot prove an address, because a login or a mailed code both pass through a server the tenant picks.
 - **Lesson**: [login to a chosen server proves nothing](/wisdom/time-traps.md).
 
 ## [2026-11-06] R50 fix web-deploy
