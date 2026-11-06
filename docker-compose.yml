@@ -1,6 +1,7 @@
+# api containers get an explicit env allow-list (no POSTGRES_PASSWORD/bootstrap secrets leak in); unset vars use api defaults.
 # Quick start: cp .env.example .env, fill the secrets, then `docker compose up --build`.
 # To use mailpit as a project's SMTP server set SD_ALLOW_PRIVATE_MAIL_HOSTS=true in .env (dev only).
-# Mailpit catches all outbound mail (UI on :8025) so nothing leaves the machine.
+# Mailpit (profile `dev`) catches all outbound mail (UI on :8025) so nothing leaves the machine.
 services:
   postgres:
     image: postgres:16
@@ -17,17 +18,55 @@ services:
   migrate:
     build: { context: ., target: api }
     command: ["migrate"]
-    env_file: .env
     environment:
       DATABASE_URL: postgres://senddesk:${POSTGRES_PASSWORD}@postgres:5432/senddesk
+      JWT_SECRET:
+      SD_SECRET_KEY:
+      SD_ENV:
+      API_VERSION:
+      FRONTEND_URL:
+      COOKIE_SECURE:
+      SD_TRUSTED_PROXIES:
+      SD_ALLOW_SIGNUP:
+      SD_ALLOW_PRIVATE_MAIL_HOSTS:
+      SD_BODY_LIMIT_BYTES:
+      SD_UPLOAD_LIMIT_BYTES:
+      SD_WEBHOOK_LIMIT_BYTES:
+      SD_WEBHOOK_SECRET:
+      SD_MAIL_PLAINTEXT:
+      SD_MAX_FILE_BYTES:
+      SD_MAX_REQUEST_BYTES:
+      SD_MAX_FILES:
+      SD_IMAP_POLL_SECS:
+      SD_IMAP_CONCURRENCY:
+      RUST_LOG:
     depends_on:
       postgres: { condition: service_healthy }
 
   app:
     build: { context: ., target: api }
-    env_file: .env
     environment:
       DATABASE_URL: postgres://senddesk:${POSTGRES_PASSWORD}@postgres:5432/senddesk
+      JWT_SECRET:
+      SD_SECRET_KEY:
+      SD_ENV:
+      API_VERSION:
+      FRONTEND_URL:
+      COOKIE_SECURE:
+      SD_TRUSTED_PROXIES:
+      SD_ALLOW_SIGNUP:
+      SD_ALLOW_PRIVATE_MAIL_HOSTS:
+      SD_BODY_LIMIT_BYTES:
+      SD_UPLOAD_LIMIT_BYTES:
+      SD_WEBHOOK_LIMIT_BYTES:
+      SD_WEBHOOK_SECRET:
+      SD_MAIL_PLAINTEXT:
+      SD_MAX_FILE_BYTES:
+      SD_MAX_REQUEST_BYTES:
+      SD_MAX_FILES:
+      SD_IMAP_POLL_SECS:
+      SD_IMAP_CONCURRENCY:
+      RUST_LOG:
     ports: ["127.0.0.1:3000:3000"]
     volumes: [storage:/var/lib/senddesk/storage]
     depends_on:
@@ -38,13 +77,14 @@ services:
       context: .
       target: web
       args:
-        NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_URL:-http://localhost:3000}
+        NEXT_PUBLIC_API_URL: ${PUBLIC_URL:-}
         NEXT_PUBLIC_API_VERSION: ${API_VERSION:-v3}
     ports: ["127.0.0.1:4000:4000"]
     depends_on: [app]
 
   mailpit:
     image: axllent/mailpit
+    profiles: ["dev"] # docker compose --profile dev up
     ports:
       - "127.0.0.1:8025:8025" # web UI
       - "127.0.0.1:1025:1025" # SMTP

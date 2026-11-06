@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
-# Targets: `api` (Rust server) and `web` (Next.js UI).
+# Targets: `api` (Rust server) and `web` (static UI).
 #   docker build --target api -t senddesk-api .
-#   docker build --target web --build-arg NEXT_PUBLIC_API_BASE_URL=https://desk.example.com -t senddesk-web .
+#   docker build --target web -t senddesk-web .
+# The UI is a static export and expects the API on the same origin (leave NEXT_PUBLIC_API_URL empty).
 
 FROM rust:1-bookworm AS api-build
 WORKDIR /src
@@ -30,15 +31,13 @@ COPY apps/web/package.json apps/web/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY apps/web ./
 # NEXT_PUBLIC_* values are inlined at build time.
-ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:3000
+ARG NEXT_PUBLIC_API_URL=
 ARG NEXT_PUBLIC_API_VERSION=v3
-ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL NEXT_PUBLIC_API_VERSION=$NEXT_PUBLIC_API_VERSION
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL NEXT_PUBLIC_API_VERSION=$NEXT_PUBLIC_API_VERSION
 RUN bun run build
 
-FROM oven/bun:1-slim AS web
-WORKDIR /web
-ENV NODE_ENV=production
-COPY --from=web-build /web ./
-USER bun
+FROM caddy:2-alpine AS web
+# Static export served by Caddy; `next start` does not work with `output: "export"`.
+COPY --from=web-build /web/out /srv
+COPY deploy/web.Caddyfile /etc/caddy/Caddyfile
 EXPOSE 4000
-CMD ["bun", "run", "start"]

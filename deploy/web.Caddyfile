@@ -1,0 +1,19 @@
+# Static UI image (Dockerfile target `web`): serves the Next.js export from /srv on :4000
+# and proxies the API, so the browser sees one origin (NEXT_PUBLIC_API_URL stays empty).
+# Set FRONTEND_URL=http://localhost:4000 in .env.
+{
+	admin off
+	auto_https off
+}
+:4000 {
+	@api path /api/* /health /health/*
+	handle @api {
+		reverse_proxy app:3000
+	}
+	root * /srv
+	encode zstd gzip
+	handle {
+		try_files {path} {path}/ {path}/index.html
+		file_server
+	}
+}
