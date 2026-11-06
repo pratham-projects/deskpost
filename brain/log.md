@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-11-06] R40 e2e
+
+- **Creation**: `scripts/e2e.sh` (scratch db `sd_e2e` on :5433, GreenMail 2.1.15 jar in `.tools/`, api binary with migrate+bootstrap, Caddy serving `apps/web/out` and proxying `/api` + `/health`, then Playwright) and `e2e/` (`@playwright/test` on system Chrome, imapflow, nodemailer). Flows: bad/good login, create project in UI, widget ticket, agent reply -> mail out, customer email -> IMAP poll -> ticket -> reply -> mail out.
+- **Decision**: ports api 3100, web 4100, SMTP 3025, IMAP 3143 (script refuses busy ports). Mail project is created via API because the UI create-project dialog has no IMAP fields (gap, not a bug in scope).
+- **Lesson**: reply mail subject is `Re: <project> Support - [Ticket #N]`, not the customer subject; match on the ticket number. No api/web bug surfaced by these flows.
+
 ## [2026-11-06] R31 deploy docs
 
 - **Creation**: multi-stage `Dockerfile` (targets `api`, `web`), `docker-compose.yml` (postgres, migrate, app, web, mailpit), `deploy/Caddyfile`, `deploy/senddesk-api.service`, `.env.example` (every var in `config.rs` and `mail_config.rs`), `SECURITY.md`, new `README.md` linking the free-email guide.
