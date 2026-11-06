@@ -444,7 +444,11 @@ async fn inbound_routing_and_imap_cursor(pool: Pool) {
             .is_none(),
         "unverified mailboxes do not route"
     );
-    assert!(projects::approve_mailbox(&pool, pa.id).await.unwrap());
+    assert!(
+        projects::approve_mailbox(&pool, pa.id, "help@acme.com")
+            .await
+            .unwrap()
+    );
     assert_eq!(
         projects::find_by_smtp_email(&pool, "HELP@acme.com")
             .await
