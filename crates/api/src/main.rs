@@ -64,6 +64,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         Command::Serve => {
             let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
             let state = AppState::new(pool, config)?;
+            api::routes::tickets::spawn_presence_gc(state.pool.clone());
             let jobs = api::workers::spawn(state.clone());
             let app = build_app(state);
             let listener = tokio::net::TcpListener::bind(addr).await?;

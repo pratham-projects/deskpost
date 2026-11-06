@@ -15,7 +15,9 @@ pub use imap::{
     ImapConfig, ImapMailbox, Mailbox, PollOptions, PollOutcome, PollState, Polled, RawMessage, poll,
 };
 pub use inbound::{InboundAttachment, InboundEmail, Limits, parse_inbound};
-pub use outbound::{OutAttachment, OutboundEmail, SmtpConfig, build_message, send};
+pub use outbound::{
+    OutAttachment, OutboundEmail, SmtpConfig, build_message, check as check_smtp, send,
+};
 
 use std::time::Duration;
 

@@ -62,6 +62,8 @@ pub fn build_app_with(state: AppState, extra: Router<AppState>) -> Router {
             routes::attachments::router(cfg.upload_limit),
         )
         .merge(routes::incoming::router(cfg.webhook_limit))
+        .merge(routes::tickets::router())
+        .merge(routes::project_routes())
         .merge(extra);
     let origins: Vec<HeaderValue> = cfg
         .cors_origins

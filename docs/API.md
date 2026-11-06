@@ -159,7 +159,8 @@ Sign-in with a user whose `status != active` fails with the generic credentials 
 | `POST /users` | global-admin | `{ email, password, name, role?: "admin"\|"agent" }` | `201 data: User` | 403, 409, 422 |
 | `GET /users/:id` | user (self, global-admin, or shares a project) | | `data: User` | 404 |
 | `PATCH /users/:id` | global-admin | `{ name?, role?, status?, phone?, timezone? }` | `data: User` | 403, 404, 422. Cannot demote/suspend the last active admin (409). |
-| `DELETE /users/:id` | global-admin | | `data: { success: true, id }` | 403, 404, 409 when the user still owns a project |
+| `DELETE /users/:id` | global-admin | | `data: { success: true, id }` | 403, 404, 409 when the user still owns a project or is the last active admin |
+| `POST /users/me/password` | user, rate limited (6/min per IP) | `{ currentPassword, newPassword (8..128) }` | `data: { message }`; every refresh family of the caller is revoked | 422 (`currentPassword` wrong), 429 |
 
 Deleting a user cascades their memberships and refresh families; their tickets/messages are kept (assignee/sender set to null).
 
@@ -182,7 +183,14 @@ A project is the tenant. `GET /projects` returns only projects the caller is a m
 | `PATCH /projects/:id/members/:userId` | project-admin | `{ role?, shouldNotify?, canViewAllTickets?, canManageTemplates? }` | `data: ProjectMember` | 403, 404; 409 when it would demote the project owner (a project always keeps an admin) |
 | `DELETE /projects/:id/members/:userId` | project-admin, or the member removing themself | | `data: { success: true }` | 404; 409 for the owner. Tickets assigned to the removed member become unassigned. |
 
+| `POST /projects/:id/test-smtp` | project-admin, rate limited (5/min per IP, shared with IMAP) | `{ host?, port?, tls?: "starttls"\|"implicit"\|"none", username?, password? }`; omitted fields come from the stored settings | `data: { ok, message }` (fixed messages, no server text) | 403, 404, 422, 429 |
+| `POST /projects/:id/test-imap` | same | same (`port` defaults to 993) | same | same |
+
 Notes:
+- The stored password is only used for a probe when host, port and username equal the stored ones; any other target needs `password` in the request (422 `password`). Resolved addresses are checked too (a name that resolves to a private address is refused). `tls: "none"` needs `SD_ALLOW_PRIVATE_MAIL_HOSTS=1`.
+- TLS is not stored: port 465/993 means implicit TLS, everything else STARTTLS.
+- Changing `smtpHost`/`smtpPort`/`smtpUsername` (or the IMAP equivalents) while a password is stored requires the password again in the same PATCH (`""` clears it), otherwise 422. PATCH applies project and mail fields in one transaction.
+- `DELETE /projects/:id` is owner only (403 for other admins); the owner cannot be demoted or removed (409).
 - SMTP/IMAP hosts are validated: loopback/private targets are rejected unless `SD_ALLOW_PRIVATE_MAIL_HOSTS=1` (`422`).
 - `smtpPort` defaults to 587, `smtpHost` has **no** provider default (TS defaulted to `smtp.gmail.com`); outbound mail needs a configured host or the reply endpoint returns 422 `SMTP not configured`.
 - `POST /projects` auto-created `canViewAllTickets=true` for the owner.
@@ -231,7 +239,7 @@ Errors: 403/404 (admin route, not a member), 401 `TOKEN_INVALID` on the public r
 | `DELETE /tickets/:id` | project-admin | | `data: { success: true, id }` (hard delete, cascades messages/attachments/unread/viewers) |
 
 - `assignedToUserId` must be a member of the ticket's project (422 otherwise); `null` unassigns.
-- `status` change rules (state machine in `sd-core`; the query that persists it is `sd_db::tickets::update`): any status may go to any other; entering `resolved` or `closed` sets `closedAt = now()` (if not already set); leaving them clears `closedAt` (TS never cleared it on reopen). Entering `resolved` sends the `resolved` email response (if enabled) after commit.
+- `status` change rules (state machine in `sd-core`; the query that persists it is `sd_db::tickets::update`): moves follow the state machine (an open status may go to any other; a `closed` ticket can only be reopened to `pending`, else `409 CONFLICT`; re-sending the current status is a no-op); entering `resolved` or `closed` sets `closedAt = now()` (if not already set); leaving them clears `closedAt` (TS never cleared it on reopen). Entering `resolved` sends the `resolved` email response (if enabled) after commit.
 - Every successful update bumps `updatedAt`.
 
 ### 7.4 Messages
@@ -243,7 +251,7 @@ Errors: 403/404 (admin route, not a member), 401 `TOKEN_INVALID` on the public r
 
 - Created messages are always `senderType: "agent"` with `senderUserId` = caller. (TS let an agent post as `client` and could reopen tickets with it; removed. Client messages arrive only via public create, IMAP and the webhook.)
 - `isInternal: true` => stored as an internal note (`messageType: "note"`), never emailed.
-- Otherwise, unless `sendEmail === false`, the reply is emailed to the ticket's client over the project's SMTP with threading headers. **Mail is sent first; if SMTP fails the message is not saved** and the endpoint returns `502 MAIL_DELIVERY_FAILED` / `422` when the project has no SMTP configured (same as TS behaviour, kept on purpose).
+- Otherwise, unless `sendEmail === false`, the reply is handed to the outbound mailer (`OutboundMailer`, R23) **after the message commits**. A mail failure is logged and recorded in `email_logs` (`failed`); the endpoint still answers `201` (R22 decision, supersedes the earlier "mail first, 502" idea; R23 may revisit).
 - `attachmentIds` must belong to the same ticket and be unlinked; they are linked to the message (422 otherwise).
 - Posting bumps ticket `updatedAt`; a first agent reply sets `firstResponseAt`.
 - Inbound client messages (IMAP/webhook, not an HTTP route here) reopen `resolved`/`closed` tickets to `in_progress`, add an unread row, and de-duplicate on the email `Message-ID`.
@@ -275,6 +283,15 @@ Project-scoped (TS stored them globally, visible to every user; the UI must now 
 
 Statuses are restricted to `created` and `resolved` (the only two the UI uses and the only two the TS product ever sends mail for; `pending`/`in_progress` rows existed in the schema but were dead). `subject` is always a string in responses (`""` when unset).
 
+### Clients - `/api/v3/clients` (read only)
+
+| Endpoint | Auth | Request | Response |
+|---|---|---|---|
+| `GET /clients` | member | query `projectId` (required), `q?`, `limit?`, `offset?` | `data: Client[]` (`id, projectId, email, name, phone, createdAt, updatedAt`) |
+| `GET /clients/:id` | member | | `data: Client` (404 for another project's client) |
+
+Clients are created by tickets and inbound mail; the TS create/update/delete routes stay dropped.
+
 ## 9. Attachments (`/api/v3/attachments`)
 
 Files live on the server filesystem behind `sd-storage`; the database stores only a `storage_key`. No URLs are stored.
@@ -297,6 +314,7 @@ Files live on the server filesystem behind `sd-storage`; the database stores onl
 |---|---|---|---|
 | `GET /unread/` | user | query `projectId?` | `data: UnreadItem[]` for the caller's projects, oldest first |
 | `DELETE /unread/ticket/:ticketId` | member | | `200 data: { deleted: n }` (the mock returned `{}`; the UI ignores the body) |
+| `POST /unread/ticket/:ticketId` | member | | `200 data: { created: bool }` marks the ticket unread (`false` if it already was) |
 
 Unread rows are per ticket (not per user), as in the TS product: any member opening the ticket clears it for everyone.
 
@@ -318,8 +336,8 @@ The UI calls POST every ~30 s while a ticket is open and DELETE on close.
 `X-Webhook-Timestamp` (unix seconds, within 5 min) and `X-Webhook-Signature` = hex HMAC-SHA256 of `"{timestamp}.{raw body}"` with `SD_WEBHOOK_SECRET` (constant-time compare). Replaces TS's bare `X-Webhook-Secret` header (replayable, logged to disk with the secret in `incoming_emails.log`; no logging of payloads now).
 
 Body: `{ from, to, subject?, body?, bodyHtml?, ticketNumber?: number|null, messageId?, inReplyTo?, references?, attachments?: [{ filename?, contentType?, contentBase64 }] }` (TS took attachment `url`s into S3; now inline base64, size-capped).
-- Project = the one whose `smtpEmail` equals the lower-cased `to` address (unknown => `404`, TS answered 200 with `success:false`).
-- `ticketNumber` (or a threading match on `inReplyTo`/`references`) appends to that ticket **of that project only**; otherwise a ticket is created. Replayed `messageId` => `200` no-op (dedup via unique message id).
+- Project = the one whose `smtpEmail` equals the lower-cased `to` address (active, non-archived projects only; the mailbox must be proven reachable by the admin's own SMTP/IMAP login before it is saved, R21; unknown => `404`, TS answered 200 with `success:false`).
+- `ticketNumber` (or a threading match on `inReplyTo`/`references`) appends to that ticket **of that project only, and only when the sender address equals the ticket client's email or an address already present on the ticket** (ticket numbers are sequential and guessable; anything else opens a new ticket); otherwise a ticket is created. Replayed `messageId` => `200` no-op (dedup via unique message id).
 - Auto-replies (`mailer-daemon`, `postmaster`, `Auto-Submitted`) are ignored with `200`.
 - Success `201 data: { ticketId, messageId, created: bool }`; `401` bad signature, `422`, `429`.
 

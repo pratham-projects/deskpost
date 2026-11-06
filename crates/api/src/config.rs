@@ -59,6 +59,8 @@ pub struct Config {
     pub upload_limit: usize,
     pub webhook_limit: usize,
     pub allow_signup: bool,
+    /// `SD_ALLOW_PRIVATE_MAIL_HOSTS`: let SMTP/IMAP settings point at loopback/private addresses.
+    pub allow_private_mail_hosts: bool,
     pub argon2: Argon2Cost,
     pub mail: crate::mail_config::MailConfig,
 }
@@ -197,6 +199,7 @@ impl Config {
                 &mut errs,
             ),
             allow_signup: flag(&get, "SD_ALLOW_SIGNUP", true, &mut errs),
+            allow_private_mail_hosts: flag(&get, "SD_ALLOW_PRIVATE_MAIL_HOSTS", false, &mut errs),
             argon2: Argon2Cost::PRODUCTION,
             mail: crate::mail_config::MailConfig::from_lookup(&get, &mut errs),
         };

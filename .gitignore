@@ -33,3 +33,7 @@ next-env.d.ts
 /target/
 # attachments written by local runs
 /data/
+
+# web deps
+apps/web/node_modules/
+apps/web/.next/

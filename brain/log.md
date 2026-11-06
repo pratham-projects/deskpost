@@ -1,5 +1,22 @@
 # Changelog
 
+## [2026-11-06] R23 api mail attach
+
+- **Creation**: attachments routes, inbound webhook and IMAP poll worker, outbound reply mail, auto-response outbox (migration 0002), `email_logs`; see [API tickets](/architecture/api-tickets.md).
+- **Decision**: merged with R22 by keeping R23's `Mailer` (SMTP + recording double) in `AppState`; ticket replies still save first and mail after commit, then store the sent headers on the message (`messages::set_email_headers`). Migration renamed 0023 to 0002. `deny.toml` allows CDLA-Permissive-2.0 and ignores RUSTSEC-2026-0441 (pin-utils via async-imap).
+- **Lesson**: two workers building the same seam in parallel need the trait named in the plan; reconcile at merge, not at review.
+
+## [2026-10-27] R22 api tickets
+
+- **Creation**: tickets (create admin + widget, list/search/counts, get, patch, delete), messages and internal notes, unread, viewers with GC task, `OutboundMailer` seam; see [API tickets](/architecture/api-tickets.md). 50 new integration tests.
+- **Decision**: status changes go through the sd-core machine (closed only reopens to pending, same status is a no-op), so API.md 7.3 "any to any" was corrected. Mail is sent after commit and failures are recorded, replacing "mail first, 502" of API.md 7.4 (R23 may revisit). Delete stays a hard delete (API.md deviation 16), not a soft delete.
+- **Lesson**: [axum multipart and query rejections](/wisdom/time-traps.md).
+## [2026-10-27] R21 api projects
+
+- **Creation**: routes for projects, members, users, clients, templates, email responses and SMTP/IMAP settings with probes ([architecture](/architecture/projects-api.md)); `mail_guard` SSRF policy; `sd_mail::check_smtp`; db `update_with_mail`, `admin_update_guarded`, `delete_guarded`, `email_responses::project_of`.
+- **Decision**: TLS derived from port (no schema change); passwords sealed with project+field AAD; `POST /users/me/password` and read-only `/clients` added to `docs/API.md`.
+- **Lesson**: [two-step writes need one transaction](/wisdom/time-traps.md).
+
 ## [2026-10-27] R20 api auth
 
 - **Creation**: `crates/api` (lib + `api` binary: serve, migrate, bootstrap), config, envelope/errors, HS256 JWT, Argon2id hasher, sliding-window limiter, trusted-proxy client IP, auth routes, extractors, health; see [API crate](/architecture/api.md). 100+ tests, including a reusable tenant fixture.

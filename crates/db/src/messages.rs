@@ -286,3 +286,28 @@ pub async fn message_id_exists(
     .fetch_one(pool)
     .await
 }
+
+/// Store the mail headers of an agent reply after it was sent, so the client's answer threads to it.
+pub async fn set_email_headers(
+    pool: &Pool,
+    message_id: Id,
+    email_message_id: &str,
+    in_reply_to: Option<&str>,
+    references: Option<&str>,
+    to: &str,
+    subject: &str,
+) -> Result<()> {
+    sqlx::query(
+        "UPDATE messages SET email_message_id = $2, email_in_reply_to = $3, email_references = $4, \
+         email_to = $5, email_subject = $6 WHERE id = $1 AND email_message_id IS NULL",
+    )
+    .bind(message_id)
+    .bind(email_message_id)
+    .bind(in_reply_to)
+    .bind(references)
+    .bind(to)
+    .bind(subject)
+    .execute(pool)
+    .await?;
+    Ok(())
+}

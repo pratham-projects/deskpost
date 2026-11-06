@@ -471,7 +471,7 @@ async fn inbound_routing_and_imap_cursor(pool: Pool) {
             .unwrap()
     );
 
-    // Archived projects are skipped by the poller.
+    // Archived projects neither route inbound mail nor get polled.
     projects::update(
         &pool,
         a.id,
@@ -484,4 +484,10 @@ async fn inbound_routing_and_imap_cursor(pool: Pool) {
     .await
     .unwrap();
     assert!(projects::list_imap_enabled(&pool).await.unwrap().is_empty());
+    assert_eq!(
+        projects::find_by_smtp_email(&pool, "help@acme.com")
+            .await
+            .unwrap(),
+        None
+    );
 }

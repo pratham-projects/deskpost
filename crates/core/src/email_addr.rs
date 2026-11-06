@@ -17,7 +17,6 @@ const MAX_INPUT: usize = 4096;
 
 static ENCODED_WORD: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"=\?[^?\s]+\?[BbQq]\?[^?\s]*\?=").unwrap());
-static COMMENT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\([^()]*\)").unwrap());
 static ANGLE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<([^<>]*)>").unwrap());
 static GROUP: LazyLock<Regex> = LazyLock::new(|| Regex::new(r":\s*([^;]+);").unwrap());
 static BARE: LazyLock<Regex> =
@@ -31,16 +30,31 @@ fn clip(s: &str) -> &str {
     &s[..end]
 }
 
-fn strip_comments(s: &str) -> String {
-    // Nested comments: peel innermost pairs until nothing changes (each pass shrinks the string).
-    let mut cur = s.to_string();
-    loop {
-        let next = COMMENT.replace_all(&cur, "").into_owned();
-        if next == cur {
-            return next.trim().to_string();
+/// One pass over RFC 5322 quoted-strings and (nested) comments, dropping both so neither a
+/// display name nor a comment can hide or fake the address. Quotes are literal inside comments
+/// and parentheses are literal inside quotes; a backslash escapes the next character, and is
+/// rejected outside both.
+/// `None` when a quote or comment is left open or a backslash appears outside them: such input is not trusted at all.
+fn strip_quoted_and_comments(s: &str) -> Option<String> {
+    let mut out = String::with_capacity(s.len());
+    let (mut in_q, mut depth, mut esc) = (false, 0usize, false);
+    for c in s.chars() {
+        if esc {
+            esc = false;
+            continue;
         }
-        cur = next;
+        match c {
+            '\\' if in_q || depth > 0 => esc = true,
+            // invalid outside quotes/comments and a parser-confusion signal: trust nothing
+            '\\' => return None,
+            '"' if depth == 0 => in_q = !in_q,
+            '(' if !in_q => depth += 1,
+            ')' if !in_q && depth > 0 => depth -= 1,
+            _ if in_q || depth > 0 => {}
+            _ => out.push(c),
+        }
     }
+    (!in_q && depth == 0).then_some(out)
 }
 
 fn to_ascii_domain(addr: &str) -> String {
@@ -62,31 +76,30 @@ pub fn extract_email_address(input: &str) -> String {
     }
 
     let no_words = ENCODED_WORD.replace_all(trimmed, "");
-    let s = strip_comments(&no_words)
-        .replace("\\\"", "\"")
-        .replace("\\'", "'");
-    let s = s.trim();
+    let raw = no_words.trim();
 
+    // Every search runs on text with quoted-strings removed first, then comments, so neither
+    // a display name nor a comment can hide or fake the address.
+    let Some(masked) = strip_quoted_and_comments(raw) else {
+        return raw.to_string();
+    };
     let mut found = ANGLE
-        .captures_iter(s)
+        .captures_iter(&masked)
         .map(|c| c[1].trim().to_string())
         .find(|a| !a.is_empty());
 
     if found.is_none() {
         let scope = GROUP
-            .captures(s)
+            .captures(&masked)
             .map(|c| c[1].split(',').next().unwrap_or("").trim().to_string())
             .filter(|g| !g.is_empty());
-        let scope = scope.as_deref().unwrap_or(s);
-        // group members may themselves use brackets: "Alice <a@x.com>"
-        found = ANGLE
-            .captures(scope)
-            .map(|c| c[1].trim().to_string())
-            .filter(|a| !a.is_empty())
-            .or_else(|| BARE.find(scope).map(|m| m.as_str().to_string()));
+        let scope = scope.as_deref().unwrap_or(&masked);
+        found = BARE.find(scope).map(|m| m.as_str().to_string());
     }
 
-    let mut out = found.unwrap_or_else(|| s.to_string());
+    // Nothing found: hand back the input (so callers can show it); a wholly quoted value is unquoted.
+    let s = raw.replace("\\\"", "\"").replace("\\'", "'");
+    let mut out = found.unwrap_or(s);
     if let Some(inner) = out
         .strip_prefix(['"', '\''])
         .and_then(|r| r.strip_suffix(['"', '\'']))
@@ -278,7 +291,10 @@ mod tests {
             ex(r#""{\"John\"} Smith" <john@example.com>"#),
             "john@example.com"
         );
-        assert_eq!(ex(r#"\"John\" <john@test.com>"#), "john@test.com");
+        // TS accepted backslash-escaped quotes outside a quoted-string; that is invalid
+        // RFC 5322 and a parser-confusion vector, so it is now rejected, not extracted.
+        assert!(!is_valid_email(&ex(r#"\"John\" <john@test.com>"#)));
+        assert!(!is_valid_email(&ex(r#"\" <fake@a.com> ""#)));
     }
 
     #[test]
@@ -366,6 +382,49 @@ mod tests {
     #[test]
     fn bracketed_address_beats_group_text() {
         assert_eq!(ex("Sales: fake@evil.com; <real@ok.com>"), "real@ok.com");
+    }
+
+    #[test]
+    fn angle_inside_quoted_display_name_cannot_spoof() {
+        assert_eq!(
+            ex(r#""boss@corp.com <boss@corp.com>" <real@evil.com>"#),
+            "real@evil.com"
+        );
+        assert_eq!(ex(r#""a \" <x@y.com>" <real@ok.com>"#), "real@ok.com");
+        assert_eq!(ex(r#"<real@ok.com> "x <fake@y.com>""#), "real@ok.com");
+    }
+
+    #[test]
+    fn comment_markers_inside_quotes_cannot_hide_the_address() {
+        assert_eq!(ex(r#""x (" <real@ok.com> ")""#), "real@ok.com");
+        assert_eq!(
+            ex(r#""(" <real@ok.com> ")" <fake@evil.com>"#),
+            "real@ok.com"
+        );
+    }
+
+    #[test]
+    fn quoted_text_is_never_searched_for_addresses() {
+        assert!(!is_valid_email(&ex(r#""evil@x.com <evil@x.com>""#)));
+        assert!(!is_valid_email(&ex(r#"Team: "evil@x.com", b;"#)));
+        // unterminated quote: nothing after it is trusted
+        assert!(!is_valid_email(&ex(r#""abc <evil@x.com>"#)));
+    }
+
+    #[test]
+    fn quotes_and_comments_cannot_confuse_each_other() {
+        // quote inside a comment is literal; paren inside a quote is literal
+        assert_eq!(ex(r#"(a " b) <real@ok.com> (c " d)"#), "real@ok.com");
+        assert_eq!(ex(r#"(") <real@ok.com> (")"#), "real@ok.com");
+        assert_eq!(ex(r#""a)" (b) <real@ok.com>"#), "real@ok.com");
+        // unbalanced: nothing is extracted
+        for bad in [
+            r#"(" <evil@x.com>"#,
+            r#"( <evil@x.com>"#,
+            r#""( <evil@x.com>"#,
+        ] {
+            assert!(!is_valid_email(&ex(bad)), "{bad}");
+        }
     }
 
     #[test]

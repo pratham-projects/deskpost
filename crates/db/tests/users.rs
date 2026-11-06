@@ -294,3 +294,98 @@ async fn cannot_delete_a_user_who_owns_a_project(pool: Pool) {
     let err = users::delete(&pool, a.id).await.unwrap_err();
     assert!(is_foreign_key_violation(&err));
 }
+
+fn demote() -> AdminPatch {
+    AdminPatch {
+        role: Some(Role::Agent),
+        ..Default::default()
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn guarded_update_and_delete_keep_one_active_admin(pool: Pool) {
+    use sd_db::users::Guarded;
+    let a = users::create(&pool, "a@example.com", "A", "h", Role::Admin)
+        .await
+        .unwrap();
+    let agent = user(&pool, "g@example.com").await;
+
+    // The only admin can be neither demoted, suspended nor deleted ...
+    assert!(matches!(
+        users::admin_update_guarded(&pool, a.id, &demote())
+            .await
+            .unwrap(),
+        Guarded::LastAdmin
+    ));
+    let suspend = AdminPatch {
+        status: Some(Status::Suspended),
+        ..Default::default()
+    };
+    assert!(matches!(
+        users::admin_update_guarded(&pool, a.id, &suspend)
+            .await
+            .unwrap(),
+        Guarded::LastAdmin
+    ));
+    assert_eq!(
+        users::delete_guarded(&pool, a.id).await.unwrap(),
+        Guarded::LastAdmin
+    );
+    // ... but harmless edits and non-admins are fine, and a missing id is just None/false.
+    let rename = AdminPatch {
+        name: Some("Renamed".into()),
+        ..Default::default()
+    };
+    let Guarded::Done(Some(u)) = users::admin_update_guarded(&pool, a.id, &rename)
+        .await
+        .unwrap()
+    else {
+        panic!("rename must succeed");
+    };
+    assert_eq!(u.name, "Renamed");
+    let Guarded::Done(Some(u)) = users::admin_update_guarded(&pool, agent.id, &suspend)
+        .await
+        .unwrap()
+    else {
+        panic!("suspending a non-admin must succeed");
+    };
+    assert_eq!(u.status, Status::Suspended);
+    assert_eq!(
+        users::delete_guarded(&pool, sd_db::new_id()).await.unwrap(),
+        Guarded::Done(false)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn concurrent_demotions_cannot_remove_every_admin(pool: Pool) {
+    use sd_db::users::Guarded;
+    let a = users::create(&pool, "a@example.com", "A", "h", Role::Admin)
+        .await
+        .unwrap();
+    let b = users::create(&pool, "b@example.com", "B", "h", Role::Admin)
+        .await
+        .unwrap();
+    let (p1, p2) = (pool.clone(), pool.clone());
+    let (r1, r2) = tokio::join!(
+        async move {
+            users::admin_update_guarded(&p1, a.id, &demote())
+                .await
+                .unwrap()
+        },
+        async move {
+            users::admin_update_guarded(&p2, b.id, &demote())
+                .await
+                .unwrap()
+        },
+    );
+    let blocked = [r1, r2]
+        .iter()
+        .filter(|r| matches!(r, Guarded::LastAdmin))
+        .count();
+    assert_eq!(blocked, 1, "exactly one of the two demotions is refused");
+    let admins: i64 = sqlx::query_scalar("SELECT count(*) FROM users WHERE role = 'admin'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(admins, 1);
+}

@@ -158,3 +158,18 @@ fn debug_output_never_contains_secrets() {
         assert!(!dbg.contains(leak), "{dbg}");
     }
 }
+
+#[test]
+fn private_mail_hosts_are_off_unless_asked_for() {
+    assert!(
+        !Config::from_lookup(env_with(&[]))
+            .unwrap()
+            .allow_private_mail_hosts
+    );
+    let on = Config::from_lookup(env_with(&[("SD_ALLOW_PRIVATE_MAIL_HOSTS", "1")])).unwrap();
+    assert!(on.allow_private_mail_hosts);
+    rejects(
+        &[("SD_ALLOW_PRIVATE_MAIL_HOSTS", "yes")],
+        "SD_ALLOW_PRIVATE_MAIL_HOSTS",
+    );
+}

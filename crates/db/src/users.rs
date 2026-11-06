@@ -174,6 +174,15 @@ pub async fn update_profile(pool: &Pool, id: Id, patch: &ProfilePatch) -> Result
 
 /// Global-admin edit. The caller must have checked that the actor is a global admin.
 pub async fn admin_update(pool: &Pool, id: Id, patch: &AdminPatch) -> Result<Option<User>> {
+    let mut conn = pool.acquire().await?;
+    admin_update_on(&mut conn, id, patch).await
+}
+
+async fn admin_update_on(
+    conn: &mut sqlx::PgConnection,
+    id: Id,
+    patch: &AdminPatch,
+) -> Result<Option<User>> {
     sqlx::query_as(&format!(
         "UPDATE users SET name = COALESCE($2, name), role = COALESCE($3, role),
                 status = COALESCE($4, status), phone = NULLIF(COALESCE($5, phone), ''),
@@ -186,8 +195,52 @@ pub async fn admin_update(pool: &Pool, id: Id, patch: &AdminPatch) -> Result<Opt
     .bind(patch.status)
     .bind(&patch.phone)
     .bind(&patch.timezone)
-    .fetch_optional(pool)
+    .fetch_optional(conn)
     .await
+}
+
+/// Result of a change that must leave at least one active global admin.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Guarded<T> {
+    Done(T),
+    LastAdmin,
+}
+
+/// Serialises every change that can remove an active admin, so two concurrent demotions cannot
+/// both see "someone else is still admin".
+async fn lock_admins(tx: &mut sqlx::PgConnection) -> Result<()> {
+    sqlx::query("SELECT pg_advisory_xact_lock(7002)")
+        .execute(tx)
+        .await?;
+    Ok(())
+}
+
+async fn is_last_active_admin(conn: &mut sqlx::PgConnection, id: Id) -> Result<bool> {
+    sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM users WHERE id = $1 AND role = 'admin' AND status = 'active')
+            AND NOT EXISTS (SELECT 1 FROM users WHERE id <> $1 AND role = 'admin' AND status = 'active')",
+    )
+    .bind(id)
+    .fetch_one(conn)
+    .await
+}
+
+/// [`admin_update`] that refuses to demote or deactivate the last active admin.
+pub async fn admin_update_guarded(
+    pool: &Pool,
+    id: Id,
+    patch: &AdminPatch,
+) -> Result<Guarded<Option<User>>> {
+    let mut tx = pool.begin().await?;
+    lock_admins(&mut tx).await?;
+    let loses_admin = patch.role.is_some_and(|r| r != Role::Admin)
+        || patch.status.is_some_and(|s| s != Status::Active);
+    if loses_admin && is_last_active_admin(&mut tx, id).await? {
+        return Ok(Guarded::LastAdmin);
+    }
+    let user = admin_update_on(&mut tx, id, patch).await?;
+    tx.commit().await?;
+    Ok(Guarded::Done(user))
 }
 
 pub async fn set_password_hash(pool: &Pool, id: Id, password_hash: &str) -> Result<bool> {
@@ -206,4 +259,19 @@ pub async fn delete(pool: &Pool, id: Id) -> Result<bool> {
         .execute(pool)
         .await?;
     Ok(r.rows_affected() == 1)
+}
+
+/// [`delete`] that refuses to remove the last active admin.
+pub async fn delete_guarded(pool: &Pool, id: Id) -> Result<Guarded<bool>> {
+    let mut tx = pool.begin().await?;
+    lock_admins(&mut tx).await?;
+    if is_last_active_admin(&mut tx, id).await? {
+        return Ok(Guarded::LastAdmin);
+    }
+    let r = sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(Guarded::Done(r.rows_affected() == 1))
 }
