@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-11-07] S2 marketing + docs site "Deskpost" (feat/site)
+
+- **Done**: `site/` Vite vanilla marketing + docs site, brand name Deskpost (site-only rename; repo and binary stay `sendesk` / `api`). Amber skin on the shared kit copied from bunfiiliate (`scripts/sync-kit.sh`), `inbox` ASCII scene, 10 docs pages, Pages workflow, smoke test.
+- **Decision**: install tabs lead with Docker Compose from a clone and Source; Images and Binary tabs say "not published yet" until a release exists (they flip automatically once the GitHub API lists one).
+- **Open**: README and docs still say SendDesk. Auto-close default (7 days) and customer-reply reopen status (`pending` in core vs `in_progress` in SQL) disagree in the code; the site only says "reopens".
+
 ## [2026-11-07] Merge feat/webload, worktree cleanup
 
 - **Merged**: `feat/webload` into `staging` (--no-ff). Conflicts: both branches added migration `0004`; webload's index moved to `0006_tickets_updated_idx.sql`, `migrate_twice_is_a_no_op` expects 6, brain tables/log kept both sides. Worktree and branch removed; one checkout left.
