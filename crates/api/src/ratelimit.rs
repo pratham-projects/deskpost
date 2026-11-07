@@ -21,6 +21,10 @@ pub enum Rule {
     MailProbe,
     /// Password changes by a signed-in user (guessing the current password).
     PasswordChange,
+    /// Reset-link requests: each one can send mail.
+    ForgotPassword,
+    /// Reset-token submissions (guessing).
+    ResetPassword,
 }
 
 impl Rule {
@@ -34,18 +38,25 @@ impl Rule {
             Self::Webhook => (120, Duration::from_secs(60)),
             Self::MailProbe => (5, Duration::from_secs(60)),
             Self::PasswordChange => (6, Duration::from_secs(60)),
+            Self::ForgotPassword => (10, Duration::from_secs(3600)),
+            Self::ResetPassword => (10, Duration::from_secs(60)),
         }
     }
 }
 
 const ACCOUNT_FAILURES: usize = 20;
 const ACCOUNT_WINDOW: Duration = Duration::from_secs(600);
+/// Reset mails per address per window, whether or not the account exists.
+const RESET_MAILS: usize = 3;
+const RESET_WINDOW: Duration = Duration::from_secs(3600);
 
 pub struct RateLimiter {
     max_keys: usize,
     hits: Mutex<HashMap<(Rule, IpAddr), VecDeque<Instant>>>,
     /// Failed sign-ins per existing account, in their own table so address buckets cannot evict them.
     failures: Mutex<HashMap<String, VecDeque<Instant>>>,
+    /// Reset requests per address (own table, same reason).
+    resets: Mutex<HashMap<String, VecDeque<Instant>>>,
 }
 
 impl RateLimiter {
@@ -54,6 +65,7 @@ impl RateLimiter {
             max_keys: max_keys.max(1),
             hits: Mutex::default(),
             failures: Mutex::default(),
+            resets: Mutex::default(),
         }
     }
 
@@ -85,6 +97,36 @@ impl RateLimiter {
             });
         }
         Ok(())
+    }
+
+    /// May a reset mail go to `email` now? Every request counts, known address or not, so the
+    /// answer says nothing about the account; callers drop the mail silently on `false`. A full
+    /// table of live entries refuses new addresses (fail closed) instead of evicting counters.
+    pub fn reset_mail_allowed(&self, email: &str) -> bool {
+        let now = Instant::now();
+        let mut r = self.resets.lock().unwrap_or_else(|e| e.into_inner());
+        let key = email.to_lowercase();
+        if !r.contains_key(&key) && r.len() >= self.max_keys {
+            r.retain(|_, q| {
+                q.back()
+                    .is_some_and(|t| now.duration_since(*t) < RESET_WINDOW)
+            });
+            if r.len() >= self.max_keys {
+                return false;
+            }
+        }
+        let q = r.entry(key).or_default();
+        while q
+            .front()
+            .is_some_and(|t| now.duration_since(*t) >= RESET_WINDOW)
+        {
+            q.pop_front();
+        }
+        if q.len() >= RESET_MAILS {
+            return false;
+        }
+        q.push_back(now);
+        true
     }
 
     /// Count a wrong password against an existing account.

@@ -9,6 +9,7 @@ use axum::routing::{get, post};
 use chrono::{Duration, Utc};
 use sd_core::api_key::hash_api_key;
 use sd_core::email_addr::is_valid_email;
+use sd_db::resets;
 use sd_db::sessions::{self, ClientMeta, Rotation};
 use sd_db::users::{self, User};
 use sd_db::{Role, Status, is_unique_violation};
@@ -18,6 +19,7 @@ use crate::client_ip::ClientIp;
 use crate::dto::UserDto;
 use crate::error::{ApiError, Envelope, Fields};
 use crate::extract::{ApiJson, AuthUser};
+use crate::mail_out::SystemMail;
 use crate::password::Hasher;
 use crate::ratelimit::Rule;
 use crate::state::AppState;
@@ -29,6 +31,7 @@ const FAMILY_TTL_DAYS: i64 = 90;
 const REFRESH_GRACE_SECS: i64 = 10;
 const COOKIE_NAME: &str = "refresh_token";
 const MAX_PASSWORD_CHARS: usize = 128;
+const RESET_TTL_HOURS: i64 = 1;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -39,6 +42,8 @@ pub fn router() -> Router<AppState> {
         .route("/signout-all", post(signout_all))
         .route("/me", get(me))
         .route("/config", get(config))
+        .route("/forgot-password", post(forgot_password))
+        .route("/reset-password", post(reset_password))
 }
 
 #[derive(Deserialize)]
@@ -242,7 +247,124 @@ async fn me(AuthUser(user): AuthUser) -> Envelope<serde_json::Value> {
 }
 
 async fn config(State(s): State<AppState>) -> Envelope<serde_json::Value> {
-    Envelope::ok(serde_json::json!({ "signupEnabled": s.config.allow_signup }))
+    Envelope::ok(serde_json::json!({
+        "signupEnabled": s.config.allow_signup,
+        "passwordResetEnabled": s.mailer.system_enabled(),
+    }))
+}
+
+#[derive(Deserialize)]
+struct ForgotReq {
+    #[serde(default)]
+    email: String,
+}
+
+const FORGOT_MESSAGE: &str = "If an account exists for that address, a reset link is on its way.";
+
+/// Same 200 and body for every address, and the same work on the request path: the lookup, token
+/// write and mail send run in a background task, so timing says nothing about the account. Per-IP
+/// overflow is a 429 (it depends on the caller only); per-address overflow is dropped silently.
+async fn forgot_password(
+    State(s): State<AppState>,
+    ClientIp(ip): ClientIp,
+    ApiJson(req): ApiJson<ForgotReq>,
+) -> Result<Envelope<serde_json::Value>, ApiError> {
+    if !s.mailer.system_enabled() {
+        return Err(ApiError::NotFound("Route not found.".into()));
+    }
+    s.limiter.check(Rule::ForgotPassword, ip)?;
+    let email = req.email.trim().to_ascii_lowercase();
+    let done = Envelope::ok(serde_json::json!({ "message": FORGOT_MESSAGE }));
+    if !is_valid_email(&email) || !s.limiter.reset_mail_allowed(&email) {
+        return Ok(done);
+    }
+    let Ok(permit) = s.reset_jobs.clone().try_acquire_owned() else {
+        tracing::warn!("password reset: too many jobs in flight, request dropped");
+        return Ok(done);
+    };
+    tokio::spawn(async move {
+        let _permit = permit;
+        if let Err(e) = send_reset(&s, &email).await {
+            tracing::warn!(error = %e, "password reset mail failed");
+        }
+    });
+    Ok(done)
+}
+
+async fn send_reset(s: &AppState, email: &str) -> Result<(), String> {
+    let found = users::get_by_email(&s.pool, email)
+        .await
+        .map_err(|e| e.to_string())?;
+    let Some(user) = found.filter(|u| u.status == Status::Active) else {
+        return Ok(());
+    };
+    // Links point at the configured front-end, never at the request's Host header.
+    let Some(origin) = s.config.cors_origins.first() else {
+        return Err("FRONTEND_URL is not set".into());
+    };
+    let token = new_refresh_token();
+    resets::create(
+        &s.pool,
+        user.id,
+        &token.hash,
+        Utc::now() + Duration::hours(RESET_TTL_HOURS),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    // The token rides in the fragment so it never reaches server logs or Referer headers.
+    let text = format!(
+        "Someone asked to reset the SendDesk password for this address.\n\n\
+         Open this link to choose a new password (valid for {RESET_TTL_HOURS} hour, works once):\n\
+         {origin}/reset-password/#token={}\n\n\
+         If it was not you, ignore this mail; your password stays as it is.\n",
+        token.value
+    );
+    s.mailer
+        .send_system(SystemMail {
+            to: user.email,
+            subject: "Reset your SendDesk password".into(),
+            text,
+        })
+        .await
+        .map_err(|e| format!("{e:?}"))
+}
+
+#[derive(Deserialize)]
+struct ResetReq {
+    #[serde(default)]
+    token: String,
+    #[serde(default)]
+    password: String,
+}
+
+async fn reset_password(
+    State(s): State<AppState>,
+    ClientIp(ip): ClientIp,
+    ApiJson(req): ApiJson<ResetReq>,
+) -> Result<Envelope<serde_json::Value>, ApiError> {
+    if !s.mailer.system_enabled() {
+        return Err(ApiError::NotFound("Route not found.".into()));
+    }
+    s.limiter.check(Rule::ResetPassword, ip)?;
+    let mut f = Fields::default();
+    if !(8..=MAX_PASSWORD_CHARS).contains(&req.password.chars().count()) {
+        f.add("password", "Password must be 8 to 128 characters.");
+    }
+    f.finish()?;
+    // Hash first so a bad token costs what a good one does.
+    let hash = s.hasher.hash(req.password).await?;
+    let token = req.token.trim();
+    let spent = if token.is_empty() || token.len() > 128 {
+        None
+    } else {
+        resets::consume(&s.pool, &hash_api_key(token), &hash).await?
+    };
+    let email = spent
+        .ok_or_else(|| ApiError::BadRequest("This reset link is invalid or has expired.".into()))?;
+    s.limiter.account_ok(&email);
+    Ok(Envelope::ok(
+        serde_json::json!({ "message": "Password changed. Sign in with the new one." }),
+    ))
 }
 
 struct RefreshToken {

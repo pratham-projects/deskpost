@@ -6,8 +6,30 @@ use crate::config::{num, secret};
 
 const MB: usize = 1024 * 1024;
 
+/// Platform mailbox for account mail (password reset), never for tenant mail. Operator-supplied,
+/// so private addresses are allowed (an internal relay is the usual setup).
+#[derive(Clone)]
+pub struct SystemSmtp {
+    pub host: String,
+    pub port: u16,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub from: String,
+}
+
+impl std::fmt::Debug for SystemSmtp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SystemSmtp")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Clone)]
 pub struct MailConfig {
+    /// `SD_SYSTEM_SMTP_*`; without a host, password reset is switched off.
+    pub system_smtp: Option<SystemSmtp>,
     /// `SD_WEBHOOK_SECRET`; without it `POST /incoming-email` answers 404.
     pub webhook_secret: Option<Vec<u8>>,
     /// `SD_MAIL_PLAINTEXT=1`: never use TLS to project mail servers (local dev and tests only).
@@ -25,6 +47,7 @@ pub struct MailConfig {
 impl Default for MailConfig {
     fn default() -> Self {
         Self {
+            system_smtp: None,
             webhook_secret: None,
             plaintext: false,
             max_file_bytes: 10 * MB,
@@ -51,6 +74,7 @@ impl MailConfig {
             }
         };
         Self {
+            system_smtp: system_smtp(get, errs),
             webhook_secret,
             plaintext,
             max_file_bytes: num(
@@ -82,4 +106,44 @@ impl MailConfig {
             download_ttl: d.download_ttl,
         }
     }
+}
+
+fn system_smtp(
+    get: &impl Fn(&str) -> Option<String>,
+    errs: &mut Vec<String>,
+) -> Option<SystemSmtp> {
+    let host = get("SD_SYSTEM_SMTP_HOST");
+    let other = [
+        "SD_SYSTEM_SMTP_PORT",
+        "SD_SYSTEM_SMTP_USER",
+        "SD_SYSTEM_SMTP_PASSWORD",
+        "SD_SYSTEM_SMTP_FROM",
+    ]
+    .into_iter()
+    .any(|k| get(k).is_some());
+    let Some(host) = host else {
+        if other {
+            errs.push("SD_SYSTEM_SMTP_HOST is required when other SD_SYSTEM_SMTP_* are set".into());
+        }
+        return None;
+    };
+    let from = get("SD_SYSTEM_SMTP_FROM").unwrap_or_else(|| {
+        errs.push("SD_SYSTEM_SMTP_FROM is required with SD_SYSTEM_SMTP_HOST".into());
+        String::new()
+    });
+    if !from.is_empty() && !sd_core::email_addr::is_valid_email(&from) {
+        errs.push("SD_SYSTEM_SMTP_FROM must be an email address".into());
+    }
+    let username = get("SD_SYSTEM_SMTP_USER");
+    let password = get("SD_SYSTEM_SMTP_PASSWORD");
+    if username.is_some() != password.is_some() {
+        errs.push("SD_SYSTEM_SMTP_USER and SD_SYSTEM_SMTP_PASSWORD go together".into());
+    }
+    Some(SystemSmtp {
+        host,
+        port: num(get, "SD_SYSTEM_SMTP_PORT", 587, 1, u16::MAX as usize, errs) as u16,
+        username,
+        password,
+        from,
+    })
 }

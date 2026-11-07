@@ -206,6 +206,11 @@ impl Config {
             argon2: Argon2Cost::PRODUCTION,
             mail: crate::mail_config::MailConfig::from_lookup(&get, &mut errs),
         };
+        if config.mail.system_smtp.is_some() && config.cors_origins.is_empty() {
+            errs.push(
+                "FRONTEND_URL is required for SD_SYSTEM_SMTP_* (reset links point there)".into(),
+            );
+        }
         if errs.is_empty() {
             Ok(config)
         } else {

@@ -157,6 +157,68 @@ impl Mailer {
     }
 }
 
+/// Account mail from the platform mailbox (`SD_SYSTEM_SMTP_*`), e.g. password reset.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SystemMail {
+    pub to: String,
+    pub subject: String,
+    pub text: String,
+}
+
+impl Mailer {
+    /// Whether account mail can be sent at all (a system mailbox is configured, or a test double).
+    pub fn system_enabled(&self) -> bool {
+        match self {
+            Self::Smtp(m) => m.config.mail.system_smtp.is_some(),
+            Self::Recording(_) => true,
+        }
+    }
+
+    pub async fn send_system(&self, mail: SystemMail) -> Result<(), MailError> {
+        match self {
+            Self::Smtp(m) => m.send_system(mail).await,
+            Self::Recording(m) => {
+                if let Some(e) = m.fail_next.lock().unwrap().take() {
+                    return Err(e);
+                }
+                m.system_sent.lock().unwrap().push(mail);
+                Ok(())
+            }
+        }
+    }
+}
+
+impl SmtpMailer {
+    async fn send_system(&self, mail: SystemMail) -> Result<(), MailError> {
+        let Some(sys) = &self.config.mail.system_smtp else {
+            return Err(MailError::NotConfigured);
+        };
+        let mut cfg = SmtpConfig::new(
+            &sys.host,
+            sys.port,
+            tls_for(sys.port, self.config.mail.plaintext, 465),
+            &sys.from,
+        );
+        cfg.allow_private = true;
+        cfg.from_name = Some("SendDesk".into());
+        if let (Some(u), Some(p)) = (&sys.username, &sys.password) {
+            cfg.username = Some(u.clone());
+            cfg.password = Some(p.clone());
+        }
+        let email = OutboundEmail {
+            to: vec![mail.to],
+            subject: mail.subject,
+            text: Some(mail.text),
+            ..Default::default()
+        };
+        let secrets = [sys.password.as_deref().unwrap_or("")];
+        sd_mail::send(&cfg, &email)
+            .await
+            .map(|_| ())
+            .map_err(|e| MailError::Delivery(redact(&e.to_string(), &secrets)))
+    }
+}
+
 impl OutboundMailer for Mailer {
     async fn send_reply(&self, mail: ReplyMail) -> Result<SentReply, MailError> {
         match self {
@@ -171,6 +233,7 @@ impl OutboundMailer for Mailer {
 #[derive(Default)]
 pub struct RecordingMailer {
     pub sent: Mutex<Vec<ReplyMail>>,
+    pub system_sent: Mutex<Vec<SystemMail>>,
     pub fail_next: Mutex<Option<MailError>>,
 }
 

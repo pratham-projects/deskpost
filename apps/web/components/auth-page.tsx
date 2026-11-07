@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { useAuthStore } from "@/lib/store"
+import { authApi } from "@/lib/api/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PasswordInput } from "@/components/ui/password-input"
@@ -17,6 +18,11 @@ export function AuthPage() {
   const [password, setPassword] = useState("")
 
   const { login, signup, isLoading, error, clearError } = useAuthStore()
+  const [resetEnabled, setResetEnabled] = useState(false)
+
+  useEffect(() => {
+    authApi.config().then((c) => setResetEnabled(c.passwordResetEnabled))
+  }, [])
 
   // Clear error when switching between login/signup
   useEffect(() => {
@@ -88,6 +94,14 @@ export function AuthPage() {
               className="mt-2"
             />
           </div>
+
+          {isLogin && resetEnabled && (
+            <div className="text-right -mt-2">
+              <a href="/forgot-password/" className="text-xs text-muted-foreground hover:text-foreground underline">
+                Forgot password?
+              </a>
+            </div>
+          )}
 
           {error && (
             <div className="flex items-center gap-2 text-sm text-destructive">

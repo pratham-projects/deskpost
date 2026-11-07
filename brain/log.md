@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-11-07] P1 password reset
+
+- **Creation**: single-use hashed reset tokens (migration 0004, `crates/db/src/resets.rs`), forgot/reset routes with own rate rules plus per-address mail cap, reset revokes all sessions, system SMTP mail, token carried in URL fragment and scrubbed, pages `/forgot-password` and `/reset-password`, spec `e2e/tests/password-reset.spec.ts`.
+- **Lesson**: e2e specs share one loopback IP, so the per-IP login limit (10/min) is shared; sign-in helpers in later specs wait out 429. A hash-only `goto` to the same path does not reload, so replay tests must leave the page first.
+- **Verify**: `make ci` ok, `make e2e` 8/8 pass.
+
 ## [2026-11-07] R50 backend fixes
 
 - **Creation**: SSRF check at connect time, IMAP timeouts and size-bounded fetch, ingest sanitising and sender check, signup off by default, client scope on tickets, status race, no reflected text in auto-responses, mailbox approval by a global admin (migration 0003), attachment mail after commit (same rule as `/messages`), streamed downloads, summed attachment size cap, per-account login throttle, bounded hashing queue.
