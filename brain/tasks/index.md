@@ -19,5 +19,6 @@
 | P4 | feat/webload | done (e2e for every screen; `scripts/load.sh` + `docs/PERFORMANCE.md`) |
 | P4-merge | feat/webload | merged to staging (migration renumbered 0006) |
 | R60 | final gate | ci + e2e green on staging, main merge awaits approval |
+| S2 | feat/site | done, merged (Deskpost site in `site/`) |
 
 Rules: [Pre-Merge Gate](/wisdom/pre-merge-gate.md).

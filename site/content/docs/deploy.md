@@ -1,0 +1,70 @@
+---
+title: Deploy
+group: Operate
+order: 8
+description: One host with Compose or systemd, Caddy, backups and smoke checks.
+---
+
+# Deploy on one host
+
+Postgres 16, the `api` binary or the compose stack, and Caddy in front. Everything below except the container build was replayed by hand on a machine without Docker.
+
+## Layout (host install)
+
+| Piece | Where |
+| --- | --- |
+| API binary | `/usr/local/bin/api` |
+| Env file | `/etc/senddesk/env`, `chmod 600`. Set `STORAGE_DIR=/var/lib/senddesk/storage` here. |
+| Attachments | `/var/lib/senddesk/storage` (`<root>/ab/cd/<key>` plus `.json` sidecars) |
+| Static UI | `/srv/senddesk/web`, from `NEXT_PUBLIC_API_URL= NEXT_PUBLIC_API_VERSION=v3 bun run build` in `apps/web` |
+| Proxy | `deploy/Caddyfile`: `/api/*` and `/health*` to `127.0.0.1:3000`, the rest is the UI |
+| Unit | `deploy/senddesk-api.service`, runs as the `senddesk` user |
+
+The API binds `0.0.0.0:$PORT` with no bind-address setting. Block port 3000 from outside so clients cannot skip Caddy and spoof client IPs.
+
+## Steps
+
+```bash
+useradd --system --home /var/lib/senddesk --shell /usr/sbin/nologin senddesk
+install -d -m 755 /etc/senddesk
+sed -E '/^[[:space:]]*#/d; s/[[:space:]]+#.*$//; /^[[:space:]]*$/d' .env | install -m 600 /dev/stdin /etc/senddesk/env
+install -m 755 target/release/api /usr/local/bin/api
+install -m 644 deploy/senddesk-api.service /etc/systemd/system/
+(set -a; . /etc/senddesk/env; set +a; sudo -E -u senddesk /usr/local/bin/api migrate)
+systemctl daemon-reload && systemctl enable --now senddesk-api
+install -d /srv/senddesk/web && cp -R apps/web/out/. /srv/senddesk/web/
+caddy validate --config deploy/Caddyfile --adapter caddyfile && systemctl reload caddy
+scripts/smoke.sh https://desk.example.com
+```
+
+The `sed` strips trailing comments because systemd, unlike compose, keeps them in values. Edit the domain in `deploy/Caddyfile` first.
+
+## Compose
+
+`docker compose up -d` runs `migrate` before `app`. The `web` service serves the UI on `127.0.0.1:4000` over plain HTTP without security headers: put TLS and Caddy-style headers in front of it.
+
+## Trusted proxies
+
+Set `SD_TRUSTED_PROXIES` to the proxy only: `127.0.0.1` for Caddy on the same host, the container network address for Caddy in a container. Left empty, every client shares one rate-limit bucket behind the proxy and the API logs a warning.
+
+## Backups
+
+```bash
+DATABASE_URL=postgres://senddesk:...@localhost:5432/senddesk \
+STORAGE_DIR=/var/lib/senddesk/storage BACKUP_DIR=/var/backups/senddesk scripts/backup.sh
+```
+
+It writes a custom-format `pg_dump` and a tarball of `STORAGE_DIR` (mode 600, 14-day retention). It refuses to run when `pg_dump` and the server have different major versions. Copy backups off the host. A dump is only restorable with the `SD_SECRET_KEY` it was made under, so store that key separately. Back up the database and the attachment directory together.
+
+## Upgrades
+
+1. Back up.
+2. Build the new binary and UI, diff `.env.example` against your env file.
+3. `api migrate`. Migrations are forward-only; rollback means restoring the backup and the old binary.
+4. Restart the service, replace the UI, run `scripts/smoke.sh`.
+
+The API and UI are versioned together. Deploy both in one step.
+
+## Smoke and health
+
+`scripts/smoke.sh https://desk.example.com` checks health, the API through the proxy, the static UI, security headers (HSTS, nosniff, X-Frame-Options, CSP), CORS allowed and denied origins, and body limits. Run it after every deploy and from a cron or uptime job. Logs go to stdout: `journalctl -u senddesk-api -f` or `docker compose logs -f app`. Query strings are never logged, because download tokens travel in them.

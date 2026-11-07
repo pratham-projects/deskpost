@@ -4,6 +4,12 @@
 
 - **Done**: cargo-dist workflow (binary `api`, 4 targets, shell installer, sha256), ghcr image workflow, compose and env release assets, `docs/releasing.md`.
 - **Lesson**: `dist plan` passes without `[profile.dist]`, but `dist build` fails with "profile `dist` is not defined". Always run one local `dist build --target aarch64-apple-darwin`, not just plan. Fixed in `Cargo.toml`; local build now produces the tarball and sha256.
+## [2026-11-07] S2 marketing + docs site "Deskpost" (feat/site)
+- **Review pass**: finish reviewer round 2 = ship. Denser inbox scene, install headline `Run it your way.`, pre-release callout in install doc, Apple M4 on the p50 row, DESIGN.md added.
+
+- **Done**: `site/` Vite vanilla marketing + docs site, brand name Deskpost (site-only rename; repo and binary stay `sendesk` / `api`). Amber skin on the shared kit copied from bunfiiliate (`scripts/sync-kit.sh`), `inbox` ASCII scene, 10 docs pages, Pages workflow, smoke test.
+- **Decision**: install tabs lead with Docker Compose from a clone and Source; Images and Binary tabs say "not published yet" until a release exists (they flip automatically once the GitHub API lists one).
+- **Open**: README and docs still say SendDesk. Auto-close default (7 days) and customer-reply reopen status (`pending` in core vs `in_progress` in SQL) disagree in the code; the site only says "reopens".
 
 ## [2026-11-07] Merge feat/webload, worktree cleanup
 
