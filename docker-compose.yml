@@ -1,4 +1,5 @@
 # api containers get an explicit env allow-list (no POSTGRES_PASSWORD/bootstrap secrets leak in); unset vars use api defaults.
+# Release install (no source): `docker compose pull && docker compose up -d --no-build`; pin with SD_API_IMAGE/SD_WEB_IMAGE.
 # Quick start: cp .env.example .env, fill the secrets, then `docker compose up --build`.
 # To use mailpit as a project's SMTP server set SD_ALLOW_PRIVATE_MAIL_HOSTS=true in .env (dev only).
 # Mailpit (profile `dev`) catches all outbound mail (UI on :8025) so nothing leaves the machine.
@@ -16,6 +17,7 @@ services:
       retries: 10
 
   migrate:
+    image: ${SD_API_IMAGE:-ghcr.io/pratham-projects/sendesk-api:latest}
     build: { context: ., target: api }
     command: ["migrate"]
     environment:
@@ -45,6 +47,7 @@ services:
       postgres: { condition: service_healthy }
 
   app:
+    image: ${SD_API_IMAGE:-ghcr.io/pratham-projects/sendesk-api:latest}
     build: { context: ., target: api }
     environment:
       DATABASE_URL: postgres://senddesk:${POSTGRES_PASSWORD}@postgres:5432/senddesk
@@ -75,6 +78,7 @@ services:
       migrate: { condition: service_completed_successfully }
 
   web:
+    image: ${SD_WEB_IMAGE:-ghcr.io/pratham-projects/sendesk-web:latest}
     build:
       context: .
       target: web
