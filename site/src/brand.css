@@ -1,0 +1,17 @@
+/* Deskpost skin: signal amber on warm ink. Greys lean brown so nothing reads as cold blue-grey. */
+:root {
+  --bg: #0a0908;
+  --bg-2: #12100d;
+  --bg-3: #1c1814;
+  --line: #26211b;
+  --line-2: #3d362c;
+  --fg: #f1ebe0;
+  --fg-dim: #a99f90;
+  --accent: #ffb020;
+  --accent-ink: #0a0908;
+}
+/* "Support inbox / you host / yourself." needs a wider measure than the kit default. */
+.hero h1 { max-width: 13ch; }
+x-copy { max-width: 660px; }
+/* leave room under the copy for the scene on phones */
+@media (max-width: 760px) { .hero-inner { padding-bottom: min(96vw, 400px); } }
