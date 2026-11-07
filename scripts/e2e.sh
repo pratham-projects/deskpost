@@ -74,6 +74,8 @@ export SD_ENV=development PORT=$API_PORT FRONTEND_URL=http://127.0.0.1:$WEB_PORT
 export STORAGE_DIR=$ROOT/$RUN/storage SD_ALLOW_PRIVATE_MAIL_HOSTS=true SD_MAIL_PLAINTEXT=true
 export SD_IMAP_POLL_SECS=5 SD_TRUSTED_PROXIES=127.0.0.1
 export SD_WEBHOOK_SECRET=$(openssl rand -hex 32)
+# Platform mailbox for account mail (password reset): GreenMail, so the spec can read the link.
+export SD_SYSTEM_SMTP_HOST=127.0.0.1 SD_SYSTEM_SMTP_PORT=$SMTP_PORT SD_SYSTEM_SMTP_FROM=noreply@desk.test
 rm -rf "$STORAGE_DIR"
 "$API" migrate >/dev/null
 SD_BOOTSTRAP_PASSWORD=$ADMIN_PASS "$API" bootstrap --email $ADMIN_EMAIL --name "E2E Admin" >/dev/null

@@ -24,6 +24,7 @@ pub mod mailq;
 pub mod members;
 pub mod messages;
 pub mod projects;
+pub mod resets;
 pub mod sessions;
 pub mod templates;
 pub mod tickets;

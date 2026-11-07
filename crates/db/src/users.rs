@@ -251,12 +251,19 @@ pub async fn admin_update_guarded(
     Ok(Guarded::Done(user))
 }
 
+/// Also drops outstanding reset links: a changed password makes them stale.
 pub async fn set_password_hash(pool: &Pool, id: Id, password_hash: &str) -> Result<bool> {
+    let mut tx = pool.begin().await?;
     let r = sqlx::query("UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1")
         .bind(id)
         .bind(password_hash)
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
+    sqlx::query("DELETE FROM password_resets WHERE user_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
     Ok(r.rows_affected() == 1)
 }
 

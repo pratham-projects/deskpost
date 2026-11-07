@@ -207,3 +207,52 @@ fn size_limits_must_agree() {
         .is_ok()
     );
 }
+
+#[test]
+fn system_smtp_is_optional_and_checked_together() {
+    let off = Config::from_lookup(env_with(&[])).unwrap();
+    assert!(off.mail.system_smtp.is_none());
+
+    let on = Config::from_lookup(env_with(&[
+        ("SD_SYSTEM_SMTP_HOST", "smtp.desk.test"),
+        ("SD_SYSTEM_SMTP_FROM", "noreply@desk.test"),
+    ]))
+    .unwrap();
+    let s = on.mail.system_smtp.unwrap();
+    assert_eq!((s.host.as_str(), s.port), ("smtp.desk.test", 587));
+    assert!(s.username.is_none());
+
+    rejects(
+        &[("SD_SYSTEM_SMTP_FROM", "noreply@desk.test")],
+        "SD_SYSTEM_SMTP_HOST",
+    );
+    rejects(
+        &[("SD_SYSTEM_SMTP_HOST", "smtp.desk.test")],
+        "SD_SYSTEM_SMTP_FROM",
+    );
+    rejects(
+        &[
+            ("SD_SYSTEM_SMTP_HOST", "smtp.desk.test"),
+            ("SD_SYSTEM_SMTP_FROM", "not-an-address"),
+        ],
+        "SD_SYSTEM_SMTP_FROM",
+    );
+    rejects(
+        &[
+            ("SD_SYSTEM_SMTP_HOST", "smtp.desk.test"),
+            ("SD_SYSTEM_SMTP_FROM", "noreply@desk.test"),
+            ("SD_SYSTEM_SMTP_USER", "bot"),
+        ],
+        "SD_SYSTEM_SMTP_PASSWORD",
+    );
+    // Links need a front-end origin to point at.
+    let errs = Config::from_lookup(|k| match k {
+        "FRONTEND_URL" => None,
+        other => env_with(&[
+            ("SD_SYSTEM_SMTP_HOST", "smtp.desk.test"),
+            ("SD_SYSTEM_SMTP_FROM", "noreply@desk.test"),
+        ])(other),
+    })
+    .expect_err("rejected");
+    assert!(errs.to_string().contains("FRONTEND_URL"), "{errs}");
+}

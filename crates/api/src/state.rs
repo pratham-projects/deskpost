@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use sd_core::secret::SecretBox;
 use sd_db::Pool;
+use tokio::sync::Semaphore;
 
 use crate::config::{Config, ConfigError};
 use crate::jwt::Jwt;
@@ -11,6 +12,7 @@ use crate::ratelimit::RateLimiter;
 use crate::store::Store;
 
 const RATE_LIMIT_KEYS: usize = 10_000;
+const RESET_JOBS: usize = 8;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -24,6 +26,8 @@ pub struct AppState {
     pub store: Arc<Store>,
     /// Replaceable in tests (`Mailer::Recording`).
     pub mailer: Mailer,
+    /// Caps reset-link jobs running in the background (token write + mail send).
+    pub reset_jobs: Arc<Semaphore>,
 }
 
 impl AppState {
@@ -43,6 +47,7 @@ impl AppState {
             limiter: Arc::new(RateLimiter::new(RATE_LIMIT_KEYS)),
             secrets,
             config,
+            reset_jobs: Arc::new(Semaphore::new(RESET_JOBS)),
         })
     }
 }

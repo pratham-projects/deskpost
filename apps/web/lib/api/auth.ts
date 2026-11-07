@@ -134,4 +134,45 @@ export const authApi = {
     });
     return parse<{ user: User }>(response);
   },
+
+  /** Public feature flags. Failure (old API, network) reads as "everything off". */
+  config: async (): Promise<{ signupEnabled: boolean; passwordResetEnabled: boolean }> => {
+    try {
+      const response = await fetch(`${API_PREFIX}/auth/config`);
+      const res = await parse<{ signupEnabled?: boolean; passwordResetEnabled?: boolean }>(response);
+      return {
+        signupEnabled: !!res.data?.signupEnabled,
+        passwordResetEnabled: !!res.data?.passwordResetEnabled,
+      };
+    } catch {
+      return { signupEnabled: false, passwordResetEnabled: false };
+    }
+  },
+
+  /** Always succeeds for a well-formed call, whether or not the address has an account. */
+  forgotPassword: async (email: string): Promise<AuthApiResponse<{ message: string }>> => {
+    try {
+      const response = await fetch(`${API_PREFIX}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      return await parse<{ message: string }>(response);
+    } catch (err) {
+      return failure(err instanceof Error ? err.message : 'Network error', 'NETWORK_ERROR');
+    }
+  },
+
+  resetPassword: async (token: string, password: string): Promise<AuthApiResponse<{ message: string }>> => {
+    try {
+      const response = await fetch(`${API_PREFIX}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password }),
+      });
+      return await parse<{ message: string }>(response);
+    } catch (err) {
+      return failure(err instanceof Error ? err.message : 'Network error', 'NETWORK_ERROR');
+    }
+  },
 };

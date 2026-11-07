@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-11-07] P1 password reset
+
+- **Creation**: single-use hashed reset tokens (migration 0004, `crates/db/src/resets.rs`), forgot/reset routes with own rate rules plus per-address mail cap, reset revokes all sessions, system SMTP mail, token carried in URL fragment and scrubbed, pages `/forgot-password` and `/reset-password`, spec `e2e/tests/password-reset.spec.ts`.
+- **Lesson**: e2e specs share one loopback IP, so the per-IP login limit (10/min) is shared; sign-in helpers in later specs wait out 429. A hash-only `goto` to the same path does not reload, so replay tests must leave the page first.
+- **Verify**: `make ci` ok, `make e2e` 8/8 pass.
+
 ## [2026-11-07] R51 review leftovers (P2)
 
 - **Fixed (M8)**: agent replies go through the persisted outbox. `post_agent` queues message + `pending` log + `reply` job in one transaction (migration 0004: `mail_outbox.message_id`, `sent_by_user_id`, kind `reply`); `run_outbox_once` sends via `state.mailer` with retry/backoff; `/messages` and attachment upload share the path, both answer 201, no SMTP in the request. `docs/API.md` section 6.7 and 9 updated.

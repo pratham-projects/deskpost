@@ -221,6 +221,11 @@ impl Config {
                 "SD_WEBHOOK_LIMIT_BYTES must fit SD_MAX_REQUEST_BYTES as base64 (4/3 of it)".into(),
             );
         }
+        if config.mail.system_smtp.is_some() && config.cors_origins.is_empty() {
+            errs.push(
+                "FRONTEND_URL is required for SD_SYSTEM_SMTP_* (reset links point there)".into(),
+            );
+        }
         if errs.is_empty() {
             Ok(config)
         } else {
