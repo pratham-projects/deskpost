@@ -1,4 +1,4 @@
-.PHONY: ci fmt clippy test deny web e2e
+.PHONY: ci fmt clippy test deny web e2e deploy-check
 
 ci:
 	cargo fmt --check
@@ -24,3 +24,6 @@ web:
 
 e2e:
 	scripts/e2e.sh
+
+deploy-check:
+	scripts/deploy-check.sh

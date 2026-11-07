@@ -44,7 +44,8 @@ make ci          # fmt, clippy, test, deny
 1. Build the binary (`cargo build --release -p api`) or the `api` Docker target; run `api migrate`.
 2. systemd: [deploy/senddesk-api.service](deploy/senddesk-api.service), secrets in `/etc/senddesk/env`.
 3. TLS and routing: [deploy/Caddyfile](deploy/Caddyfile) (`/api` and `/health` to the API, the rest to the UI).
-4. Walk through [SECURITY.md](SECURITY.md).
+4. Walk through [SECURITY.md](SECURITY.md); run `scripts/smoke.sh https://your.domain` after each deploy.
+5. Backups, upgrades, rotation, first admin: [docs/OPERATIONS.md](docs/OPERATIONS.md) (`scripts/backup.sh`).
 
 Every environment variable is listed with defaults in [.env.example](.env.example).
 
@@ -54,7 +55,8 @@ Every environment variable is listed with defaults in [.env.example](.env.exampl
 crates/   api, core, db, mail, storage
 apps/web  Next.js UI
 deploy/   Caddyfile, systemd unit
-docs/     PLAN, API, free-email
+scripts/  e2e, smoke, backup, deploy-check
+docs/     PLAN, API, OPERATIONS, free-email
 brain/    project knowledge bundle (OKF)
 ```
 
