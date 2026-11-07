@@ -15,6 +15,7 @@
 | R31 | feat/deploy-docs | done, merged |
 | R40 | feat/e2e | done (`make e2e`: `scripts/e2e.sh` + `e2e/` Playwright; 5 flows green) |
 | R50 | review + fixes | done, merged |
+| P4 | feat/webload | done (e2e for every screen; `scripts/load.sh` + `docs/PERFORMANCE.md`) |
 | R60 | final gate | ci + e2e green on staging, main merge awaits approval |
 
 Rules: [Pre-Merge Gate](/wisdom/pre-merge-gate.md).

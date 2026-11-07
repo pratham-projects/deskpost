@@ -63,6 +63,8 @@ pub struct Config {
     pub first_user_admin: bool,
     /// `SD_ALLOW_PRIVATE_MAIL_HOSTS`: let SMTP/IMAP settings point at loopback/private addresses.
     pub allow_private_mail_hosts: bool,
+    /// `SD_RATE_LIMIT_SCALE`: multiplies every per-address quota (load tests; keep 1 in production).
+    pub rate_limit_scale: usize,
     pub argon2: Argon2Cost,
     pub mail: crate::mail_config::MailConfig,
 }
@@ -203,6 +205,7 @@ impl Config {
             allow_signup: flag(&get, "SD_ALLOW_SIGNUP", false, &mut errs),
             first_user_admin: flag(&get, "SD_FIRST_USER_ADMIN", false, &mut errs),
             allow_private_mail_hosts: flag(&get, "SD_ALLOW_PRIVATE_MAIL_HOSTS", false, &mut errs),
+            rate_limit_scale: num(&get, "SD_RATE_LIMIT_SCALE", 1, 1, 100_000, &mut errs),
             argon2: Argon2Cost::PRODUCTION,
             mail: crate::mail_config::MailConfig::from_lookup(&get, &mut errs),
         };

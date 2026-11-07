@@ -102,6 +102,7 @@ fn bad_values_are_named() {
     rejects(&[("API_VERSION", "v3/../x")], "API_VERSION");
     rejects(&[("API_VERSION", "v3;path")], "API_VERSION");
     rejects(&[("COOKIE_SECURE", "maybe")], "COOKIE_SECURE");
+    rejects(&[("SD_RATE_LIMIT_SCALE", "0")], "SD_RATE_LIMIT_SCALE");
     rejects(&[("SD_BODY_LIMIT_BYTES", "0")], "SD_BODY_LIMIT_BYTES");
     rejects(
         &[("SD_UPLOAD_LIMIT_BYTES", "99999999999")],

@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-11-07] P4 web e2e + load
+
+- **Creation**: Playwright specs for every screen (`e2e/tests/screens.spec.ts`; fixes for templates project scope, attachment names, api key display, stale login copy). `scripts/load.sh` (oha on a release API, scratch db `sd_load`, seeds 500 tickets) and `docs/PERFORMANCE.md`. `SD_RATE_LIMIT_SCALE` (default 1) multiplies per-address quotas for load runs. Migration `0004` index `(project_id, updated_at DESC, id DESC)` for the inbox list.
+- **Decision**: load runs lift rate limits by env instead of spoofing many source addresses; production keeps scale 1.
+- **Lesson**: oha counts requests in flight at the deadline as errors; pass `-w`. Replies with `sendEmail` default and no SMTP log a warning per request, so load scenarios send `sendEmail:false`.
+
 ## [2026-11-07] R50 backend fixes
 
 - **Creation**: SSRF check at connect time, IMAP timeouts and size-bounded fetch, ingest sanitising and sender check, signup off by default, client scope on tickets, status race, no reflected text in auto-responses, mailbox approval by a global admin (migration 0003), attachment mail after commit (same rule as `/messages`), streamed downloads, summed attachment size cap, per-account login throttle, bounded hashing queue.
