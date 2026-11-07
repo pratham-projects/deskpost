@@ -11,7 +11,7 @@ use sd_core::threading::{
     build_references, parse_ticket_number, reply_message_id, ticket_message_id, ticket_subject,
 };
 use sd_db::projects::MailSettings;
-use sd_db::{EmailResponseStatus, Id, Pool, email_logs, email_responses, mailq, projects};
+use sd_db::{EmailResponseStatus, Id, Pool, email_responses, mailq, messages, projects};
 use sd_mail::{OutAttachment, OutboundEmail, SmtpConfig, TlsMode};
 use sd_storage::Storage;
 use tokio::io::AsyncReadExt;
@@ -24,7 +24,11 @@ use crate::store::Store;
 /// Gives up after this many sends.
 pub const MAX_ATTEMPTS: i32 = 5;
 const OUTBOX_BATCH: i64 = 20;
-const LEASE_SECS: i64 = 300;
+/// One send gets this long; a slow server must not hold the rest of the batch.
+const JOB_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(45);
+/// Lease of a claimed batch: every job may take `JOB_TIMEOUT`, so no later job's lease runs out
+/// while an earlier one is still sending (a second instance would otherwise send it twice).
+const LEASE_SECS: i64 = OUTBOX_BATCH * JOB_TIMEOUT.as_secs() as i64 + 60;
 const ERROR_LEN: usize = 300;
 
 /// AAD binding a sealed password to its project and field. `routes::projects` must seal with the same.
@@ -127,8 +131,8 @@ impl From<sd_db::Error> for MailError {
 }
 
 pub trait OutboundMailer: Send + Sync {
-    /// Email an agent reply to the ticket's client. Sent before the message is saved: on `Err` the
-    /// caller saves nothing.
+    /// Email an agent reply to the ticket's client. Called by the outbox worker for a saved message;
+    /// on `Err` the job is retried or given up. The `email_logs` row belongs to the outbox job.
     fn send_reply(
         &self,
         mail: ReplyMail,
@@ -310,7 +314,11 @@ impl OutboundMailer for SmtpMailer {
             &domain,
         )
         .map(|m| bare(&m));
-        let subject = ticket_subject(&ticket.project_name, ticket.ticket_number as u32, true);
+        let subject = ticket_subject(
+            &ticket.project_name,
+            u32::try_from(ticket.ticket_number).unwrap_or(u32::MAX),
+            true,
+        );
         let attachments = self.attachments(&mail).await?;
         let email = OutboundEmail {
             to: vec![ticket.client_email.clone()],
@@ -322,35 +330,15 @@ impl OutboundMailer for SmtpMailer {
             attachments,
             ..Default::default()
         };
-        let log = email_logs::create(
-            &self.pool,
-            &email_logs::NewEmailLog {
-                project_id: mail.project_id,
-                ticket_id: mail.ticket_id,
-                message_id: None,
-                to_email: ticket.client_email.clone(),
-                subject: Some(subject.clone()),
-                sent_by_user_id: mail.sent_by,
-            },
-        )
-        .await?;
         match sd_mail::send(&smtp, &email).await {
-            Ok(id) => {
-                let id = bare(&id);
-                email_logs::mark_sent(&self.pool, log.id, &id).await?;
-                Ok(SentReply {
-                    email_message_id: id,
-                    in_reply_to,
-                    references: (!references.is_empty()).then(|| references.join(" ")),
-                    to: ticket.client_email,
-                    subject,
-                })
-            }
-            Err(e) => {
-                let msg = redact(&e.to_string(), &[&password]);
-                email_logs::mark_failed(&self.pool, log.id, &msg).await?;
-                Err(MailError::Delivery(msg))
-            }
+            Ok(id) => Ok(SentReply {
+                email_message_id: bare(&id),
+                in_reply_to,
+                references: (!references.is_empty()).then(|| references.join(" ")),
+                to: ticket.client_email,
+                subject,
+            }),
+            Err(e) => Err(MailError::Delivery(redact(&e.to_string(), &[&password]))),
         }
     }
 }
@@ -364,11 +352,12 @@ fn ctl_free(s: &str) -> String {
 /// Subject of an auto-response: the project's own text with the ticket tag guaranteed (replies are
 /// threaded by it), or the standard subject when none is configured.
 fn auto_subject(custom: &str, project: &str, number: i64) -> String {
+    let n = u32::try_from(number).unwrap_or(u32::MAX);
     let custom = ctl_free(custom);
     let custom = custom.trim();
     if custom.is_empty() {
-        ticket_subject(project, number as u32, false)
-    } else if parse_ticket_number(custom) == Some(number as u32) {
+        ticket_subject(project, n, false)
+    } else if parse_ticket_number(custom) == Some(n) {
         custom.to_string()
     } else {
         format!("{custom} [Ticket #{number}]")
@@ -402,27 +391,103 @@ pub async fn enqueue_auto_response(
     .is_some())
 }
 
-/// Send what is due. Each job gets one attempt; failures are rescheduled with backoff or, after
-/// `MAX_ATTEMPTS`, given up. Returns the number of jobs handled. Never more than one batch.
+/// Queue target for an agent reply: the ticket's client and the subject the mail will carry.
+/// `None` when the ticket does not exist in the project.
+pub async fn reply_outbox(
+    pool: &Pool,
+    project_id: Id,
+    ticket_id: Id,
+) -> sd_db::Result<Option<messages::ReplyOutbox>> {
+    Ok(mailq::ticket_mail(pool, project_id, ticket_id)
+        .await?
+        .map(|t| messages::ReplyOutbox {
+            subject: ticket_subject(
+                &t.project_name,
+                u32::try_from(t.ticket_number).unwrap_or(u32::MAX),
+                true,
+            ),
+            to_email: t.client_email,
+        }))
+}
+
+/// Send what is due. Each job gets one attempt, bounded by `JOB_TIMEOUT`; failures are rescheduled
+/// with backoff or, after `MAX_ATTEMPTS`, given up. A bookkeeping error on one job never abandons
+/// the rest of the batch. Returns the number of jobs handled. Never more than one batch.
 pub async fn run_outbox_once(state: &AppState) -> sd_db::Result<usize> {
+    let dead = mailq::dead_letter_exhausted(&state.pool, MAX_ATTEMPTS).await?;
+    if dead > 0 {
+        tracing::error!(dead, "outbox jobs given up after repeated worker crashes");
+    }
     let jobs = mailq::claim_due(&state.pool, OUTBOX_BATCH, LEASE_SECS).await?;
     let n = jobs.len();
     for job in jobs {
-        let outcome = send_job(state, &job).await;
-        match outcome {
-            Ok(id) => mailq::mark_sent(&state.pool, &job, &id).await?,
+        let outcome = match tokio::time::timeout(JOB_TIMEOUT, send_job(state, &job)).await {
+            Ok(o) => o,
+            Err(_) => Err(("send timed out".to_string(), true)),
+        };
+        let recorded = match outcome {
+            Ok(id) => mailq::mark_sent(&state.pool, &job, &id).await,
             Err((msg, retryable)) => {
                 let retry =
                     (retryable && job.attempts < MAX_ATTEMPTS).then(|| backoff_secs(job.attempts));
-                mailq::mark_failed(&state.pool, &job, &msg, retry).await?;
+                mailq::mark_failed(&state.pool, &job, &msg, retry).await
             }
+        };
+        if let Err(e) = recorded {
+            // The lease expires and the job comes back; the rest of the batch still goes out.
+            tracing::error!(job = %job.id, error = %e, "could not record an outbox outcome");
         }
     }
     Ok(n)
 }
 
+/// An agent reply: rebuilt from the saved message, threaded, and its headers stored on success.
+async fn send_reply_job(
+    state: &AppState,
+    job: &mailq::OutboxJob,
+) -> Result<String, (String, bool)> {
+    let db = |e: sd_db::Error| (redact(&e.to_string(), &[]), true);
+    let message_id = job
+        .message_id
+        .ok_or_else(|| ("reply job without a message".to_string(), false))?;
+    let (body, attachment_ids) = mailq::reply_source(&state.pool, message_id)
+        .await
+        .map_err(db)?
+        .ok_or_else(|| ("message not found".to_string(), false))?;
+    let mail = ReplyMail {
+        project_id: job.project_id,
+        ticket_id: job.ticket_id,
+        sent_by: job.sent_by_user_id,
+        body,
+        attachment_ids,
+    };
+    match state.mailer.send_reply(mail).await {
+        Ok(sent) => {
+            if let Err(e) = messages::set_email_headers(
+                &state.pool,
+                message_id,
+                &sent.email_message_id,
+                sent.in_reply_to.as_deref(),
+                sent.references.as_deref(),
+                &sent.to,
+                &sent.subject,
+            )
+            .await
+            {
+                tracing::error!(error = %e, "reply sent but mail headers not stored");
+            }
+            Ok(sent.email_message_id)
+        }
+        Err(MailError::NotConfigured) => Err(("SMTP not configured".to_string(), false)),
+        Err(MailError::Delivery(e) | MailError::Internal(e)) => Err((redact(&e, &[]), true)),
+    }
+}
+
 /// `Err((message, retryable))`.
 async fn send_job(state: &AppState, job: &mailq::OutboxJob) -> Result<String, (String, bool)> {
+    if job.kind == "reply" {
+        return send_reply_job(state, job).await;
+    }
     let fatal = |m: &str| (m.to_string(), false);
     let db = |e: sd_db::Error| (redact(&e.to_string(), &[]), true);
     let settings = projects::mail_settings(&state.pool, job.project_id)

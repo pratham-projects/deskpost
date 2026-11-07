@@ -794,3 +794,18 @@ async fn one_account_cannot_be_guessed_from_many_addresses(pool: PgPool) {
     assert_eq!(blocked.status, StatusCode::UNAUTHORIZED);
     assert_eq!(blocked.json(), unknown.json());
 }
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn signup_rejects_control_characters_in_the_name(pool: PgPool) {
+    let t = TestApp::new(pool).await;
+    for name in ["Ada\nLovelace", "Ada\u{7}", "\u{0}"] {
+        let r = t
+            .send_json(
+                t.post("/auth/signup"),
+                json!({ "email": "ctl@example.com", "password": PASSWORD, "name": name }),
+            )
+            .await;
+        assert_eq!(r.status, 422, "{name:?}");
+    }
+    assert_eq!(signup(&t, "fine@example.com").await.status, 201);
+}

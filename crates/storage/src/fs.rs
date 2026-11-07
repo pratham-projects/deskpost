@@ -17,6 +17,37 @@ pub struct FsStorage {
     max_object_bytes: u64,
 }
 
+/// Create `path` and parents readable by the service user only (the attachments are customer data).
+async fn mkdir(path: &Path) -> std::io::Result<()> {
+    let mut b = fs::DirBuilder::new();
+    b.recursive(true);
+    #[cfg(unix)]
+    b.mode(0o700);
+    b.create(path).await
+}
+
+/// Make a rename durable: flush the directory entry, not just the file contents.
+async fn sync_dir(dir: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        File::open(dir).await?.sync_all().await
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = dir;
+        Ok(())
+    }
+}
+
+/// Owner-only exclusive file creation.
+fn create_new_private() -> OpenOptions {
+    let mut o = OpenOptions::new();
+    o.write(true).create_new(true);
+    #[cfg(unix)]
+    o.mode(0o600);
+    o
+}
+
 /// Removes the file on drop unless disarmed, so errors and cancelled futures leave no partial files.
 struct TempGuard(Option<PathBuf>);
 
@@ -38,7 +69,7 @@ impl FsStorage {
     /// Creates `root` if missing and resolves it once; a symlinked root itself is followed
     /// (operator-configured), symlinks below it are not.
     pub async fn new(root: impl AsRef<Path>, max_object_bytes: u64) -> Result<Self> {
-        fs::create_dir_all(root.as_ref()).await?;
+        mkdir(root.as_ref()).await?;
         let root = fs::canonicalize(root.as_ref()).await?;
         Ok(Self {
             root,
@@ -105,11 +136,7 @@ impl FsStorage {
         mut body: R,
         tmp: &Path,
     ) -> Result<(u64, String)> {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(tmp)
-            .await?;
+        let mut file = create_new_private().open(tmp).await?;
         let mut hasher = Sha256::new();
         let mut buf = vec![0u8; CHUNK];
         let mut size = 0u64;
@@ -133,6 +160,35 @@ impl FsStorage {
     }
 }
 
+impl FsStorage {
+    /// Delete leftovers in `<root>/.tmp` older than `older_than` (a crash between create and
+    /// rename). Returns how many files went. A live upload is never that old.
+    pub async fn sweep_tmp(&self, older_than: std::time::Duration) -> Result<u64> {
+        let dir = self.root.join(TMP_DIR);
+        let mut rd = match fs::read_dir(&dir).await {
+            Ok(rd) => rd,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+            Err(e) => return Err(e.into()),
+        };
+        let mut removed = 0;
+        while let Some(entry) = rd.next_entry().await? {
+            // symlink_metadata: never follow a link planted in the temp dir.
+            let Ok(m) = fs::symlink_metadata(entry.path()).await else {
+                continue;
+            };
+            let old = m
+                .modified()
+                .ok()
+                .and_then(|t| t.elapsed().ok())
+                .is_some_and(|age| age >= older_than);
+            if m.is_file() && old && fs::remove_file(entry.path()).await.is_ok() {
+                removed += 1;
+            }
+        }
+        Ok(removed)
+    }
+}
+
 impl Storage for FsStorage {
     type Reader = File;
 
@@ -146,10 +202,10 @@ impl Storage for FsStorage {
         let (data_path, meta_path) = self.locate(&key).await?;
 
         let tmp_dir = self.root.join(TMP_DIR);
-        fs::create_dir_all(&tmp_dir).await?;
+        mkdir(&tmp_dir).await?;
         Self::check_dir(&tmp_dir).await?;
         let dir = data_path.parent().expect("key has a parent");
-        fs::create_dir_all(dir).await?;
+        mkdir(dir).await?;
         // Re-check after creation: a symlink planted between locate and create_dir_all.
         self.locate(&key).await?;
 
@@ -167,7 +223,10 @@ impl Storage for FsStorage {
             content_type: sanitize_content_type(meta.content_type.as_deref().unwrap_or("")),
         };
         let json = serde_json::to_vec(&obj).map_err(|e| Error::Meta(e.to_string()))?;
-        fs::write(&tmp_meta, json).await?;
+        let mut meta_file = create_new_private().open(&tmp_meta).await?;
+        meta_file.write_all(&json).await?;
+        meta_file.sync_all().await?;
+        drop(meta_file);
 
         // Sidecar first: an object without data is invisible, data without sidecar is not.
         fs::rename(&tmp_meta, &meta_path).await?;
@@ -177,6 +236,8 @@ impl Storage for FsStorage {
             return Err(e.into());
         }
         g_data.disarm();
+        // Both renames are in `dir`: one directory flush makes them durable before the DB row exists.
+        sync_dir(dir).await?;
         Ok(obj)
     }
 
@@ -490,5 +551,40 @@ mod tests {
         ));
         assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
         assert!(tmp_is_empty(&s));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn files_and_dirs_are_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let (_d, s) = store(1024).await;
+        let k = s.put(&b"secret"[..], PutMeta::default()).await.unwrap().key;
+        let (data, meta) = s.locate(&k).await.unwrap();
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&data), 0o600);
+        assert_eq!(mode(&meta), 0o600);
+        assert_eq!(mode(data.parent().unwrap()), 0o700);
+        assert_eq!(mode(&s.root.join(TMP_DIR)), 0o700);
+    }
+
+    #[tokio::test]
+    async fn sweep_removes_only_old_temp_files() {
+        let (_d, s) = store(1024).await;
+        s.put(&b"x"[..], PutMeta::default()).await.unwrap();
+        let tmp = s.root.join(TMP_DIR);
+        std::fs::write(tmp.join("stale.data"), b"junk").unwrap();
+        // fresh files stay
+        assert_eq!(s.sweep_tmp(Duration::from_secs(3600)).await.unwrap(), 0);
+        assert!(tmp.join("stale.data").exists());
+        // old enough: gone, and stored objects are untouched
+        assert_eq!(s.sweep_tmp(Duration::ZERO).await.unwrap(), 1);
+        assert!(!tmp.join("stale.data").exists());
+        assert_eq!(s.sweep_tmp(Duration::ZERO).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn sweep_without_a_temp_dir_is_a_no_op() {
+        let (_d, s) = store(1024).await;
+        assert_eq!(s.sweep_tmp(Duration::ZERO).await.unwrap(), 0);
     }
 }

@@ -1,5 +1,3 @@
-use std::collections::hash_map::RandomState;
-use std::hash::{BuildHasher, Hasher};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -147,11 +145,8 @@ fn angle(field: &'static str, id: &str) -> Result<String, Error> {
 }
 
 fn random_id() -> String {
-    let (a, b) = (
-        RandomState::new().build_hasher().finish(),
-        RandomState::new().build_hasher().finish(),
-    );
-    format!("{a:016x}{b:016x}")
+    // v4 UUIDs come from the OS CSPRNG; Message-IDs must not be guessable.
+    uuid::Uuid::new_v4().simple().to_string()
 }
 
 /// Build the MIME message. Returns it with its Message-ID.

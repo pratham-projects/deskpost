@@ -206,6 +206,21 @@ impl Config {
             argon2: Argon2Cost::PRODUCTION,
             mail: crate::mail_config::MailConfig::from_lookup(&get, &mut errs),
         };
+        let m = &config.mail;
+        if m.max_file_bytes > m.max_request_bytes {
+            errs.push("SD_MAX_FILE_BYTES must not exceed SD_MAX_REQUEST_BYTES".into());
+        }
+        if config.upload_limit <= m.max_request_bytes {
+            errs.push(
+                "SD_UPLOAD_LIMIT_BYTES must be larger than SD_MAX_REQUEST_BYTES (multipart overhead)"
+                    .into(),
+            );
+        }
+        if config.webhook_limit < m.max_request_bytes / 3 * 4 {
+            errs.push(
+                "SD_WEBHOOK_LIMIT_BYTES must fit SD_MAX_REQUEST_BYTES as base64 (4/3 of it)".into(),
+            );
+        }
         if errs.is_empty() {
             Ok(config)
         } else {

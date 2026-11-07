@@ -1,5 +1,12 @@
 # Changelog
 
+## [2026-11-07] R51 review leftovers (P2)
+
+- **Fixed (M8)**: agent replies go through the persisted outbox. `post_agent` queues message + `pending` log + `reply` job in one transaction (migration 0004: `mail_outbox.message_id`, `sent_by_user_id`, kind `reply`); `run_outbox_once` sends via `state.mailer` with retry/backoff; `/messages` and attachment upload share the path, both answer 201, no SMTP in the request. `docs/API.md` section 6.7 and 9 updated.
+- **Fixed (auth-api LOW)**: L1 `Pagination` uses `saturating_add`; L2 archived projects refuse widget/key auth; L3 member add needs a visible, active user (no UUID oracle); L4 outbox per-job 45 s timeout, lease = batch x timeout + 60 s, crash loops dead-lettered (`dead_letter_exhausted`), a bookkeeping error no longer aborts the batch; L6 sign-up name rejects control chars; L7 attachment delete tolerates a missing file; L8 request timeout (120 s) and in-flight cap (512) layers; L10 `u32::try_from` for ticket numbers. L5 (SSRF ranges) was already in `sd_mail::guard`; L9 documented.
+- **Fixed (mail-storage LOW)**: L1 executables refused by content, octet-stream resolved by extension; L3 `.tmp` sweep (housekeeping, 24 h); L4 0600/0700 modes; L5 directory fsync after rename; L7 percent-decoded `X-Filename`/`X-Message`; L9 startup check that file < request < upload/webhook limits, decoded webhook attachment size rechecked; L10 webhook `to` normalised (bounds already in ingest); L11 storage sanitiser trims after truncation; L12 `random_id` uses a v4 UUID; L6 as above. L2 (orphan GC) and L8 (bearer token URL) documented in `SECURITY.md` "Accepted risks"; L13 kept (tested helpers).
+- **Lesson**: [one durable send path](/wisdom/time-traps.md): a reply sent inline and an auto-response queued had different failure semantics, and the inline one could mail before the message existed; queue in the same transaction as the row it describes.
+
 ## [2026-11-07] R50 backend fixes
 
 - **Creation**: SSRF check at connect time, IMAP timeouts and size-bounded fetch, ingest sanitising and sender check, signup off by default, client scope on tickets, status race, no reflected text in auto-responses, mailbox approval by a global admin (migration 0003), attachment mail after commit (same rule as `/messages`), streamed downloads, summed attachment size cap, per-account login throttle, bounded hashing queue.

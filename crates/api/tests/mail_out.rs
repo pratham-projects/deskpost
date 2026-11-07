@@ -63,7 +63,24 @@ async fn reply_has_threading_headers_credentials_and_a_log(pool: PgPool) {
     assert_eq!(m.from.as_deref(), Some(MAILBOX));
     assert_eq!(m.text.as_deref().map(str::trim), Some("We are on it"));
 
-    // The next reply continues the chain from the one before (known through the email log).
+    // The next reply continues the chain from the one before (known through the email log the
+    // outbox marks sent).
+    let log = sd_db::email_logs::create(
+        &k.t.pool,
+        &sd_db::email_logs::NewEmailLog {
+            project_id: project.id,
+            ticket_id: ticket.id,
+            message_id: None,
+            to_email: first.to.clone(),
+            subject: None,
+            sent_by_user_id: None,
+        },
+    )
+    .await
+    .unwrap();
+    sd_db::email_logs::mark_sent(&k.t.pool, log.id, &first.email_message_id)
+        .await
+        .unwrap();
     let second =
         k.t.state
             .mailer
@@ -77,19 +94,6 @@ async fn reply_has_threading_headers_credentials_and_a_log(pool: PgPool) {
     assert_eq!(
         second.references.as_deref(),
         Some(format!("client-1@mail.example {}", first.email_message_id).as_str())
-    );
-
-    let logs: Vec<(String, Option<String>)> =
-        sqlx::query_as("SELECT status, smtp_message_id FROM email_logs ORDER BY created_at")
-            .fetch_all(&k.t.pool)
-            .await
-            .unwrap();
-    assert_eq!(
-        logs,
-        [
-            ("sent".into(), Some(first.email_message_id)),
-            ("sent".into(), Some(second.email_message_id))
-        ]
     );
 }
 

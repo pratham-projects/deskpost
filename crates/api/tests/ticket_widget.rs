@@ -195,6 +195,7 @@ async fn widget_response_and_mail_never_expose_internal_notes(pool: PgPool) {
     .await;
     e.reply(&id, &e.owner, j("public reply")).await;
     assert!(!r.text().contains("TOP-SECRET-NOTE"));
+    api::mail_out::run_outbox_once(&e.t.state).await.unwrap();
     // the only customer-facing paths: the mail and the widget response
     for m in e.mailer.sent.lock().unwrap().iter() {
         assert!(!m.body.contains("TOP-SECRET-NOTE"));
@@ -208,4 +209,28 @@ async fn widget_response_and_mail_never_expose_internal_notes(pool: PgPool) {
         )
         .await;
     assert_eq!(g.status, 401);
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn archived_project_refuses_widget_tickets(pool: PgPool) {
+    let e = Env::new(pool).await;
+    assert_eq!(submit(&e, Some(KEY), &fields(&e)).await.status, 201);
+    sqlx::query("UPDATE projects SET is_archived = true WHERE id = $1")
+        .bind(e.project.id)
+        .execute(&e.t.pool)
+        .await
+        .unwrap();
+    let r = submit(&e, Some(KEY), &fields(&e)).await;
+    assert!(
+        r.status == 401 || r.status == 403 || r.status == 404,
+        "{}",
+        r.status
+    );
+    // un-archiving restores it
+    sqlx::query("UPDATE projects SET is_archived = false WHERE id = $1")
+        .bind(e.project.id)
+        .execute(&e.t.pool)
+        .await
+        .unwrap();
+    assert_eq!(submit(&e, Some(KEY), &fields(&e)).await.status, 201);
 }

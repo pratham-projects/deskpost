@@ -70,7 +70,7 @@ fn validate_account(email: &str, password: &str, name: &str) -> Result<(String, 
         f.add("password", "Password must be 8 to 128 characters.");
     }
     let name = name.trim().to_string();
-    if name.is_empty() || name.chars().count() > 255 {
+    if name.is_empty() || name.chars().count() > 255 || name.chars().any(char::is_control) {
         f.add("name", "Name must be 1 to 255 characters.");
     }
     f.finish()?;

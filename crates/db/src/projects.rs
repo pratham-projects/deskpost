@@ -355,12 +355,14 @@ async fn apply_mail(
 
 // ---- system side (no actor): public widget, inbound mail, workers ----
 
-/// Public widget auth: the project whose API key hashes to `api_key_hash`.
+/// Public widget auth: the active, non-archived project whose API key hashes to `api_key_hash`.
 pub async fn find_by_api_key_hash(pool: &Pool, api_key_hash: &str) -> Result<Option<Id>> {
-    sqlx::query_scalar("SELECT id FROM projects WHERE api_key_hash = $1 AND status = 'active'")
-        .bind(api_key_hash)
-        .fetch_optional(pool)
-        .await
+    sqlx::query_scalar(
+        "SELECT id FROM projects WHERE api_key_hash = $1 AND status = 'active' AND NOT is_archived",
+    )
+    .bind(api_key_hash)
+    .fetch_optional(pool)
+    .await
 }
 
 /// Inbound mail routing: the one active, non-archived project whose mailbox address is `email` and

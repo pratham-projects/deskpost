@@ -18,7 +18,7 @@ mod create;
 mod dto;
 mod messages;
 
-pub use messages::deliver as deliver_reply;
+pub use messages::reply_outbox_for;
 mod read;
 mod unread;
 mod viewers;

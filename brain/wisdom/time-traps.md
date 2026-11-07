@@ -38,3 +38,6 @@ Carried over from bunfiiliate:
 
 - Static export (`output: "export"`) cannot run under `next start`. Serve `out/` with Caddy; check the Docker target, not just the e2e Caddy path.
 - **login to a chosen server proves nothing**: neither a login nor a code mailed through the tenant's own SMTP proves an address; only the operator (or DNS) can, so the operator approves.
+- Outgoing mail belongs in the outbox, queued in the same transaction as the row it describes. Inline SMTP in a request holds it for the timeout, cannot retry, and (when sent before the commit) mails a message that was then rolled back. `claim_due` bumps `attempts`, so a crash loop needs its own dead-letter pass; size the lease to batch x per-job timeout.
+- `tower::limit` needs the `limit` feature and `tower` as a normal dependency (it was dev-only); `tower_http::TimeoutLayer::new` is deprecated, use `with_status_code`.
+

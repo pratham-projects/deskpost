@@ -43,7 +43,7 @@ is wrong, this document decides; every such case is listed in [Deviations](#devi
 | 422 | `VALIDATION_ERROR` | field validation; `details` = `{ field: message }` |
 | 429 | `RATE_LIMITED` | `Retry-After` header set |
 | 500 | `INTERNAL` | generic message, details only in server logs |
-| 502 | `MAIL_DELIVERY_FAILED` | outbound SMTP failed; nothing was saved (see 6.7) |
+| 502 | `MAIL_DELIVERY_FAILED` | reserved; replies are queued and never answer 502 (see 6.7) |
 
 401 codes `TOKEN_MISSING`, `TOKEN_EXPIRED`, `TOKEN_INVALID` are exactly what `client.ts` matches to trigger refresh.
 
@@ -251,7 +251,7 @@ Errors: 403/404 (admin route, not a member), 401 `TOKEN_INVALID` on the public r
 
 - Created messages are always `senderType: "agent"` with `senderUserId` = caller. (TS let an agent post as `client` and could reopen tickets with it; removed. Client messages arrive only via public create, IMAP and the webhook.)
 - `isInternal: true` => stored as an internal note (`messageType: "note"`), never emailed.
-- Otherwise, unless `sendEmail === false`, the reply is handed to the outbound mailer (`OutboundMailer`, R23) **after the message commits**. A mail failure is logged and recorded in `email_logs` (`failed`); the endpoint still answers `201` (R22 decision, supersedes the earlier "mail first, 502" idea; R23 may revisit).
+- Otherwise, unless `sendEmail === false`, the reply is queued for email **in the same transaction as the message** (a `mail_outbox` job plus a `pending` `email_logs` row). The request never talks to SMTP and always answers `201`. The outbox worker (every 15 s) sends it and stores the Message-ID headers on the message; a failure is retried with backoff (30 s, 2 min, 8 min, 32 min, then 1 h, 5 attempts) and, once given up (or when the project has no SMTP settings), the `email_logs` row is `failed` with the error. A send is cut off after 45 s. This is the single path for `/messages` and attachment uploads.
 - `attachmentIds` must belong to the same ticket and be unlinked; they are linked to the message (422 otherwise).
 - Posting bumps ticket `updatedAt`; a first agent reply sets `firstResponseAt`.
 - Inbound client messages (IMAP/webhook, not an HTTP route here) reopen `resolved`/`closed` tickets to `in_progress`, add an unread row, and de-duplicate on the email `Message-ID`.
@@ -303,8 +303,9 @@ Files live on the server filesystem behind `sd-storage`; the database stores onl
 | `GET /attachments/ticket/:ticketId` | member | | `data: Attachment[]` |
 | `GET /attachments/file/:attachmentId` | member (Bearer, or `?token=` signed download token minted for the viewer) | | raw bytes. `Content-Type` from the stored type; `Content-Disposition: inline` only for the allow-listed safe types (png, jpeg, gif, webp, pdf, plain text), `attachment` for everything else; always `X-Content-Type-Options: nosniff`; `Cache-Control: private` |
 
-- Each upload creates an agent message carrying the file(s) (body = `message` or "Sent an attachment: name" / "Sent N attachments"); the message is emailed when `sendEmail` is true and not internal.
+- Each upload creates an agent message carrying the file(s) (body = `message` or "Sent an attachment: name" / "Sent N attachments"); the message is queued for email (same outbox path and failure semantics as `/messages`) when `sendEmail` is true and not internal. `X-Filename` and `X-Message` may be percent-encoded UTF-8 (raw UTF-8 bytes are accepted too); a `%` that is not a valid escape stays literal.
 - Caps (configurable, defaults): 10 MB per file, 25 MB per request/email, 20 files per request, project quota `storage_quota_mb` (default 1024). Filenames are sanitised (path separators, control chars, leading dots removed, <=255 bytes); the on-disk key is generated (`{projectId}/{ticketId}/{uuid}`), never derived from user input.
+- Content check: a file whose bytes start like a program (Windows PE `MZ`, ELF, Mach-O, `#!`) is refused with `415` whatever type it declares. A missing or `application/octet-stream` type is resolved from the file extension when that maps to an allowed type, else `415`.
 - Allowed types: images, PDF, text, office documents, zip (see `ALLOWED_FILE_TYPES` in `apps/web/lib/api/attachments.ts`; the server list is authoritative and the UI list must be a subset). Others: `415`.
 - UI note: the mock returned a bare `{ attachmentId }`; the real API wraps it in the envelope, so `attachmentsApi.upload*` must read `.data` (R30).
 

@@ -136,6 +136,10 @@ fn to_email(p: Payload, s: &AppState) -> Result<InboundEmail, ApiError> {
             f.add("attachments", "contentBase64 must be base64.");
             continue;
         };
+        // The pre-check above only saw the text length; enforce the cap on what was decoded.
+        if bytes.len() > cfg.max_file_bytes {
+            return Err(ApiError::PayloadTooLarge);
+        }
         attachments.push(InboundAttachment {
             filename: a.filename.clone().unwrap_or_else(|| "attachment".into()),
             content_type: a
@@ -207,7 +211,7 @@ fn to_email(p: Payload, s: &AppState) -> Result<InboundEmail, ApiError> {
             .unwrap_or_default(),
         from,
         from_name: None,
-        to: vec![p.to],
+        to: vec![normalize_email(&p.to).unwrap_or(p.to)],
         subject: p.subject,
         text: p.body,
         html: p.body_html,

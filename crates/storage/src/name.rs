@@ -24,6 +24,11 @@ pub fn sanitize_filename(raw: &str) -> String {
     while name.len() > MAX_NAME_BYTES {
         name.pop();
     }
+    // Truncation can leave a trailing dot or space (`name.` is a different name on Windows).
+    name.truncate(
+        name.trim_end_matches(|c: char| c == '.' || c.is_whitespace())
+            .len(),
+    );
     if name.is_empty() { "file".into() } else { name }
 }
 
@@ -92,5 +97,13 @@ mod tests {
             prop_assert!(!n.chars().any(|c| c.is_control() || is_bidi_control(c)));
             prop_assert!(!n.starts_with('.'));
         }
+    }
+
+    #[test]
+    fn truncation_leaves_no_trailing_dot_or_space() {
+        let raw = format!("{} .x", "a".repeat(252));
+        let out = sanitize_filename(&raw);
+        assert!(out.len() <= 255);
+        assert!(!out.ends_with(['.', ' ']), "{out:?}");
     }
 }

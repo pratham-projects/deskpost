@@ -111,8 +111,10 @@ async fn add(
     let role = req.role.map_or(Role::Agent, |r| parse_role(&mut f, &r));
     f.finish()?;
     let target = req.user_id.unwrap_or_default();
-    if users::get(&s.pool, target).await?.is_none() {
-        return Err(ApiError::not_found("User"));
+    // Only users the actor can already see, and only active ones: no UUID probing, no suspended members.
+    match users::get_visible(&s.pool, user.id, target).await? {
+        Some(u) if u.status == sd_db::Status::Active => {}
+        _ => return Err(ApiError::not_found("User")),
     }
     let m = members::add(
         &s.pool,
