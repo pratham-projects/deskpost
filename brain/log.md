@@ -1,5 +1,10 @@
 # Changelog
 
+## [2026-11-07] R2 release automation (feat/release)
+
+- **Done**: cargo-dist workflow (binary `api`, 4 targets, shell installer, sha256), ghcr image workflow, compose and env release assets, `docs/releasing.md`.
+- **Lesson**: `dist plan` passes without `[profile.dist]`, but `dist build` fails with "profile `dist` is not defined". Always run one local `dist build --target aarch64-apple-darwin`, not just plan. Fixed in `Cargo.toml`; local build now produces the tarball and sha256.
+
 ## [2026-11-07] Merge feat/webload, worktree cleanup
 
 - **Merged**: `feat/webload` into `staging` (--no-ff). Conflicts: both branches added migration `0004`; webload's index moved to `0006_tickets_updated_idx.sql`, `migrate_twice_is_a_no_op` expects 6, brain tables/log kept both sides. Worktree and branch removed; one checkout left.
