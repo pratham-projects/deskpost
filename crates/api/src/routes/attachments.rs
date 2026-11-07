@@ -101,6 +101,13 @@ fn validate(state: &AppState, files: &[Upload], message: Option<&str>) -> Result
     if files.iter().any(|u| !upload_type_allowed(&u.content_type)) {
         return Err(ApiError::UnsupportedMediaType);
     }
+    // The declared type is the client's word: refuse programs whatever they claim to be.
+    if files
+        .iter()
+        .any(|u| content_type::looks_executable(&u.bytes))
+    {
+        return Err(ApiError::UnsupportedMediaType);
+    }
     if message.is_some_and(|m| m.chars().count() > MAX_MESSAGE_CHARS) {
         f.add("message", "At most 50000 characters.");
     }
@@ -112,10 +119,18 @@ async fn post_files(
     state: &AppState,
     user: Id,
     ticket_id: Id,
-    files: Vec<Upload>,
+    mut files: Vec<Upload>,
     message: Option<String>,
     send_email: bool,
 ) -> Result<(Vec<Id>, Id), ApiError> {
+    // Clients (curl, some mail apps) send octet-stream or nothing: trust the extension, not that.
+    for u in &mut files {
+        if (u.content_type.is_empty() || u.content_type == "application/octet-stream")
+            && let Some(t) = content_type::type_from_extension(&u.filename)
+        {
+            u.content_type = t.to_string();
+        }
+    }
     let ticket = tickets::get(&state.pool, user, ticket_id)
         .await?
         .ok_or_else(|| ApiError::not_found("Ticket"))?;
@@ -205,9 +220,16 @@ async fn save_message(
         None if names.len() == 1 => format!("Sent an attachment: {}", names[0]),
         None => format!("Sent {} attachments", names.len()),
     };
+    // Same rule as `/messages`: the reply is queued with the message and the outbox worker sends it.
+    let outbox = if send_email {
+        crate::routes::tickets::reply_outbox_for(state, user, ticket.id).await?
+    } else {
+        None
+    };
     let new = NewAgentMessage {
         body,
         attachment_ids: ids.to_vec(),
+        outbox,
         ..Default::default()
     };
     let message = match sd_db::messages::post_agent(&state.pool, user, ticket.id, &new).await? {
@@ -217,15 +239,44 @@ async fn save_message(
             return Err(ApiError::internal("attachments could not be linked"));
         }
     };
-    // Same rule as `/messages`: mail goes out after the commit and a failure never fails the upload.
-    if send_email {
-        crate::routes::tickets::deliver_reply(state, user, &message).await;
-    }
     Ok(message.id)
 }
 
 fn header_str<'a>(h: &'a HeaderMap, name: &str) -> Option<&'a str> {
     h.get(name).and_then(|v| v.to_str().ok())
+}
+
+/// Free text carried in a header (`X-Filename`, `X-Message`). HTTP headers are ASCII, so clients
+/// percent-encode UTF-8 (`%E6%97%A5.pdf`); raw UTF-8 bytes are accepted too. A `%` that does not start
+/// a valid escape stays literal (`100%.pdf`).
+fn header_text(h: &HeaderMap, name: &str) -> Option<String> {
+    let raw = std::str::from_utf8(h.get(name)?.as_bytes()).ok()?;
+    Some(percent_decode(raw))
+}
+
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let hex = |c: u8| (c as char).to_digit(16);
+        match (
+            b[i],
+            b.get(i + 1).copied().and_then(hex),
+            b.get(i + 2).copied().and_then(hex),
+        ) {
+            (b'%', Some(hi), Some(lo)) => {
+                out.push((hi * 16 + lo) as u8);
+                i += 3;
+            }
+            (c, _, _) => {
+                out.push(c);
+                i += 1;
+            }
+        }
+    }
+    // Decoded bytes that are not UTF-8 mean it was not an encoding: keep what the client sent.
+    String::from_utf8(out).unwrap_or_else(|_| s.to_string())
 }
 
 fn flag(h: &HeaderMap, name: &str) -> bool {
@@ -241,14 +292,12 @@ async fn upload_one(
 ) -> Result<Envelope<Value>, ApiError> {
     let body = body.map_err(|_| ApiError::PayloadTooLarge)?;
     let upload = Upload {
-        filename: header_str(&headers, "x-filename")
-            .unwrap_or("file")
-            .to_string(),
+        filename: header_text(&headers, "x-filename").unwrap_or_else(|| "file".into()),
         content_type: normalize(header_str(&headers, "content-type").unwrap_or_default())
             .unwrap_or_default(),
         bytes: body.to_vec(),
     };
-    let message = header_str(&headers, "x-message").map(str::to_string);
+    let message = header_text(&headers, "x-message");
     let (ids, message_id) = post_files(
         &s,
         user.id,
@@ -453,11 +502,42 @@ async fn remove(
         .ok_or_else(|| {
             ApiError::Forbidden("Only the uploader or a project admin can delete a file.".into())
         })?;
-    s.store
-        .fs()
-        .await?
-        .delete(&key)
-        .await
-        .map_err(ApiError::internal)?;
+    // The row is gone; a file that is already missing is the state we wanted.
+    match s.store.fs().await?.delete(&key).await {
+        Ok(()) | Err(sd_storage::Error::NotFound) => {}
+        Err(e) => tracing::warn!(error = %e, "attachment file not removed"),
+    }
     Ok(Envelope::ok(json!({ "success": true, "id": id })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn percent_encoded_utf8_is_decoded() {
+        assert_eq!(percent_decode("%E6%97%A5%E6%9C%AC.pdf"), "日本.pdf");
+        assert_eq!(percent_decode("a%20b"), "a b");
+        assert_eq!(percent_decode("plain.txt"), "plain.txt");
+    }
+
+    #[test]
+    fn stray_percent_stays_literal() {
+        assert_eq!(percent_decode("100%.pdf"), "100%.pdf");
+        assert_eq!(percent_decode("50%zz"), "50%zz");
+        assert_eq!(percent_decode("%"), "%");
+        // not UTF-8 once decoded: not an encoding
+        assert_eq!(percent_decode("%FF%FE"), "%FF%FE");
+    }
+
+    #[test]
+    fn raw_utf8_header_is_accepted() {
+        let mut h = HeaderMap::new();
+        h.insert(
+            "x-filename",
+            HeaderValue::from_bytes("日本.pdf".as_bytes()).unwrap(),
+        );
+        assert_eq!(header_text(&h, "x-filename").as_deref(), Some("日本.pdf"));
+        assert_eq!(header_text(&h, "x-message"), None);
+    }
 }

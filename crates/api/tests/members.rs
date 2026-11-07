@@ -50,10 +50,51 @@ async fn list_and_search_are_member_only(pool: PgPool) {
     );
 }
 
+/// A user the project admins can see because they share another project with them.
+async fn visible_user(w: &W, email: &str, slug: &str) -> sd_db::users::User {
+    let u = w.t.user(email, Role::Agent).await;
+    let side = w.t.project(w.owner.id, slug).await;
+    w.t.add_member(w.owner.id, side.id, w.admin.id, Role::Agent)
+        .await;
+    w.t.add_member(w.owner.id, side.id, u.id, Role::Agent).await;
+    u
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn add_member_needs_a_visible_active_user(pool: PgPool) {
+    let w = world(pool).await;
+    // Shares no project with the actor: indistinguishable from an unknown id.
+    let stranger = w.t.user("stranger@example.com", Role::Agent).await;
+    let probe = w
+        .post(&base(&w), &w.owner.token, json!({ "userId": stranger.id }))
+        .await;
+    let unknown = w
+        .post(
+            &base(&w),
+            &w.owner.token,
+            json!({ "userId": Uuid::new_v4() }),
+        )
+        .await;
+    assert_eq!((probe.status.as_u16(), unknown.status.as_u16()), (404, 404));
+    assert_eq!(probe.text(), unknown.text(), "no oracle for user ids");
+    assert!(!probe.text().contains("stranger@example.com"));
+    // Visible but suspended: refused too.
+    let gone = visible_user(&w, "gone@example.com", "side-a").await;
+    sqlx::query("UPDATE users SET status = 'suspended' WHERE id = $1")
+        .bind(gone.id)
+        .execute(&w.t.pool)
+        .await
+        .unwrap();
+    let r = w
+        .post(&base(&w), &w.owner.token, json!({ "userId": gone.id }))
+        .await;
+    assert_eq!(r.status, 404);
+}
+
 #[sqlx::test(migrations = "../db/migrations")]
 async fn add_member_role_matrix_and_validation(pool: PgPool) {
     let w = world(pool).await;
-    let newbie = w.t.user("new@example.com", Role::Agent).await;
+    let newbie = visible_user(&w, "new@example.com", "side-n").await;
     let body = json!({ "userId": newbie.id });
     // Agents are refused, outsiders get 404, and a refused add changes nothing.
     for (who, want) in [(&w.agent, 403), (&w.other, 404), (&w.root, 404)] {
@@ -101,7 +142,7 @@ async fn add_member_role_matrix_and_validation(pool: PgPool) {
     ] {
         assert_eq!(w.post(&base(&w), &w.owner.token, bad).await.status, 422);
     }
-    let admin = w.t.user("adm2@example.com", Role::Agent).await;
+    let admin = visible_user(&w, "adm2@example.com", "side-2").await;
     let r = w
         .post(
             &base(&w),

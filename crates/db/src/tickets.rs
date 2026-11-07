@@ -146,7 +146,7 @@ pub async fn create(pool: &Pool, access: &Access, new: &NewTicket) -> Result<Opt
         }
         Access::ApiKeyHash(hash) => {
             sqlx::query_scalar(
-                "SELECT EXISTS (SELECT 1 FROM projects WHERE id = $1 AND api_key_hash = $2 AND status = 'active')",
+                "SELECT EXISTS (SELECT 1 FROM projects WHERE id = $1 AND api_key_hash = $2 AND status = 'active' AND NOT is_archived)",
             )
             .bind(new.project_id)
             .bind(hash)

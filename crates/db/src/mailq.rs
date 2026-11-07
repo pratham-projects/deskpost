@@ -274,6 +274,9 @@ pub struct OutboxJob {
     pub kind: String,
     /// Attempts including the one just claimed.
     pub attempts: i32,
+    /// The agent reply to send (`kind = 'reply'` only).
+    pub message_id: Option<Id>,
+    pub sent_by_user_id: Option<Id>,
 }
 
 /// Pending rows one project may hold; beyond it new auto-responses are dropped, not queued.
@@ -342,11 +345,46 @@ pub async fn claim_due(pool: &Pool, limit: i64, lease_secs: i64) -> Result<Vec<O
                 next_attempt_at = now() + make_interval(secs => $2)
          WHERE id IN (SELECT id FROM mail_outbox WHERE status = 'pending' AND next_attempt_at <= now()
                       ORDER BY next_attempt_at, id LIMIT $1 FOR UPDATE SKIP LOCKED)
-         RETURNING id, project_id, ticket_id, email_log_id, kind, attempts",
+         RETURNING id, project_id, ticket_id, email_log_id, kind, attempts, message_id, sent_by_user_id",
     )
     .bind(limit.clamp(1, 100))
     .bind(lease_secs as f64)
     .fetch_all(pool)
+    .await
+}
+
+/// Give up on pending jobs already claimed `max_attempts` times without an outcome (the worker died
+/// mid-send, repeatedly). Returns how many were dead-lettered. Run before `claim_due`.
+pub async fn dead_letter_exhausted(pool: &Pool, max_attempts: i32) -> Result<u64> {
+    let mut tx = pool.begin().await?;
+    let ids: Vec<Id> = sqlx::query_scalar(
+        "UPDATE mail_outbox SET status = 'dead', updated_at = now(),
+                last_error = COALESCE(last_error, 'gave up: the worker died while sending')
+         WHERE status = 'pending' AND attempts >= $1 AND next_attempt_at <= now()
+         RETURNING email_log_id",
+    )
+    .bind(max_attempts)
+    .fetch_all(&mut *tx)
+    .await?;
+    sqlx::query(
+        "UPDATE email_logs SET status = 'failed', error = 'gave up: the worker died while sending',
+                updated_at = now() WHERE id = ANY($1) AND status = 'pending'",
+    )
+    .bind(&ids)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(ids.len() as u64)
+}
+
+/// Body and attachment ids of a reply message, read when the job is sent.
+pub async fn reply_source(pool: &Pool, message_id: Id) -> Result<Option<(String, Vec<Id>)>> {
+    sqlx::query_as(
+        "SELECT m.body, ARRAY(SELECT a.id FROM attachments a WHERE a.message_id = m.id ORDER BY a.created_at, a.id)
+         FROM messages m WHERE m.id = $1",
+    )
+    .bind(message_id)
+    .fetch_optional(pool)
     .await
 }
 

@@ -535,6 +535,9 @@ async fn multipart_with_email_sends_attachments_and_threads(pool: PgPool) {
     let ids = r.json()["data"]["attachmentIds"].as_array().unwrap().len();
     assert_eq!(ids, 2);
 
+    // Queued with the message; nothing is sent inside the request.
+    assert!(smtp.messages().is_empty());
+    assert_eq!(api::mail_out::run_outbox_once(&k.t.state).await.unwrap(), 1);
     let mails = smtp.messages();
     assert_eq!(mails.len(), 1);
     assert_eq!(mails[0].rcpt_to, ["client@example.com"]);
@@ -585,9 +588,11 @@ async fn failed_mail_is_logged_and_never_fails_the_upload(pool: PgPool) {
     };
     // Not configured at all, then server unreachable: the upload and message are saved either way.
     assert_eq!(up("a.txt").await.status.as_u16(), 201);
+    api::mail_out::run_outbox_once(&k.t.state).await.unwrap();
     k.configure_mail(project.id, closed_port(), None).await;
     let r = up("b.txt").await;
     assert_eq!(r.status.as_u16(), 201);
+    api::mail_out::run_outbox_once(&k.t.state).await.unwrap();
     assert!(!r.text().contains("smtp-secret-pw"));
     assert_eq!(
         (k.count("attachments").await, k.count("messages").await),
@@ -599,10 +604,15 @@ async fn failed_mail_is_logged_and_never_fails_the_upload(pool: PgPool) {
             .await
             .unwrap();
     assert_eq!(logs.len(), 2);
-    for (status, error) in logs {
-        assert_eq!(status, "failed");
-        assert!(!error.unwrap_or_default().contains("smtp-secret-pw"));
-    }
+    // Not configured: given up at once. Unreachable: still pending, retried with backoff.
+    assert_eq!(logs[0].0, "failed");
+    assert_eq!(logs[1], ("pending".to_string(), None));
+    let last: Option<String> =
+        sqlx::query_scalar("SELECT last_error FROM mail_outbox WHERE status = 'pending'")
+            .fetch_one(&k.t.pool)
+            .await
+            .unwrap();
+    assert!(!last.unwrap_or_default().contains("smtp-secret-pw"));
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
@@ -625,6 +635,11 @@ async fn upload_without_email_does_not_touch_the_mailer(pool: PgPool) {
             .header("x-message", "see attached");
     let r = k.t.send_body(req, Body::from("abc")).await;
     assert_eq!(r.status, 201);
+    assert!(
+        k.recorder.sent.lock().unwrap().is_empty(),
+        "queued, not sent in the request"
+    );
+    api::mail_out::run_outbox_once(&k.t.state).await.unwrap();
     {
         let sent = k.recorder.sent.lock().unwrap();
         assert_eq!(sent.len(), 1);
@@ -646,4 +661,119 @@ async fn upload_without_email_does_not_touch_the_mailer(pool: PgPool) {
         .unwrap()
     );
     assert_eq!(stored, json!("recorded-1@test.invalid"));
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn programs_are_refused_whatever_type_they_claim(pool: PgPool) {
+    let k = Kit::new(pool).await;
+    let (_, _, ticket, s) = k.tenant("owner@example.com", "acme").await;
+    for (name, bytes) in [
+        ("invoice.pdf", &b"MZ\x90\x00\x03"[..]),
+        ("report.pdf", b"\x7fELF\x02\x01"),
+        ("notes.txt", b"#!/bin/sh\nrm -rf /\n"),
+    ] {
+        let r = k
+            .put(&s.access_token, ticket.id, name, "application/pdf", bytes)
+            .await;
+        assert_eq!(r.status, 415, "{name}");
+    }
+    assert_eq!(k.count("attachments").await, 0);
+    assert_eq!(k.stored_files(), 0);
+    // an ordinary PDF still goes through
+    let ok = k
+        .put(
+            &s.access_token,
+            ticket.id,
+            "ok.pdf",
+            "application/pdf",
+            b"%PDF-1.7 hi",
+        )
+        .await;
+    assert_eq!(ok.status, 201, "{}", ok.text());
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn octet_stream_is_resolved_by_extension_only_when_allowed(pool: PgPool) {
+    let k = Kit::new(pool).await;
+    let (_, _, ticket, s) = k.tenant("owner@example.com", "acme").await;
+    for ct in ["application/octet-stream", ""] {
+        let r = k
+            .put(&s.access_token, ticket.id, "scan.pdf", ct, b"%PDF-1.4 x")
+            .await;
+        assert_eq!(r.status, 201, "{ct:?}: {}", r.text());
+    }
+    let stored: Vec<String> = sqlx::query_scalar("SELECT DISTINCT mime_type FROM attachments")
+        .fetch_all(&k.t.pool)
+        .await
+        .unwrap();
+    assert_eq!(stored, ["application/pdf"]);
+    // an unknown extension stays refused
+    let r = k
+        .put(
+            &s.access_token,
+            ticket.id,
+            "tool.exe",
+            "application/octet-stream",
+            b"abc",
+        )
+        .await;
+    assert_eq!(r.status, 415);
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn percent_encoded_filename_and_message_headers_are_decoded(pool: PgPool) {
+    let k = Kit::new(pool).await;
+    let (_, _, ticket, s) = k.tenant("owner@example.com", "acme").await;
+    let req =
+        k.t.req(Method::PUT, &format!("/attachments/{}", ticket.id))
+            .bearer(&s.access_token)
+            .header("content-type", "text/plain")
+            .header("x-filename", "%E6%97%A5%E6%9C%AC.txt")
+            .header("x-message", "caf%C3%A9 100%25");
+    let r = k.t.send_body(req, Body::from("abc")).await;
+    assert_eq!(r.status, 201, "{}", r.text());
+    let name: String = sqlx::query_scalar("SELECT filename FROM attachments")
+        .fetch_one(&k.t.pool)
+        .await
+        .unwrap();
+    assert_eq!(name, "日本.txt");
+    let body: String = sqlx::query_scalar("SELECT body FROM messages WHERE sender_type = 'agent'")
+        .fetch_one(&k.t.pool)
+        .await
+        .unwrap();
+    assert_eq!(body, "café 100%");
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn deleting_a_file_whose_bytes_are_gone_still_succeeds(pool: PgPool) {
+    let k = Kit::new(pool).await;
+    let (_, _, ticket, s) = k.tenant("owner@example.com", "acme").await;
+    let up = k
+        .put(&s.access_token, ticket.id, "a.txt", "text/plain", b"abc")
+        .await;
+    let id = up.json()["data"]["attachmentId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let key: String = sqlx::query_scalar("SELECT storage_key FROM attachments")
+        .fetch_one(&k.t.pool)
+        .await
+        .unwrap();
+    k.t.state.store.fs().await.unwrap();
+    // remove the bytes behind the row's back
+    use sd_storage::Storage;
+    k.t.state
+        .store
+        .fs()
+        .await
+        .unwrap()
+        .delete(&key)
+        .await
+        .unwrap();
+    let req =
+        k.t.req(Method::DELETE, &format!("/attachments/file/{id}"))
+            .bearer(&s.access_token);
+    let r = k.t.send(req).await;
+    assert_eq!(r.status, 200, "{}", r.text());
+    assert_eq!(k.count("attachments").await, 0);
 }

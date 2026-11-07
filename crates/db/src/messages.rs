@@ -48,6 +48,15 @@ pub struct NewAgentMessage {
     pub email_references: Option<String>,
     pub email_to: Option<String>,
     pub email_subject: Option<String>,
+    /// Queue the reply for email in the same transaction (ignored for internal notes).
+    pub outbox: Option<ReplyOutbox>,
+}
+
+/// Who and what an emailed reply is addressed to; recorded on the `email_logs` row at queue time.
+#[derive(Debug, Clone)]
+pub struct ReplyOutbox {
+    pub to_email: String,
+    pub subject: String,
 }
 
 #[derive(Debug, Clone)]
@@ -182,6 +191,34 @@ pub async fn post_agent(
     .bind(new.is_internal)
     .execute(&mut *tx)
     .await?;
+    if let (Some(out), false) = (&new.outbox, new.is_internal) {
+        let log_id = new_id();
+        sqlx::query(
+            "INSERT INTO email_logs (id, project_id, ticket_id, message_id, to_email, subject, sent_by_user_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        )
+        .bind(log_id)
+        .bind(project_id)
+        .bind(ticket_id)
+        .bind(id)
+        .bind(&out.to_email)
+        .bind(&out.subject)
+        .bind(actor)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "INSERT INTO mail_outbox (id, project_id, ticket_id, email_log_id, kind, message_id, sent_by_user_id)
+             VALUES ($1, $2, $3, $4, 'reply', $5, $6)",
+        )
+        .bind(new_id())
+        .bind(project_id)
+        .bind(ticket_id)
+        .bind(log_id)
+        .bind(id)
+        .bind(actor)
+        .execute(&mut *tx)
+        .await?;
+    }
     let message = sqlx::query_as(&format!("{SELECT} WHERE m.id = $1"))
         .bind(id)
         .fetch_one(&mut *tx)

@@ -13,7 +13,13 @@ use axum::http::{Method, Request};
 use axum::routing::get;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
+
+/// A request that has not finished after this long is answered 408 (slow-client / slowloris bound).
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
+/// Requests handled at once; more wait for a slot instead of exhausting the pool and memory.
+const MAX_IN_FLIGHT: usize = 512;
 
 pub mod client_ip;
 pub mod config;
@@ -109,6 +115,11 @@ pub fn build_app_with(state: AppState, extra: Router<AppState>) -> Router {
             }),
         )
         .layer(cors)
+        .layer(TimeoutLayer::with_status_code(
+            axum::http::StatusCode::REQUEST_TIMEOUT,
+            REQUEST_TIMEOUT,
+        ))
+        .layer(tower::limit::ConcurrencyLimitLayer::new(MAX_IN_FLIGHT))
         .with_state(state);
     if cfg.cookie_secure {
         app.layer(header(

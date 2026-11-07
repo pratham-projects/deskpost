@@ -41,3 +41,6 @@ Carried over from bunfiiliate:
 
 - **pg_dump newer than the server**: a dump from `pg_dump` 18 fails to restore on PG 16 (`unrecognized configuration parameter "transaction_timeout"`). Use matching client tools; `scripts/backup.sh` refuses a mismatch.
 - **systemd `EnvironmentFile` keeps inline `# comments` in the value** and lets the file override `Environment=`. Strip comments when installing `.env.example`.
+- Outgoing mail belongs in the outbox, queued in the same transaction as the row it describes. Inline SMTP in a request holds it for the timeout, cannot retry, and (when sent before the commit) mails a message that was then rolled back. `claim_due` bumps `attempts`, so a crash loop needs its own dead-letter pass; size the lease to batch x per-job timeout.
+- `tower::limit` needs the `limit` feature and `tower` as a normal dependency (it was dev-only); `tower_http::TimeoutLayer::new` is deprecated, use `with_status_code`.
+

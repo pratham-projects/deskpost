@@ -3,7 +3,7 @@ mod tickets_fixture;
 
 use std::sync::Arc;
 
-use api::mail_out::{MailError, RecordingMailer};
+use api::mail_out::{MailError, RecordingMailer, run_outbox_once};
 use axum::http::Method;
 use serde_json::json;
 use sqlx::PgPool;
@@ -20,6 +20,16 @@ async fn reply_happy_path_mails_after_commit(pool: PgPool) {
     assert_eq!(m["messageType"], "reply");
     assert_eq!(m["isInternal"], false);
     assert_eq!(m["sender"]["id"], e.agent_id.to_string());
+    // Queued with the message; the worker sends it.
+    assert!(e.mailer.sent.lock().unwrap().is_empty());
+    let (pending, kind): (String, String) = sqlx::query_as(
+        "SELECT l.status, o.kind FROM email_logs l JOIN mail_outbox o ON o.email_log_id = l.id",
+    )
+    .fetch_one(&e.t.pool)
+    .await
+    .unwrap();
+    assert_eq!((pending.as_str(), kind.as_str()), ("pending", "reply"));
+    assert_eq!(run_outbox_once(&e.t.state).await.unwrap(), 1);
     let sent = e.mailer.sent.lock().unwrap().clone();
     assert_eq!(sent.len(), 1);
     assert_eq!(sent[0].body, "We are on it");
@@ -67,7 +77,16 @@ async fn send_email_false_and_internal_notes_are_never_mailed(pool: PgPool) {
         json!({"body":"still internal","isInternal":true,"sendEmail":true}),
     )
     .await;
+    run_outbox_once(&e.t.state).await.unwrap();
     assert!(e.mailer.sent.lock().unwrap().is_empty());
+    assert_eq!(count(&e, "mail_outbox").await, 0);
+}
+
+async fn count(e: &Env, table: &str) -> i64 {
+    sqlx::query_scalar(&format!("SELECT count(*) FROM {table}"))
+        .fetch_one(&e.t.pool)
+        .await
+        .unwrap()
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
@@ -85,14 +104,59 @@ async fn mail_failure_is_recorded_not_surfaced(pool: PgPool) {
             .json()["pagination"]["total"],
         2
     );
-    let (status, error): (String, Option<String>) =
-        sqlx::query_as("SELECT status, error FROM email_logs WHERE ticket_id = $1")
-            .bind(uuid::Uuid::parse_str(&id).unwrap())
+    // First attempt fails: the job is retried, the log stays pending.
+    run_outbox_once(&e.t.state).await.unwrap();
+    let (status, attempts, err): (String, i32, Option<String>) =
+        sqlx::query_as("SELECT status, attempts, last_error FROM mail_outbox")
             .fetch_one(&e.t.pool)
             .await
             .unwrap();
-    assert_eq!(status, "failed");
-    assert_eq!(error.as_deref(), Some("smtp down"));
+    assert_eq!((status.as_str(), attempts), ("pending", 1));
+    assert_eq!(err.as_deref(), Some("smtp down"));
+    let log: String = sqlx::query_scalar("SELECT status FROM email_logs")
+        .fetch_one(&e.t.pool)
+        .await
+        .unwrap();
+    assert_eq!(log, "pending");
+    // Not due yet: nothing is sent early.
+    assert_eq!(run_outbox_once(&e.t.state).await.unwrap(), 0);
+    // Due again: the retry succeeds and the thread headers are stored.
+    sqlx::query("UPDATE mail_outbox SET next_attempt_at = now()")
+        .execute(&e.t.pool)
+        .await
+        .unwrap();
+    assert_eq!(run_outbox_once(&e.t.state).await.unwrap(), 1);
+    let (log, smtp_id): (String, Option<String>) =
+        sqlx::query_as("SELECT status, smtp_message_id FROM email_logs")
+            .fetch_one(&e.t.pool)
+            .await
+            .unwrap();
+    assert_eq!(log, "sent");
+    assert_eq!(smtp_id.as_deref(), Some("recorded-1@test.invalid"));
+    let stored: Option<String> =
+        sqlx::query_scalar("SELECT email_message_id FROM messages WHERE body = 'hello'")
+            .fetch_one(&e.t.pool)
+            .await
+            .unwrap();
+    assert_eq!(stored.as_deref(), Some("recorded-1@test.invalid"));
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn unconfigured_smtp_gives_up_the_reply_job_at_once(pool: PgPool) {
+    let mailer = Arc::new(RecordingMailer::default());
+    *mailer.fail_next.lock().unwrap() = Some(MailError::NotConfigured);
+    let e = Env::with_mailer(pool, mailer).await;
+    let id = e.ticket_id(&e.owner, "No smtp").await;
+    assert_eq!(e.reply(&id, &e.owner, j("hello")).await.status, 201);
+    run_outbox_once(&e.t.state).await.unwrap();
+    let (job, log, err): (String, String, Option<String>) = sqlx::query_as(
+        "SELECT o.status, l.status, l.error FROM mail_outbox o JOIN email_logs l ON l.id = o.email_log_id",
+    )
+    .fetch_one(&e.t.pool)
+    .await
+    .unwrap();
+    assert_eq!((job.as_str(), log.as_str()), ("dead", "failed"));
+    assert_eq!(err.as_deref(), Some("SMTP not configured"));
 }
 
 #[sqlx::test(migrations = "../db/migrations")]
@@ -129,6 +193,7 @@ async fn message_validation_roles_and_isolation(pool: PgPool) {
         .post(&path, &e.agent, json!({"body":"hi","senderType":"client"}))
         .await;
     assert_eq!(r.json()["data"]["senderType"], "agent");
+    run_outbox_once(&e.t.state).await.unwrap();
     assert!(e.mailer.sent.lock().unwrap().len() == 1);
 }
 

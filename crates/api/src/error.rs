@@ -168,7 +168,7 @@ impl Pagination {
             total,
             limit,
             offset,
-            has_more: offset + limit < total,
+            has_more: offset.saturating_add(limit) < total,
         }
     }
 }
@@ -219,5 +219,18 @@ impl<T: Serialize> IntoResponse for Envelope<T> {
     fn into_response(self) -> Response {
         let status = self.status;
         (status, Json(self)).into_response()
+    }
+}
+
+#[cfg(test)]
+mod pagination_tests {
+    use super::Pagination;
+
+    #[test]
+    fn has_more_cannot_overflow() {
+        assert!(!Pagination::new(10, 50, i64::MAX).has_more);
+        assert!(!Pagination::new(10, 200, i64::MAX - 1).has_more);
+        assert!(Pagination::new(10, 5, 0).has_more);
+        assert!(!Pagination::new(10, 5, 5).has_more);
     }
 }

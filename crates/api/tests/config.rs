@@ -174,3 +174,36 @@ fn private_mail_hosts_are_off_unless_asked_for() {
         "SD_ALLOW_PRIVATE_MAIL_HOSTS",
     );
 }
+
+#[test]
+fn size_limits_must_agree() {
+    rejects(
+        &[
+            ("SD_MAX_FILE_BYTES", "2000000"),
+            ("SD_MAX_REQUEST_BYTES", "1000000"),
+        ],
+        "SD_MAX_FILE_BYTES must not exceed",
+    );
+    // raising the mail cap alone would 413 before it: refuse at startup instead
+    rejects(
+        &[("SD_MAX_REQUEST_BYTES", "100000000")],
+        "SD_UPLOAD_LIMIT_BYTES must be larger",
+    );
+    rejects(
+        &[
+            ("SD_MAX_REQUEST_BYTES", "20000000"),
+            ("SD_UPLOAD_LIMIT_BYTES", "26000000"),
+            ("SD_WEBHOOK_LIMIT_BYTES", "26000000"),
+        ],
+        "SD_WEBHOOK_LIMIT_BYTES must fit",
+    );
+    // consistent custom values are fine
+    assert!(
+        Config::from_lookup(env_with(&[
+            ("SD_MAX_REQUEST_BYTES", "50000000"),
+            ("SD_UPLOAD_LIMIT_BYTES", "52000000"),
+            ("SD_WEBHOOK_LIMIT_BYTES", "70000000"),
+        ]))
+        .is_ok()
+    );
+}

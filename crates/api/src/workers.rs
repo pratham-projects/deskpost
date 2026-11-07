@@ -139,12 +139,23 @@ pub async fn auto_close_once(state: &AppState) -> sd_db::Result<usize> {
     Ok(tickets::auto_close_resolved(&state.pool).await?.len())
 }
 
+const TMP_MAX_AGE: Duration = Duration::from_secs(24 * 3600);
+
 async fn housekeeping_once(state: &AppState) -> sd_db::Result<()> {
     let closed = auto_close_once(state).await?;
     if closed > 0 {
         tracing::info!(closed, "auto-closed resolved tickets");
     }
     mailq::purge_finished(&state.pool, OUTBOX_RETENTION_DAYS).await?;
+    // Leftovers of an upload the process died in; nothing live is a day old.
+    match state.store.fs().await {
+        Ok(fs) => match fs.sweep_tmp(TMP_MAX_AGE).await {
+            Ok(n) if n > 0 => tracing::info!(removed = n, "swept stale upload temp files"),
+            Ok(_) => {}
+            Err(e) => tracing::warn!(error = %e, "temp sweep failed"),
+        },
+        Err(e) => tracing::warn!(error = ?e, "storage unavailable for the temp sweep"),
+    }
     Ok(())
 }
 

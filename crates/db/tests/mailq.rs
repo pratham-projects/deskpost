@@ -295,3 +295,53 @@ async fn imap_status_round_trips(pool: Pool) {
         None
     );
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn crash_looping_jobs_are_dead_lettered_not_reclaimed(pool: Pool) {
+    let (_, pa, _, _) = two_tenants(&pool).await;
+    let t = mailq::create_inbound_ticket(&pool, &inbound(pa.id, "m1@x"))
+        .await
+        .unwrap()
+        .unwrap();
+    mailq::enqueue(&pool, pa.id, t.ticket_id, "created", "ann@example.com", "S")
+        .await
+        .unwrap();
+    // Claimed five times, each time the worker died before reporting: leases ran out.
+    for _ in 0..5 {
+        mailq::claim_due(&pool, 10, 600).await.unwrap();
+        sqlx::query("UPDATE mail_outbox SET next_attempt_at = now()")
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    assert_eq!(mailq::dead_letter_exhausted(&pool, 5).await.unwrap(), 1);
+    assert!(mailq::claim_due(&pool, 10, 600).await.unwrap().is_empty());
+    let (job, log): (String, String) = sqlx::query_as(
+        "SELECT o.status, l.status FROM mail_outbox o JOIN email_logs l ON l.id = o.email_log_id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!((job.as_str(), log.as_str()), ("dead", "failed"));
+    // nothing left to give up
+    assert_eq!(mailq::dead_letter_exhausted(&pool, 5).await.unwrap(), 0);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_job_still_inside_its_lease_is_not_dead_lettered(pool: Pool) {
+    let (_, pa, _, _) = two_tenants(&pool).await;
+    let t = mailq::create_inbound_ticket(&pool, &inbound(pa.id, "m1@x"))
+        .await
+        .unwrap()
+        .unwrap();
+    mailq::enqueue(&pool, pa.id, t.ticket_id, "created", "ann@example.com", "S")
+        .await
+        .unwrap();
+    sqlx::query("UPDATE mail_outbox SET attempts = 5")
+        .execute(&pool)
+        .await
+        .unwrap();
+    mailq::claim_due(&pool, 10, 600).await.unwrap();
+    // the 6th claim is leased and in flight
+    assert_eq!(mailq::dead_letter_exhausted(&pool, 5).await.unwrap(), 0);
+}
