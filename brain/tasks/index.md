@@ -17,6 +17,7 @@
 | R50 | review + fixes | done, merged |
 | P3 | feat/deploy | done: deploy verified natively (no docker), `docs/OPERATIONS.md`, `scripts/smoke.sh`, `backup.sh`, `make deploy-check` |
 | P4 | feat/webload | done (e2e for every screen; `scripts/load.sh` + `docs/PERFORMANCE.md`) |
+| P4-merge | feat/webload | merged to staging (migration renumbered 0006) |
 | R60 | final gate | ci + e2e green on staging, main merge awaits approval |
 
 Rules: [Pre-Merge Gate](/wisdom/pre-merge-gate.md).

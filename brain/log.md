@@ -1,5 +1,12 @@
 # Changelog
 
+## [2026-11-07] Merge feat/webload, worktree cleanup
+
+- **Merged**: `feat/webload` into `staging` (--no-ff). Conflicts: both branches added migration `0004`; webload's index moved to `0006_tickets_updated_idx.sql`, `migrate_twice_is_a_no_op` expects 6, brain tables/log kept both sides. Worktree and branch removed; one checkout left.
+- **Gate**: `make ci` green after the merge (first run failed on a stale embedded migration list; db crate rebuilt).
+- **Lesson**: [parallel branches collide on migration numbers, and `sqlx::migrate!` does not rebuild when a file is only added](/wisdom/time-traps.md).
+- **Housekeeping**: dropped unreferenced scratch databases (15 GB); `main` merge still awaits approval.
+
 ## [2026-11-07] P4 web e2e + load
 
 - **Creation**: Playwright specs for every screen (`e2e/tests/screens.spec.ts`; fixes for templates project scope, attachment names, api key display, stale login copy). `scripts/load.sh` (oha on a release API, scratch db `sd_load`, seeds 500 tickets) and `docs/PERFORMANCE.md`. `SD_RATE_LIMIT_SCALE` (default 1) multiplies per-address quotas for load runs. Migration `0006` (renumbered at merge; 0004/0005 are outbox reply and password resets) index `(project_id, updated_at DESC, id DESC)` for the inbox list.

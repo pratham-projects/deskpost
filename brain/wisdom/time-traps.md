@@ -44,3 +44,5 @@ Carried over from bunfiiliate:
 - Outgoing mail belongs in the outbox, queued in the same transaction as the row it describes. Inline SMTP in a request holds it for the timeout, cannot retry, and (when sent before the commit) mails a message that was then rolled back. `claim_due` bumps `attempts`, so a crash loop needs its own dead-letter pass; size the lease to batch x per-job timeout.
 - `tower::limit` needs the `limit` feature and `tower` as a normal dependency (it was dev-only); `tower_http::TimeoutLayer::new` is deprecated, use `with_status_code`.
 
+- Parallel branches pick the next migration number independently: two `0004_*` files fail with a duplicate version at merge. Renumber the later one and bump the applied-count test.
+- `sqlx::migrate!` embeds at compile time and cargo does not notice a newly added file, so tests fail with `VersionMissing(n)` until the db crate is rebuilt (`touch crates/db/src/lib.rs`).
