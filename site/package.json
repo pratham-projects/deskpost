@@ -12,6 +12,7 @@
     "marked": "15.0.12"
   },
   "devDependencies": {
-    "vite": "7.1.12"
+    "vite": "7.1.12",
+    "playwright-core": "1.56.1"
   }
 }

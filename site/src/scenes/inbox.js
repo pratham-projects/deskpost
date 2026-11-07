@@ -92,7 +92,8 @@ registerScene("inbox", ({ cols, rows, rand }) => {
 
   return {
     step(t, dt, ptr, put) {
-      const cyc = t % CYCLE, cn = Math.floor(t / CYCLE);
+      const tt0 = t + 3000;            // start 3 s in so the first paint already shows an envelope forming
+      const cyc = tt0 % CYCLE, cn = Math.floor(tt0 / CYCLE);
       if (cyc >= 7000 && posted !== cn) { posted = cn; post(t); }
 
       for (const p of ps) {
