@@ -1,6 +1,7 @@
 # Changelog
 
 ## [2026-11-07] S2 marketing + docs site "Deskpost" (feat/site)
+- **Review pass**: finish reviewer round 2 = ship. Denser inbox scene, install headline `Run it your way.`, pre-release callout in install doc, Apple M4 on the p50 row, DESIGN.md added.
 
 - **Done**: `site/` Vite vanilla marketing + docs site, brand name Deskpost (site-only rename; repo and binary stay `sendesk` / `api`). Amber skin on the shared kit copied from bunfiiliate (`scripts/sync-kit.sh`), `inbox` ASCII scene, 10 docs pages, Pages workflow, smoke test.
 - **Decision**: install tabs lead with Docker Compose from a clone and Source; Images and Binary tabs say "not published yet" until a release exists (they flip automatically once the GitHub API lists one).
