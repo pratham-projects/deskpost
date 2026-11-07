@@ -44,7 +44,9 @@ impl AppState {
             pool,
             jwt: Arc::new(Jwt::new(&config.jwt_secret)),
             hasher: Arc::new(Hasher::new(config.argon2, concurrency)?),
-            limiter: Arc::new(RateLimiter::new(RATE_LIMIT_KEYS)),
+            limiter: Arc::new(
+                RateLimiter::new(RATE_LIMIT_KEYS).with_scale(config.rate_limit_scale),
+            ),
             secrets,
             config,
             reset_jobs: Arc::new(Semaphore::new(RESET_JOBS)),

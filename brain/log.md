@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-11-07] P4 web e2e + load
+
+- **Creation**: Playwright specs for every screen (`e2e/tests/screens.spec.ts`; fixes for templates project scope, attachment names, api key display, stale login copy). `scripts/load.sh` (oha on a release API, scratch db `sd_load`, seeds 500 tickets) and `docs/PERFORMANCE.md`. `SD_RATE_LIMIT_SCALE` (default 1) multiplies per-address quotas for load runs. Migration `0006` (renumbered at merge; 0004/0005 are outbox reply and password resets) index `(project_id, updated_at DESC, id DESC)` for the inbox list.
+- **Decision**: load runs lift rate limits by env instead of spoofing many source addresses; production keeps scale 1.
+- **Lesson**: oha counts requests in flight at the deadline as errors; pass `-w`. Replies with `sendEmail` default and no SMTP log a warning per request, so load scenarios send `sendEmail:false`.
+
 ## [2026-11-07] P1 password reset
 
 - **Creation**: single-use hashed reset tokens (migration 0004, `crates/db/src/resets.rs`), forgot/reset routes with own rate rules plus per-address mail cap, reset revokes all sessions, system SMTP mail, token carried in URL fragment and scrubbed, pages `/forgot-password` and `/reset-password`, spec `e2e/tests/password-reset.spec.ts`.

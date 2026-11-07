@@ -52,6 +52,7 @@ const RESET_WINDOW: Duration = Duration::from_secs(3600);
 
 pub struct RateLimiter {
     max_keys: usize,
+    scale: usize,
     hits: Mutex<HashMap<(Rule, IpAddr), VecDeque<Instant>>>,
     /// Failed sign-ins per existing account, in their own table so address buckets cannot evict them.
     failures: Mutex<HashMap<String, VecDeque<Instant>>>,
@@ -63,10 +64,18 @@ impl RateLimiter {
     pub fn new(max_keys: usize) -> Self {
         Self {
             max_keys: max_keys.max(1),
+            scale: 1,
             hits: Mutex::default(),
             failures: Mutex::default(),
             resets: Mutex::default(),
         }
+    }
+
+    /// Multiplies every request quota (load tests only).
+    #[must_use]
+    pub fn with_scale(mut self, scale: usize) -> Self {
+        self.scale = scale.max(1);
+        self
     }
 
     pub fn check(&self, rule: Rule, ip: IpAddr) -> Result<(), ApiError> {
@@ -164,6 +173,7 @@ impl RateLimiter {
     /// `Err(wait)` when the client is over quota. Rejected requests are not recorded.
     pub fn check_at(&self, rule: Rule, ip: IpAddr, now: Instant) -> Result<(), Duration> {
         let (limit, window) = rule.quota();
+        let limit = limit.saturating_mul(self.scale);
         let key = (rule, bucket(ip));
         let mut hits = self.hits.lock().unwrap_or_else(|e| e.into_inner());
         if !hits.contains_key(&key) && hits.len() >= self.max_keys {

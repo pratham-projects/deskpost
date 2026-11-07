@@ -11,7 +11,8 @@ export interface Project {
   domain?: string;
   description?: string;
   status: 'active' | 'archived';
-  apiKey: string;
+  apiKey?: string; // create/regenerate responses only
+  apiKeyPrefix?: string;
   ownerUserId: string;
   replyToEmail?: string;
   smtpEmail?: string;

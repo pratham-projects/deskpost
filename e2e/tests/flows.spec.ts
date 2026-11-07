@@ -1,5 +1,4 @@
-import { expect, test } from "@playwright/test"
-import { ADMIN_EMAIL, IMAP_PORT, SMTP_PORT, apiLogin, sendCustomerMail, uiLogin, waitForMail } from "./helpers"
+import { ADMIN_EMAIL, expect, test, IMAP_PORT, SMTP_PORT, apiLogin, sendCustomerMail, uiLogin, waitForMail } from "./helpers"
 
 const run = Date.now().toString(36)
 const SUPPORT = `support-${run}@desk.test`

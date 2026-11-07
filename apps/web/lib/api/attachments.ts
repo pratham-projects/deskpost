@@ -29,7 +29,25 @@ export const isAllowedFileType = (file: File): boolean => {
   return ALLOWED_FILE_TYPES.includes(file.type) || ALLOWED_TYPE_PREFIXES.some((p) => file.type.startsWith(p));
 };
 
+export interface AttachmentMeta {
+  id: string
+  filename: string
+  mimeType: string
+}
+
 export const attachmentsApi = {
+  /** Filenames and types of every attachment on a ticket (message payloads only carry ids). */
+  listForTicket: async (ticketId: string): Promise<AttachmentMeta[]> => {
+    const token = getToken?.();
+    const response = await fetch(`${API_PREFIX}/attachments/ticket/${ticketId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
+    });
+    if (!response.ok) throw new Error('Failed to list attachments');
+    const body = await response.json();
+    return (body.data ?? []) as AttachmentMeta[];
+  },
+
   /**
    * Get attachment file URL
    */

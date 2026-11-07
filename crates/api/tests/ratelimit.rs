@@ -262,3 +262,13 @@ async fn trusted_proxy_separates_clients_by_forwarded_address(pool: PgPool) {
     let other = signin_attempt(&t, Some(("x-forwarded-for", "203.0.113.51")), "10.0.0.1").await;
     assert_eq!(other, StatusCode::UNAUTHORIZED);
 }
+
+#[test]
+fn scale_multiplies_the_quota() {
+    let l = RateLimiter::new(100).with_scale(3);
+    let t0 = Instant::now();
+    for _ in 0..30 {
+        assert!(l.check_at(Rule::Login, ip("1.1.1.1"), t0).is_ok());
+    }
+    assert!(l.check_at(Rule::Login, ip("1.1.1.1"), t0).is_err());
+}

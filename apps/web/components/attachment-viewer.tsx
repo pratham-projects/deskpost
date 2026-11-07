@@ -28,12 +28,9 @@ function getExtensionFromUrl(url: string): string {
   return filename.substring(lastDot).toLowerCase()
 }
 
-function getFilenameFromUrl(url: string): string {
-  const lastSlash = url.lastIndexOf('/')
-  const fullName = lastSlash !== -1 ? url.substring(lastSlash + 1) : url
-  // Remove the prefix (e.g., "mjvvnghkxrw9m0k705-")
-  const dashIndex = fullName.indexOf('-')
-  return dashIndex !== -1 ? fullName.substring(dashIndex + 1) : fullName
+/** Real filename when known (from the attachment list), else a neutral label. URLs carry only the id. */
+function displayName(a: AttachmentData): string {
+  return a.filename || 'Attachment'
 }
 
 function getFileCategory(url: string): 'safe' | 'unsafe' | 'unknown' {
@@ -56,10 +53,10 @@ export function AttachmentViewer({ attachment, onClose }: AttachmentViewerProps)
   const [fileBlob, setFileBlob] = useState<Blob | null>(null)
   const [isDownloading, setIsDownloading] = useState(false)
 
-  const fileCategory = attachment.url ? getFileCategory(attachment.url) : 'unknown'
+  const filename = displayName(attachment)
+  const fileCategory = getFileCategory(filename)
   const isUnsafe = fileCategory === 'unsafe'
-  const filename = attachment.url ? getFilenameFromUrl(attachment.url) : `file-${attachment.id}`
-  const ext = attachment.url ? getExtensionFromUrl(attachment.url) : ''
+  const ext = getExtensionFromUrl(filename)
 
   useEffect(() => {
     let cancelled = false
@@ -213,11 +210,11 @@ export function AttachmentButton({ attachment, className }: AttachmentButtonProp
   
   const attachmentData: AttachmentData = typeof attachment === 'string' ? { id: attachment } : attachment
   
-  const fileCategory = attachmentData.url ? getFileCategory(attachmentData.url) : 'unknown'
+  const filename = displayName(attachmentData)
+  const fileCategory = getFileCategory(filename)
   const isUnsafe = fileCategory === 'unsafe'
   const isSafe = fileCategory === 'safe'
-  const filename = attachmentData.url ? getFilenameFromUrl(attachmentData.url) : 'Attachment'
-  const ext = attachmentData.url ? getExtensionFromUrl(attachmentData.url) : ''
+  const ext = getExtensionFromUrl(filename)
 
   const getIcon = () => {
     if (['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) return <Image className="w-4 h-4" />
