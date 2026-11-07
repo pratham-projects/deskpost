@@ -11,6 +11,7 @@ export default {
   status: "pre-release",
   headline: "Support inbox you host <em>yourself.</em>",
   sub: "A shared queue across projects, threaded replies, internal notes and an embeddable widget. Customers can just email. <strong>A Rust API, a web UI and one Postgres.</strong> No paid services.",
+  heroCmdPre: "git clone https://github.com/pratham-projects/sendesk && cd sendesk",
   heroCmd: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pratham-projects/sendesk/releases/latest/download/api-installer.sh | sh",
 
   liveTitle: "Built in the open.",
@@ -81,23 +82,15 @@ export default {
   ],
 
   installTitle: "Install in one line.",
+  installLedePending: "Run it with Docker Compose from a clone, or build from source. Binaries, images and checksums arrive with the first tagged release.",
   installLede: "Download the binary, pull the images, or build from source. SHA-256 checksums are attached to every release.",
   install: [
-    { id: "binary", label: "Binary", cmds: [
-      "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pratham-projects/sendesk/releases/latest/download/api-installer.sh | sh",
-      "# export DATABASE_URL, JWT_SECRET and SD_SECRET_KEY first, see .env.example",
-      "api migrate",
-      "SD_BOOTSTRAP_PASSWORD='choose-a-long-one' api bootstrap --email you@example.com --name \"You\"",
-      "api serve",
-    ], note: "Installs `api` to `~/.cargo/bin` for macOS and Linux, x86_64 and arm64. Needs PostgreSQL 16. It is the API only: serve the UI from the web image or a static export." },
     { id: "docker", label: "Docker", cmds: [
-      "V=v0.1.0; B=https://github.com/pratham-projects/sendesk/releases/download/$V",
-      "mkdir deskpost && cd deskpost",
-      "curl -LO $B/docker-compose.yml && curl -L $B/.env.example -o .env",
-      "# edit .env: POSTGRES_PASSWORD, JWT_SECRET, SD_SECRET_KEY, FRONTEND_URL",
-      "docker compose pull && docker compose up -d --no-build",
-      "docker compose run --rm -e SD_BOOTSTRAP_PASSWORD app bootstrap --email you@example.com --name \"You\"",
-    ], note: "Images are `ghcr.io/pratham-projects/sendesk-api` and `sendesk-web`. Set `V` to a tag that exists. UI on `127.0.0.1:4000`, API on `127.0.0.1:3000`: put Caddy in front." },
+      "git clone https://github.com/pratham-projects/sendesk && cd sendesk",
+      "cp .env.example .env   # fill POSTGRES_PASSWORD, JWT_SECRET, SD_SECRET_KEY, SD_BOOTSTRAP_PASSWORD",
+      "docker compose up --build",
+      "docker compose run --rm app bootstrap --email admin@example.com --name Admin",
+    ], note: "Builds the API and web images from the clone. UI on `localhost:4000`, API on `localhost:3000`, caught mail on `localhost:8025`." },
     { id: "source", label: "Source", cmds: [
       "git clone https://github.com/pratham-projects/sendesk && cd sendesk",
       "cargo build --release -p api --locked",
@@ -105,6 +98,21 @@ export default {
       "./target/release/api migrate && ./target/release/api serve",
       "cd apps/web && bun install && bun run dev",
     ], note: "Rust stable and PostgreSQL 16, plus bun for the UI. The first admin comes from `api bootstrap`, see the quickstart." },
+    { id: "images", label: "Images", cmds: [
+      "V=v0.1.0; B=https://github.com/pratham-projects/sendesk/releases/download/$V",
+      "mkdir deskpost && cd deskpost",
+      "curl -LO $B/docker-compose.yml && curl -L $B/.env.example -o .env",
+      "# edit .env: POSTGRES_PASSWORD, JWT_SECRET, SD_SECRET_KEY, FRONTEND_URL",
+      "docker compose pull && docker compose up -d --no-build",
+      "docker compose run --rm -e SD_BOOTSTRAP_PASSWORD app bootstrap --email you@example.com --name \"You\"",
+    ], note: "Images are `ghcr.io/pratham-projects/sendesk-api` and `sendesk-web`. Set `V` to a tag that exists. UI on `127.0.0.1:4000`, API on `127.0.0.1:3000`: put Caddy in front.", pending: "No images are published yet: they arrive with the first release. Use the Docker tab today." },
+    { id: "binary", label: "Binary", cmds: [
+      "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pratham-projects/sendesk/releases/latest/download/api-installer.sh | sh",
+      "# export DATABASE_URL, JWT_SECRET and SD_SECRET_KEY first, see .env.example",
+      "api migrate",
+      "SD_BOOTSTRAP_PASSWORD='choose-a-long-one' api bootstrap --email you@example.com --name \"You\"",
+      "api serve",
+    ], note: "Installs `api` to `~/.cargo/bin` for macOS and Linux, x86_64 and arm64. Needs PostgreSQL 16. It is the API only: serve the UI from the web image or a static export.", pending: "No release is tagged yet: this URL works from the first release." },
   ],
 
   faq: [
