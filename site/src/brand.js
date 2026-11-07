@@ -15,13 +15,13 @@ export default {
   heroCmd: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pratham-projects/sendesk/releases/latest/download/api-installer.sh | sh",
 
   liveTitle: "Built in the open.",
-  liveNote: "Counts are read live from GitHub; the rest comes from files in the repo. The repository is named `sendesk` and the binary is `api`: Deskpost is the name of this site. Load figures come from one laptop, see `docs/PERFORMANCE.md` before quoting them.",
+  liveNote: "Counts appear when GitHub answers; the rest comes from files in the repo. The repository is named `sendesk` and the binary is `api`: Deskpost is the name of this site. Load figures come from one laptop, see `docs/PERFORMANCE.md` before quoting them.",
   facts: [
     ["License", "AGPL-3.0-only"],
     ["Backend", "Rust, Axum, SQLx, Postgres 16"],
     ["Workspace", "5 crates, 1 binary (`api`)"],
     ["API prefix", "`/api/v3`"],
-    ["Ticket list p50, 500 tickets", "13.4 ms · 2.4k req/s"],
+    ["Ticket list p50, 500 tickets", "13.4 ms · 2.4k req/s · Apple M4"],
     ["API memory, idle", "32 MB RSS"],
   ],
 
@@ -81,7 +81,7 @@ export default {
     ["Resolved becomes closed", "After the project's idle window, the hourly job closes it. A later customer reply reopens it."],
   ],
 
-  installTitle: "Install in one line.",
+  installTitle: "Run it your way.",
   installLedePending: "Run it with Docker Compose from a clone, or build from source. Binaries, images and checksums arrive with the first tagged release.",
   installLede: "Download the binary, pull the images, or build from source. SHA-256 checksums are attached to every release.",
   install: [

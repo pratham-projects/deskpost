@@ -29,7 +29,7 @@ registerScene("inbox", ({ cols, rows, rand }) => {
   const tt = rows - TH - 1;
   const top0 = narrow ? Math.max(Math.floor(rows * 0.4), rows - 21) : 1;
   const bandTop = top0 + fh + 1, bandBot = tt - (narrow ? 2 : 5) - H;
-  const ey0 = bandBot >= bandTop ? bandTop + Math.floor((bandBot - bandTop) * (narrow ? 0.15 : 0.4)) : bandTop;
+  const ey0 = bandBot >= bandTop ? bandTop + Math.floor((bandBot - bandTop) * (narrow ? 0.15 : 0.2)) : bandTop;
   const ye = ey0 + H;               // first thread row
   const threadX = ex0 + 3;
   const threadLen = Math.max(0, tt - ye);
@@ -37,7 +37,7 @@ registerScene("inbox", ({ cols, rows, rand }) => {
   // keep the headline side calm: ambient glyphs fade toward the left (wide) or the top (narrow)
   const calm = (c, r) => narrow
     ? 0.15 + 0.85 * smooth((r - (top0 - 4)) / 6)
-    : 0.12 + 0.88 * smooth((c / cols - 0.3) / 0.3);
+    : 0.2 + 0.8 * smooth((c / cols - 0.25) / 0.3);
 
   const ps = [];
   const add = (o) => {
@@ -76,7 +76,7 @@ registerScene("inbox", ({ cols, rows, rand }) => {
     if (k === 0) add({ kind: "l", seal: true, tx: ex0 + 4, ty: ey0 + y, ch: "@", tone: 2, a: 1, gd: 3200 + gate() * 1200, rd: 11200 + gate() * 2000 });
   });
   // ambient drifters
-  const nAmb = Math.round(cols * rows * 0.011);
+  const nAmb = Math.round(cols * rows * 0.028);
   for (let i = 0; i < nAmb; i++) add({ kind: "a" });
 
   // ticket stack
@@ -92,7 +92,7 @@ registerScene("inbox", ({ cols, rows, rand }) => {
 
   return {
     step(t, dt, ptr, put) {
-      const tt0 = t + 3000;            // start 3 s in so the first paint already shows an envelope forming
+      const tt0 = t + 5600;            // start 5.6 s in so the first paint already shows an envelope forming
       const cyc = tt0 % CYCLE, cn = Math.floor(tt0 / CYCLE);
       if (cyc >= 7000 && posted !== cn) { posted = cn; post(t); }
 
@@ -136,7 +136,7 @@ registerScene("inbox", ({ cols, rows, rand }) => {
         } else if (on) {
           put(c, r, GLYPHS[p.g], 1, 0.3 + 0.45 * near);
         } else if (!(c >= ex0 - 1 && c <= ex0 + W && r >= tt - 1 && r <= tt + TH)) {
-          put(c, r, GLYPHS[p.g], 0, (0.22 + 0.3 * (0.5 + 0.5 * Math.sin(t * 0.002 + p.ph))) * calm(c, r));
+          put(c, r, GLYPHS[p.g], 0, (0.3 + 0.35 * (0.5 + 0.5 * Math.sin(t * 0.002 + p.ph))) * calm(c, r));
         }
       }
 

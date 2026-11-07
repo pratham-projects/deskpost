@@ -9,6 +9,8 @@ description: Binary installer, Docker Compose from release assets, or build from
 
 Pick one. Every path needs PostgreSQL 16 (Compose brings its own) and three secrets. Generate secrets with `openssl rand -base64 48`; `JWT_SECRET` and `SD_SECRET_KEY` must differ and placeholders are rejected at startup.
 
+> **Pre-release.** No release is tagged yet, so the Binary and Docker Compose sections below work from the first release. Today, use the Source section or clone the repo and run `docker compose up --build`.
+
 ## Binary
 
 ```bash
