@@ -1,5 +1,9 @@
 # Changelog
 
+## [2026-11-13] Site theme pass
+
+- **Done**: Site restyled to product UI: cool paper + navy primary from `apps/web/app/globals.css`, Geist Sans headings (GeistVariable.woff2 added, OFL), 10px radius, light-first, dark follows OS. Pixel type only on wordmark + ASCII scene. Branch `feat/site-ui-theme`, merged to staging.
+
 ## [2026-11-07] R2 release automation (feat/release)
 
 - **Done**: cargo-dist workflow (binary `api`, 4 targets, shell installer, sha256), ghcr image workflow, compose and env release assets, `docs/releasing.md`.
