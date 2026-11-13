@@ -6,6 +6,7 @@ export default {
   wordmark: "desk<b>post</b>",
   repo: "pratham-projects/sendesk",
   scene: "inbox",
+  shot: { name: "inbox", alt: "The ticket inbox: status and project filters on the left, the ticket list, a threaded conversation with an internal note, and customer details." },
   license: "AGPL-3.0-only",
   stack: "Rust · Postgres 16 · Next.js",
   status: "pre-release",

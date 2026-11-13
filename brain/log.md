@@ -1,5 +1,10 @@
 # Changelog
 
+## [2026-11-13] Hero product screenshots
+
+- **Done**: Hero: ASCII scene replaced by a framed product screenshot (ticket inbox, mock build via `NEXT_PUBLIC_USE_MOCK=1 next dev`), light/dark `<picture>` by OS theme, "sample data" caption. `brand.shot` opts a site in; no shot keeps the ASCII canvas.
+- **Lesson**: capture at 1280x800 (dsf 2) then `cwebp -q 84 -resize 2000 0`; at 1120 SendDesk's responsive layout squeezes the ticket pane. Never shoot real data (`~/.learnpuppy` holds the user's own).
+
 ## [2026-11-13] Site theme pass
 
 - **Done**: Site restyled to product UI: cool paper + navy primary from `apps/web/app/globals.css`, Geist Sans headings (GeistVariable.woff2 added, OFL), 10px radius, light-first, dark follows OS. Pixel type only on wordmark + ASCII scene. Branch `feat/site-ui-theme`, merged to staging.
