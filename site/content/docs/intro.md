@@ -2,16 +2,16 @@
 title: Introduction
 group: Start
 order: 1
-description: What Deskpost is, what runs where, and what it is not.
+description: What Deskpost is, what runs where, and what it leaves out.
 ---
 
 # Deskpost
 
 A multi-tenant support inbox you host yourself: a shared queue across projects, threaded conversations, internal notes, canned responses, attachments, live viewer presence and an embeddable customer widget. Customers can also write in by email.
 
-> **Names.** Deskpost is the name of this site. The repository is `pratham-projects/sendesk`, the server binary is `api`, environment variables start with `SD_` and the systemd unit is `senddesk-api`. The rename is site-only.
+> Deskpost is the name of this site. The repository is `pratham-projects/sendesk`, the server binary is `api`, environment variables start with `SD_` and the systemd unit is `senddesk-api`. The rename is site-only.
 
-> Deskpost is **pre-release**. There is no tagged release yet. Read the [FAQ](#/faq) and the accepted risks in [Security](#/security) before you rely on it.
+> Deskpost is pre-release. There is no tagged release yet. Read the [FAQ](#/faq) and the accepted risks in [Security](#/security) before you rely on it.
 
 ## What runs
 
@@ -25,12 +25,12 @@ A multi-tenant support inbox you host yourself: a shared queue across projects, 
 
 ## Model
 
-A **project** is the tenant. It owns its members, clients, tickets, templates, auto-replies, mail settings and API key. Users have a global role (`admin` or `agent`); what they can see is decided by project membership. A non-member gets `404` for project resources.
+A project is the tenant. It owns its members, clients, tickets, templates, auto-replies, mail settings and API key. Users have a global role (`admin` or `agent`); what they can see is decided by project membership. A non-member gets `404` for project resources.
 
 ## Crates
 
 `core` (status machine, threading, reply stripping, secret box), `db` (SQLx and migrations), `storage` (attachment store), `mail` (SMTP, IMAP, MIME) and `api` (the binary).
 
-## Not goals
+## Non-goals
 
-No paid or proprietary services, no SaaS billing, no mobile apps. Attachments live on the local filesystem; there is no S3 driver.
+Deskpost has no paid or proprietary services, SaaS billing or mobile apps. Attachments live on the local filesystem, and there is no S3 driver.

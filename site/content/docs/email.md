@@ -7,7 +7,7 @@ description: SMTP out, IMAP or signed webhook in, threading, and free provider s
 
 # Email in and out
 
-No AWS. Outbound is plain SMTP, inbound is IMAP polling or a signed webhook. Each project has its own settings, so projects can use different providers. Passwords are encrypted at rest with AES-256-GCM and never returned by the API.
+Outbound is plain SMTP and inbound is IMAP polling or a signed webhook, with no AWS account involved. Each project has its own settings, so projects can use different providers. Passwords are encrypted at rest with AES-256-GCM and never returned by the API.
 
 TLS follows the port: `465` and `993` mean implicit TLS, anything else is STARTTLS.
 

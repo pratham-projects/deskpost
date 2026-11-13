@@ -9,7 +9,7 @@ description: Short answers about status, names, mail, storage and licensing.
 
 ## Is it production ready?
 
-Not yet. It is pre-release and there is no tagged release. It has unit, property, integration and browser tests, a review pass and a local final gate, but the container build is not exercised in CI. Read the accepted risks in [Security](#/security).
+Not yet. It is pre-release with no tagged release. It has unit, property, integration and browser tests, a review pass and a local final gate, but the container build is not exercised in CI. Read the accepted risks in [Security](#/security).
 
 ## Why Deskpost, when the repo says sendesk?
 

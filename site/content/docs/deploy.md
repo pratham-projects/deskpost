@@ -54,7 +54,7 @@ DATABASE_URL=postgres://senddesk:...@localhost:5432/senddesk \
 STORAGE_DIR=/var/lib/senddesk/storage BACKUP_DIR=/var/backups/senddesk scripts/backup.sh
 ```
 
-It writes a custom-format `pg_dump` and a tarball of `STORAGE_DIR` (mode 600, 14-day retention). It refuses to run when `pg_dump` and the server have different major versions. Copy backups off the host. A dump is only restorable with the `SD_SECRET_KEY` it was made under, so store that key separately. Back up the database and the attachment directory together.
+It writes a custom-format `pg_dump` and a tarball of `STORAGE_DIR` (mode 600, 14-day retention). It refuses to run when `pg_dump` and the server have different major versions. Copy backups off the host. A dump is only restorable with the `SD_SECRET_KEY` it was made under, so store that key separately.
 
 ## Upgrades
 
