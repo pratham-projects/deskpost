@@ -1,5 +1,10 @@
 # Changelog
 
+## [2026-11-13] Site copy humanizer pass
+
+- **Done**: every string on the site (`brand.js`, `content/docs/*.md`, kit headings, FAQ, footers) read against blader/humanizer v4. Removed staged headings ("Everything it does, listed.", "Built in the open."), "not X, Y" footers, fragment rows, decorative bold labels, inflated blurbs ("Hardened from the first commit."), stock words. No facts, numbers, commands or claims changed. Smoke test now asserts the hero screenshot instead of the ASCII canvas.
+- **Rule kept**: contrasts stay where both halves carry information (`404`, not `403`). Docs stay plain reference text.
+
 ## [2026-11-13] Hero product screenshots
 
 - **Done**: Hero: ASCII scene replaced by a framed product screenshot (ticket inbox, mock build via `NEXT_PUBLIC_USE_MOCK=1 next dev`), light/dark `<picture>` by OS theme, "sample data" caption. `brand.shot` opts a site in; no shot keeps the ASCII canvas.

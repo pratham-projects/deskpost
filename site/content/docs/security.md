@@ -35,7 +35,7 @@ Report vulnerabilities privately by emailing the maintainer (the address is in t
 
 ## Accepted risks
 
-Decided on, not forgotten (from `SECURITY.md`):
+These risks were reviewed and accepted (from `SECURITY.md`):
 
 - No orphan sweep for attachment files after a crash between writing a file and its row. Only `.tmp` is swept.
 - A project delete racing an upload can leave one file behind.
