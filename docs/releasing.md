@@ -11,15 +11,15 @@
 Change targets/installers: edit `dist-workspace.toml`, run `dist generate`, commit `release.yml`. Check: `dist plan`.
 
 ## Release assets
-- `api-{aarch64,x86_64}-{apple-darwin,unknown-linux-gnu}.tar.xz` (+ `.sha256`), `sha256.sum`, `source.tar.gz`
-- `api-installer.sh`
+- `deskpost-{aarch64,x86_64}-{apple-darwin,unknown-linux-gnu}.tar.xz` (+ `.sha256`), `sha256.sum`, `source.tar.gz`
+- `deskpost-installer.sh`
 - `docker-compose.yml`, `.env.example`
 - `deploy/Caddyfile` -> `Caddyfile`, `deploy/web.Caddyfile` -> `web.Caddyfile`
 - `deskpost-api.service`
 
 ## Install API binary
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pratham-projects/deskpost/releases/latest/download/api-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pratham-projects/deskpost/releases/latest/download/deskpost-installer.sh | sh
 ```
 Installs `api` to `~/.cargo/bin`. Needs Postgres 16 and env from `.env.example`; see `deskpost-api.service` for systemd.
 

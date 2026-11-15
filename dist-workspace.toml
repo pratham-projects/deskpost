@@ -17,5 +17,5 @@ pr-run-mode = "plan"
 checksum = "sha256"
 # Publish with the GitHub Releases hosting
 hosting = "github"
-# Never publish to crates.io (publish = false), api is still dist-enabled
+# Never publish to crates.io (publish = false), deskpost is still dist-enabled
 publish-jobs = []

@@ -28,7 +28,7 @@ Report vulnerabilities privately by emailing the maintainer (the address is in t
 - Terminate TLS at a reverse proxy and set `DP_TRUSTED_PROXIES` to that proxy only.
 - `FRONTEND_URL` lists exact origins, never `*`.
 - Leave `DP_ALLOW_PRIVATE_MAIL_HOSTS=false` in production.
-- Set `DP_ALLOW_SIGNUP=false` after `api bootstrap`, unless open sign-up is intended.
+- Set `DP_ALLOW_SIGNUP=false` after `deskpost bootstrap`, unless open sign-up is intended.
 - Pass the bootstrap password through `DP_BOOTSTRAP_PASSWORD`, not `--password`.
 - Set `DP_WEBHOOK_SECRET` only if you expose the inbound webhook.
 - Dedicated Postgres role, not exposed publicly. `.env` is `chmod 600` and never committed.

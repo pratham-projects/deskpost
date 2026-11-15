@@ -143,7 +143,7 @@ interface UnreadItem { id: string; ticketId: string; projectId: string; createdA
 | `POST /auth/signout` | refresh token optional | none | `200 data: { message }`; revokes the token's family; cookie cleared. Always 200. | |
 | `POST /auth/signout-all` | user | none | `200 data: { message }`; revokes every family of the caller | 401 |
 | `GET /auth/me` | user | none | `200 data: { user: User }` | 401 |
-| `GET /auth/config` | public | none | `200 data: { signupEnabled: bool }` (`DP_ALLOW_SIGNUP`, default false; when false, `POST /auth/signup` is `403 FORBIDDEN` and the first admin comes from `api bootstrap`) | |
+| `GET /auth/config` | public | none | `200 data: { signupEnabled: bool }` (`DP_ALLOW_SIGNUP`, default false; when false, `POST /auth/signup` is `403 FORBIDDEN` and the first admin comes from `deskpost bootstrap`) | |
 
 Bootstrap: the first user ever registered gets role `admin`; every later signup is `agent`.
 Passwords are Argon2id; the account is looked up by lower-cased email.

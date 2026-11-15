@@ -25,12 +25,12 @@ example = set(re.findall(r"^([A-Z][A-Z_]+)=", open(".env.example").read(), re.M)
 errs += [f".env.example lacks {v}" for v in read - example]
 errs += [f".env.example has unknown {v}" for v in example - read - {"DP_BOOTSTRAP_PASSWORD", "POSTGRES_PASSWORD", "RUST_LOG", "PUBLIC_URL"}]
 unit = open("deploy/deskpost-api.service").read()
-for needle in ("User=deskpost", "EnvironmentFile=/etc/deskpost/env", "ExecStart=/usr/local/bin/api serve", "ReadWritePaths=/var/lib/deskpost"):
+for needle in ("User=deskpost", "EnvironmentFile=/etc/deskpost/env", "ExecStart=/usr/local/bin/deskpost serve", "ReadWritePaths=/var/lib/deskpost"):
     if needle not in unit: errs.append(f"systemd unit lacks {needle}")
 for sec in ("[Unit]", "[Service]", "[Install]"):
     if sec not in unit: errs.append(f"systemd unit lacks {sec}")
 df = open("Dockerfile").read()
-if "target/release/api" not in df or 'ENTRYPOINT ["api"]' not in df: errs.append("Dockerfile api binary path/entrypoint")
+if "target/release/deskpost" not in df or 'ENTRYPOINT ["deskpost"]' not in df: errs.append("Dockerfile api binary path/entrypoint")
 if "COPY --from=web-build /web/out /srv" not in df: errs.append("Dockerfile web static copy")
 if "root * /srv\n" not in open("deploy/web.Caddyfile").read(): errs.append("web.Caddyfile root must match Dockerfile /srv")
 if errs:

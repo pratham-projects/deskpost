@@ -37,8 +37,8 @@ echo "== scratch database $DB_NAME"
 psql "$BASE_DB" -q -c "DROP DATABASE IF EXISTS $DB_NAME" -c "CREATE DATABASE $DB_NAME"
 
 echo "== build api (release)"
-cargo build -q --release -p api
-API=$ROOT/target/release/api
+cargo build -q --release -p deskpost
+API=$ROOT/target/release/deskpost
 
 export DATABASE_URL=$DB_URL
 export JWT_SECRET=$(openssl rand -hex 32) DP_SECRET_KEY=$(openssl rand -hex 32)

@@ -61,8 +61,8 @@ wait_port greenmail $SMTP_PORT
 wait_port greenmail $IMAP_PORT
 
 echo "== build api + web"
-cargo build -q -p api
-API=$ROOT/target/debug/api
+cargo build -q -p deskpost
+API=$ROOT/target/debug/deskpost
 if [ ! -f apps/web/out/index.html ] || [ -n "${E2E_REBUILD_WEB:-}" ]; then
   (cd apps/web && bun install --frozen-lockfile >/dev/null && bun run build >/dev/null)
 fi

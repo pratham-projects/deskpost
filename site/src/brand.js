@@ -13,7 +13,7 @@ export default {
   headline: "Support inbox you host <em>yourself.</em>",
   sub: "A shared queue across projects, threaded replies, internal notes and an embeddable widget. Customers can just email. <strong>A Rust API, a web UI and one Postgres.</strong> No paid services.",
   heroCmdPre: "git clone https://github.com/pratham-projects/deskpost && cd deskpost",
-  heroCmd: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pratham-projects/deskpost/releases/latest/download/api-installer.sh | sh",
+  heroCmd: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pratham-projects/deskpost/releases/latest/download/deskpost-installer.sh | sh",
 
   liveTitle: "Project facts.",
   liveNote: "GitHub counts show up when GitHub answers. The rest is read from files in the repo. The repository is `deskpost` and the binary is `api`. Load figures come from one laptop, so see `docs/PERFORMANCE.md` before quoting them.",
@@ -94,11 +94,11 @@ export default {
     ], note: "Builds the API and web images from the clone. UI on `localhost:4000`, API on `localhost:3000`, caught mail on `localhost:8025`." },
     { id: "source", label: "Source", cmds: [
       "git clone https://github.com/pratham-projects/deskpost && cd deskpost",
-      "cargo build --release -p api --locked",
+      "cargo build --release -p deskpost --locked",
       "# export DATABASE_URL, JWT_SECRET and DP_SECRET_KEY first, see .env.example",
-      "./target/release/api migrate && ./target/release/api serve",
+      "./target/release/deskpost migrate && ./target/release/deskpost serve",
       "cd apps/web && bun install && bun run dev",
-    ], note: "Rust stable and PostgreSQL 16, plus bun for the UI. The first admin comes from `api bootstrap`, see the quickstart." },
+    ], note: "Rust stable and PostgreSQL 16, plus bun for the UI. The first admin comes from `deskpost bootstrap`, see the quickstart." },
     { id: "images", label: "Images", cmds: [
       "V=v0.1.0; B=https://github.com/pratham-projects/deskpost/releases/download/$V",
       "mkdir deskpost && cd deskpost",
@@ -108,11 +108,11 @@ export default {
       "docker compose run --rm -e DP_BOOTSTRAP_PASSWORD app bootstrap --email you@example.com --name \"You\"",
     ], note: "Images are `ghcr.io/pratham-projects/deskpost-api` and `deskpost-web`. Set `V` to a tag that exists. UI on `127.0.0.1:4000`, API on `127.0.0.1:3000`: put Caddy in front.", pending: "No images are published yet: they arrive with the first release. Use the Docker tab today." },
     { id: "binary", label: "Binary", cmds: [
-      "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pratham-projects/deskpost/releases/latest/download/api-installer.sh | sh",
+      "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pratham-projects/deskpost/releases/latest/download/deskpost-installer.sh | sh",
       "# export DATABASE_URL, JWT_SECRET and DP_SECRET_KEY first, see .env.example",
-      "api migrate",
-      "DP_BOOTSTRAP_PASSWORD='choose-a-long-one' api bootstrap --email you@example.com --name \"You\"",
-      "api serve",
+      "deskpost migrate",
+      "DP_BOOTSTRAP_PASSWORD='choose-a-long-one' deskpost bootstrap --email you@example.com --name \"You\"",
+      "deskpost serve",
     ], note: "Installs `api` to `~/.cargo/bin` for macOS and Linux, x86_64 and arm64. Needs PostgreSQL 16. It is the API only: serve the UI from the web image or a static export.", pending: "No release is tagged yet: this URL works from the first release." },
   ],
 

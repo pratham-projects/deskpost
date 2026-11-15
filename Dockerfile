@@ -10,19 +10,19 @@ COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates ./crates
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    cargo build --release -p api --locked && cp target/release/api /api
+    cargo build --release -p deskpost --locked && cp target/release/deskpost /deskpost
 
 FROM debian:bookworm-slim AS api
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --home /var/lib/deskpost deskpost \
     && mkdir -p /var/lib/deskpost/storage && chown -R deskpost /var/lib/deskpost
-COPY --from=api-build /api /usr/local/bin/api
+COPY --from=api-build /deskpost /usr/local/bin/deskpost
 USER deskpost
 ENV PORT=3000 STORAGE_DIR=/var/lib/deskpost/storage
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s CMD curl -fsS http://127.0.0.1:${PORT}/health || exit 1
-ENTRYPOINT ["api"]
+ENTRYPOINT ["deskpost"]
 CMD ["serve"]
 
 FROM oven/bun:1 AS web-build

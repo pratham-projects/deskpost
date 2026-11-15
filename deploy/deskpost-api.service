@@ -1,7 +1,7 @@
 # /etc/systemd/system/deskpost-api.service
-# Install: copy the release binary to /usr/local/bin/api, put secrets in /etc/deskpost/env (chmod 600),
+# Install: copy the release binary to /usr/local/bin/deskpost, put secrets in /etc/deskpost/env (chmod 600),
 # set STORAGE_DIR=/var/lib/deskpost/storage in that file (it overrides Environment= below), create the user
-# (`useradd --system --home /var/lib/deskpost --shell /usr/sbin/nologin deskpost`), run `api migrate` once, then `systemctl enable --now deskpost-api`.
+# (`useradd --system --home /var/lib/deskpost --shell /usr/sbin/nologin deskpost`), run `deskpost migrate` once, then `systemctl enable --now deskpost-api`.
 [Unit]
 Description=Deskpost API
 After=network-online.target postgresql.service
@@ -13,7 +13,7 @@ User=deskpost
 Group=deskpost
 EnvironmentFile=/etc/deskpost/env
 Environment=STORAGE_DIR=/var/lib/deskpost/storage
-ExecStart=/usr/local/bin/api serve
+ExecStart=/usr/local/bin/deskpost serve
 Restart=on-failure
 RestartSec=3
 StateDirectory=deskpost

@@ -15,7 +15,7 @@ vulnerabilities. Expect an acknowledgement within a few days.
 - `FRONTEND_URL` lists exact origins for CORS; never `*`.
 - Leave `DP_ALLOW_PRIVATE_MAIL_HOSTS=false` in production. It is the SSRF guard on user-supplied
   SMTP/IMAP hosts; enabling it lets project admins probe loopback and private networks.
-- Set `DP_ALLOW_SIGNUP=false` after creating the first admin with `api bootstrap`, unless open signup is intended.
+- Set `DP_ALLOW_SIGNUP=false` after creating the first admin with `deskpost bootstrap`, unless open signup is intended.
 - Pass the bootstrap password through `DP_BOOTSTRAP_PASSWORD`, not `--password` (visible in `ps`).
 - Set `DP_WEBHOOK_SECRET` if you expose the inbound mail webhook; requests are signature-checked.
 - Postgres: dedicated role and password, not exposed publicly. Compose binds all ports to 127.0.0.1 and leaves `DP_ALLOW_PRIVATE_MAIL_HOSTS` unset (false).

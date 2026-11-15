@@ -29,7 +29,7 @@ On the server's filesystem under `STORAGE_DIR`. There is no S3 driver. Back them
 
 ## How do I get the first admin in?
 
-`api bootstrap --email ... --name ...` with `DP_BOOTSTRAP_PASSWORD` in the environment. Public sign-up is off by default.
+`deskpost bootstrap --email ... --name ...` with `DP_BOOTSTRAP_PASSWORD` in the environment. Public sign-up is off by default.
 
 ## How fast is it?
 
