@@ -33,15 +33,15 @@ are baked into the web image at build time (`PUBLIC_URL` in `.env`).
 ```sh
 export PATH=/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH
 export DATABASE_URL=postgres://pratham@localhost:5433/postgres
-cargo run -p api -- migrate
-DP_ENV=development JWT_SECRET=... DP_SECRET_KEY=... cargo run -p api -- serve
+cargo run -p deskpost -- migrate
+DP_ENV=development JWT_SECRET=... DP_SECRET_KEY=... cargo run -p deskpost -- serve
 cd apps/web && bun install && bun run dev
 make ci          # fmt, clippy, test, deny
 ```
 
 ## Production
 
-1. Build the binary (`cargo build --release -p api`) or the `api` Docker target; run `api migrate`.
+1. Build the binary (`cargo build --release -p deskpost`) or the `api` Docker target; run `deskpost migrate`.
 2. systemd: [deploy/deskpost-api.service](deploy/deskpost-api.service), secrets in `/etc/deskpost/env`.
 3. TLS and routing: [deploy/Caddyfile](deploy/Caddyfile) (`/api` and `/health` to the API, the rest to the UI).
 4. Walk through [SECURITY.md](SECURITY.md); run `scripts/smoke.sh https://your.domain` after each deploy.
@@ -61,3 +61,7 @@ brain/    project knowledge bundle (OKF)
 ```
 
 `UPSTREAM.md` describes the origin of the UI.
+
+## License
+
+Copyright (C) 2026 Pratham Bhavsar. Licensed under the [GNU AGPL-3.0-only](LICENSE).

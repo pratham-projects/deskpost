@@ -15,7 +15,7 @@ Pick one. Every path needs PostgreSQL 16 (Compose brings its own) and three secr
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/pratham-projects/deskpost/releases/latest/download/api-installer.sh | sh
+  https://github.com/pratham-projects/deskpost/releases/latest/download/deskpost-installer.sh | sh
 ```
 
 This installs `api` to `~/.cargo/bin`. Tarballs are `api-<target>.tar.xz` for `aarch64` and `x86_64`, on `apple-darwin` and `unknown-linux-gnu`, each with a `.sha256`, plus `sha256.sum` and `source.tar.gz`.
@@ -43,9 +43,9 @@ The UI listens on `127.0.0.1:4000` and the API on `127.0.0.1:3000`. Compose bind
 ```bash
 git clone https://github.com/pratham-projects/deskpost
 cd deskpost
-cargo build --release -p api --locked
+cargo build --release -p deskpost --locked
 ```
 
 You need a stable Rust toolchain and, for the UI, bun. With a source checkout, `docker compose up --build` builds the images locally instead.
 
-> The container build is not exercised in CI. The host layout (release binary, static export, Caddy) is the path that was replayed by hand.
+> The container images build in CI, and the Compose stack was run end to end locally (migrate, bootstrap, sign-in). The host layout (release binary, static export, Caddy) was replayed by hand.

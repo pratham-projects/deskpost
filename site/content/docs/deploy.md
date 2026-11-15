@@ -13,7 +13,7 @@ Postgres 16, the `api` binary or the compose stack, and Caddy in front. Everythi
 
 | Piece | Where |
 | --- | --- |
-| API binary | `/usr/local/bin/api` |
+| API binary | `/usr/local/bin/deskpost` |
 | Env file | `/etc/deskpost/env`, `chmod 600`. Set `STORAGE_DIR=/var/lib/deskpost/storage` here. |
 | Attachments | `/var/lib/deskpost/storage` (`<root>/ab/cd/<key>` plus `.json` sidecars) |
 | Static UI | `/srv/deskpost/web`, from `NEXT_PUBLIC_API_URL= NEXT_PUBLIC_API_VERSION=v3 bun run build` in `apps/web` |
@@ -28,9 +28,9 @@ The API binds `0.0.0.0:$PORT` with no bind-address setting. Block port 3000 from
 useradd --system --home /var/lib/deskpost --shell /usr/sbin/nologin deskpost
 install -d -m 755 /etc/deskpost
 sed -E '/^[[:space:]]*#/d; s/[[:space:]]+#.*$//; /^[[:space:]]*$/d' .env | install -m 600 /dev/stdin /etc/deskpost/env
-install -m 755 target/release/api /usr/local/bin/api
+install -m 755 target/release/deskpost /usr/local/bin/deskpost
 install -m 644 deploy/deskpost-api.service /etc/systemd/system/
-(set -a; . /etc/deskpost/env; set +a; sudo -E -u deskpost /usr/local/bin/api migrate)
+(set -a; . /etc/deskpost/env; set +a; sudo -E -u deskpost /usr/local/bin/deskpost migrate)
 systemctl daemon-reload && systemctl enable --now deskpost-api
 install -d /srv/deskpost/web && cp -R apps/web/out/. /srv/deskpost/web/
 caddy validate --config deploy/Caddyfile --adapter caddyfile && systemctl reload caddy
@@ -60,7 +60,7 @@ It writes a custom-format `pg_dump` and a tarball of `STORAGE_DIR` (mode 600, 14
 
 1. Back up.
 2. Build the new binary and UI, diff `.env.example` against your env file.
-3. `api migrate`. Migrations are forward-only; rollback means restoring the backup and the old binary.
+3. `deskpost migrate`. Migrations are forward-only; rollback means restoring the backup and the old binary.
 4. Restart the service, replace the UI, run `scripts/smoke.sh`.
 
 The API and UI are versioned together. Deploy both in one step.

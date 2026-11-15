@@ -29,7 +29,7 @@ The API is configured through environment variables only. `.env.example` lists e
 | `DP_TRUSTED_PROXIES` | empty | IPs or CIDRs of your reverse proxy. Only these may set `X-Forwarded-For`. |
 | `STORAGE_DIR` | `./data/storage` | Attachment root. Production: `/var/lib/deskpost/storage`. |
 | `DP_ALLOW_SIGNUP` | `false` | `true` opens public `POST /auth/signup`. |
-| `DP_FIRST_USER_ADMIN` | `false` | With sign-up open, the first account becomes admin. Prefer `api bootstrap`. |
+| `DP_FIRST_USER_ADMIN` | `false` | With sign-up open, the first account becomes admin. Prefer `deskpost bootstrap`. |
 | `DP_ALLOW_PRIVATE_MAIL_HOSTS` | `false` | Local mail servers only (Mailpit, GreenMail). |
 | `RUST_LOG` | `info` | `api=debug,sqlx=warn` for troubleshooting. |
 
@@ -52,7 +52,7 @@ The API is configured through environment variables only. `.env.example` lists e
 | `DP_MAIL_PLAINTEXT` | `false` | Never use TLS to project mail servers. Local dev and tests only. |
 | `DP_IMAP_POLL_SECS` | `60` | Poll interval. |
 | `DP_IMAP_CONCURRENCY` | `4` | Mailboxes polled in parallel. |
-| `DP_BOOTSTRAP_PASSWORD` | | Read by `api bootstrap` only. Remove it afterwards. |
+| `DP_BOOTSTRAP_PASSWORD` | | Read by `deskpost bootstrap` only. Remove it afterwards. |
 
 ## Compose and web
 
@@ -63,7 +63,7 @@ The API is configured through environment variables only. `.env.example` lists e
 ## Commands
 
 ```bash
-api serve       # HTTP server and workers
-api migrate     # forward-only migrations
-api bootstrap --email you@example.com --name "You"   # first admin, password from DP_BOOTSTRAP_PASSWORD
+deskpost serve       # HTTP server and workers
+deskpost migrate     # forward-only migrations
+deskpost bootstrap --email you@example.com --name "You"   # first admin, password from DP_BOOTSTRAP_PASSWORD
 ```

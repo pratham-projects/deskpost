@@ -9,7 +9,7 @@ description: Short answers about status, names, mail, storage and licensing.
 
 ## Is it production ready?
 
-Not yet. It is pre-release with no tagged release. It has unit, property, integration and browser tests, a review pass and a local final gate, but the container build is not exercised in CI. Read the accepted risks in [Security](#/security).
+Not yet. It is pre-release with no tagged release. It has unit, property, integration and browser tests, a review pass and a local final gate, and the container images build in CI and were run end to end with Docker Compose before release. Read the accepted risks in [Security](#/security).
 
 ## What are the repo, binary and unit called?
 
@@ -29,7 +29,7 @@ On the server's filesystem under `STORAGE_DIR`. There is no S3 driver. Back them
 
 ## How do I get the first admin in?
 
-`api bootstrap --email ... --name ...` with `DP_BOOTSTRAP_PASSWORD` in the environment. Public sign-up is off by default.
+`deskpost bootstrap --email ... --name ...` with `DP_BOOTSTRAP_PASSWORD` in the environment. Public sign-up is off by default.
 
 ## How fast is it?
 

@@ -21,5 +21,7 @@
 | R60 | final gate | ci + e2e green on staging, main merge awaits approval |
 | S2 | feat/site | done, merged (Deskpost site in `site/`) |
 | R70 | feat/rebrand | done: SendDesk -> Deskpost full rename + deploy-check env fix; awaiting merge to staging |
+| R90 | feat/pre-release | done: binary rename, reopen semantics, LICENSE/CHANGELOG, CI docker + deploy-check, docker verified; awaiting merge to staging |
+| R80 | feat/pre-release | done: review findings audit (`reviews/STATUS.md`), `shouldNotify` new-ticket mail (migration 0007) |
 
 Rules: [Pre-Merge Gate](/wisdom/pre-merge-gate.md).

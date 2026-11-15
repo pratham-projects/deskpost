@@ -15,7 +15,7 @@ use super::dto::TicketDto;
 use crate::client_ip::ClientIp;
 use crate::error::{ApiError, Envelope, Fields};
 use crate::extract::{AuthUser, project_role};
-use crate::mail_out::enqueue_auto_response;
+use crate::mail_out::{enqueue_auto_response, enqueue_team_notice};
 use crate::ratelimit::Rule;
 use crate::state::AppState;
 
@@ -76,6 +76,13 @@ fn wants_notification(fields: &HashMap<String, String>) -> bool {
         let v = v.trim();
         !(v.eq_ignore_ascii_case("false") || v == "0")
     })
+}
+
+/// Queue the "new ticket" notice for members with `shouldNotify`; best effort like the confirmation.
+async fn notify_team(s: &AppState, ticket: &tickets::Ticket) {
+    if let Err(e) = enqueue_team_notice(&s.pool, ticket.project_id, ticket.id).await {
+        tracing::warn!(error = %e, "team notice not queued");
+    }
 }
 
 /// Queue the confirmation mail after commit; a failure is logged and never fails the request.
@@ -153,6 +160,7 @@ pub async fn admin(
     let ticket = tickets::create(&s.pool, &Access::Member(user.id), &new)
         .await?
         .ok_or_else(|| ApiError::not_found("Project"))?;
+    notify_team(&s, &ticket).await;
     if wants_notification(&fields) {
         confirm(&s, &ticket).await;
     }
@@ -180,6 +188,7 @@ pub async fn widget(
     let ticket = tickets::create(&s.pool, &access, &new)
         .await?
         .ok_or(ApiError::TokenInvalid)?;
+    notify_team(&s, &ticket).await;
     if wants_notification(&fields) {
         confirm(&s, &ticket).await;
     }

@@ -56,8 +56,8 @@ Sign in, create a project, and in its settings point SMTP at `mailpit` port `102
 
 ```bash
 export DATABASE_URL=postgres://user@localhost:5432/postgres
-cargo run -p api -- migrate
-DP_ENV=development JWT_SECRET=... DP_SECRET_KEY=... cargo run -p api -- serve
+cargo run -p deskpost -- migrate
+DP_ENV=development JWT_SECRET=... DP_SECRET_KEY=... cargo run -p deskpost -- serve
 cd apps/web && bun install && bun run dev
 ```
 

@@ -454,6 +454,23 @@ pub async fn enqueue_auto_response(
     .is_some())
 }
 
+/// Queue a "new ticket" notice for the members who asked for one (`shouldNotify`). Best effort: call
+/// after the ticket committed and log, never fail, on error. Returns how many notices were queued.
+pub async fn enqueue_team_notice(
+    pool: &Pool,
+    project_id: Id,
+    ticket_id: Id,
+) -> dp_db::Result<usize> {
+    let Some(t) = mailq::ticket_mail(pool, project_id, ticket_id).await? else {
+        return Ok(0);
+    };
+    let subject: String = format!("New ticket #{}: {}", t.ticket_number, ctl_free(&t.subject))
+        .chars()
+        .take(255)
+        .collect();
+    mailq::enqueue_team_notice(pool, project_id, ticket_id, &subject).await
+}
+
 /// Queue target for an agent reply: the ticket's client and the subject the mail will carry.
 /// `None` when the ticket does not exist in the project.
 pub async fn reply_outbox(
@@ -546,10 +563,62 @@ async fn send_reply_job(
     }
 }
 
+/// "New ticket" notice to one team member, from the project's own mailbox. Plain text with the
+/// ticket number, sender and subject only; the description stays in the app.
+async fn send_notice_job(
+    state: &AppState,
+    job: &mailq::OutboxJob,
+) -> Result<String, (String, bool)> {
+    let fatal = |m: &str| (m.to_string(), false);
+    let db = |e: dp_db::Error| (redact(&e.to_string(), &[]), true);
+    let settings = projects::mail_settings(&state.pool, job.project_id)
+        .await
+        .map_err(db)?
+        .ok_or_else(|| fatal("project not found"))?;
+    let (smtp, password) = smtp_config(
+        &settings,
+        &state.secrets,
+        state.config.mail.plaintext,
+        state.config.allow_private_mail_hosts,
+    )
+    .map_err(|_| fatal("SMTP not configured"))?;
+    let to = mailq::log_recipient(&state.pool, job.email_log_id)
+        .await
+        .map_err(db)?
+        .ok_or_else(|| fatal("email log not found"))?;
+    let t = mailq::ticket_mail(&state.pool, job.project_id, job.ticket_id)
+        .await
+        .map_err(db)?
+        .ok_or_else(|| fatal("ticket not found"))?;
+    let email = OutboundEmail {
+        to: vec![to],
+        subject: format!(
+            "[{}] New ticket #{}",
+            ctl_free(&t.project_name),
+            t.ticket_number
+        ),
+        text: Some(format!(
+            "A new ticket was opened in {}.\n\nTicket: #{}\nFrom: {}\nSubject: {}\n",
+            ctl_free(&t.project_name),
+            t.ticket_number,
+            ctl_free(&t.client_email),
+            ctl_free(&t.subject),
+        )),
+        ..Default::default()
+    };
+    dp_mail::send(&smtp, &email)
+        .await
+        .map(|id| bare(&id))
+        .map_err(|e| (redact(&e.to_string(), &[&password]), true))
+}
+
 /// `Err((message, retryable))`.
 async fn send_job(state: &AppState, job: &mailq::OutboxJob) -> Result<String, (String, bool)> {
     if job.kind == "reply" {
         return send_reply_job(state, job).await;
+    }
+    if job.kind == "new_ticket" {
+        return send_notice_job(state, job).await;
     }
     let fatal = |m: &str| (m.to_string(), false);
     let db = |e: dp_db::Error| (redact(&e.to_string(), &[]), true);

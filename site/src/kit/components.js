@@ -64,7 +64,7 @@ define("x-hero", class extends HTMLElement {
           <a class="btn primary" href="${base}docs/#/quickstart">Get started ${icon("arrow")}</a>
           <a class="btn" href="https://github.com/${brand.repo}">${icon("github")} Star on GitHub</a>
         </div>
-        <p class="hero-meta"><span data-tag>${esc(brand.status)}</span><span>${esc(brand.license)}</span><span>${esc(brand.stack)}</span></p>
+        <p class="hero-meta"><span data-tag>${esc(brand.status)}</span><span><a href="https://github.com/${brand.repo}/blob/main/LICENSE">${esc(brand.license)}</a></span><span>${esc(brand.stack)}</span></p>
       ${s ? `</div>${shot}` : ""}
       </div>
     </section>`;
@@ -183,9 +183,9 @@ define("x-footer", class extends HTMLElement {
         <div>${mark()}<p>${md(brand.footBlurb)}</p></div>
         ${col("Product", [["Features", `${base}#features`], ["Install", `${base}#install`], ["Releases", `${gh}/releases`]])}
         ${col("Docs", (brand.footDocs ?? [["Quickstart", "quickstart"], ["Configuration", "configuration"], ["Security", "security"]]).map(([t, s]) => [t, `${base}docs/#/${s}`]).concat([["llms.txt", `${base}llms.txt`]]))}
-        ${col("Project", brand.footProject ?? [["GitHub", gh], ["Issues", `${gh}/issues`], ["Security policy", `${gh}/blob/staging/SECURITY.md`]])}
+        ${col("Project", brand.footProject ?? [["GitHub", gh], ["Issues", `${gh}/issues`], ["Security policy", `${gh}/blob/main/SECURITY.md`]])}
       </div>
-      <div class="foot-end"><span>${esc(brand.license)}</span><span>${esc(brand.footNote)}</span></div>
+      <div class="foot-end"><span><a href="${gh}/blob/main/LICENSE">${esc(brand.license)}</a></span><span>${esc(brand.footNote)}</span></div>
     </div>`;
   }
 });

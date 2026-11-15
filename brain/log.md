@@ -1,5 +1,21 @@
 # Changelog
 
+## [2026-11-16] Pre-release pass (feat/pre-release)
+
+- **Done**: binary `api` -> `deskpost` (crate, bin, Dockerfile, unit ExecStart, installer `deskpost-installer.sh`, scripts, docs, site; lib name stays `api`). Customer reply reopens resolved/closed to `in_progress` (core `on_customer_reply` now matches db; manual reopen of closed stays `pending`); auto-close default 7 days verified in migration, docs, site. `LICENSE` (AGPL-3.0), `CHANGELOG.md`, `docs/releasing.md` (main, first tag `v0.1.0-rc.1`), CI jobs `docker-build` (api+web, no push) and `deploy-check`; `dist plan` + local `dist build` ok. Compose gets `name: deskpost`.
+- **Docker**: colima installed (`brew install colima docker docker-compose docker-buildx`, plugin dir in `~/.docker/config.json`). Images build; stack ran end to end (migrate 7, bootstrap, sign-in, projects) then torn down. Site security/FAQ/install copy synced with new accepted risks (widget frameable, no per-sender intake throttle) and the docker/CI facts. History secret scan clean.
+- **Found + fixed**: `.env.example` inline `# comments` became the value in Compose (`DP_TRUSTED_PROXIES` failed `migrate`); comments now on their own lines. Hero used undefined `gh` after the LICENSE-link edit and crashed the site (smoke caught it); links now point at `blob/main`. docs/API.md drift (PDF is download-only, key layout `ab/cd/...`).
+- **Gate**: fmt, `make ci`, `make e2e` (20), `make deploy-check`, site build + smoke at `/deskpost/` green.
+- **Tribe**: codex login revoked (`codex login` needed); codex tasks rerouted to claude1 by editing `.coord/board.json`. Workers must run the site smoke when they touch `site/`.
+- **Left**: smoke.sh against the host Caddy front (headers live in `deploy/Caddyfile`, not the web image); first real GitHub run of the new CI jobs; manual items in the release checklist.
+
+## [2026-11-16] Review findings audit H/M/L (feat/pre-release)
+
+- **Done**: every finding in `reviews/{auth-api,mail-storage,web-deploy}.md` re-checked against the tree; `reviews/STATUS.md` has id, status and file:line evidence. Nearly all were already fixed (R50 fix branches, R51 leftovers) or accepted in `SECURITY.md`.
+- **Fixed now**: `shouldNotify` sent no mail although `docs/API.md` promises a new-ticket mail to flagged members. New outbox kind `new_ticket` (migration `0007`), `mail_out::enqueue_team_notice` on widget, admin and inbound ticket creation, one job per active flagged member, subject and sender only (no description), bounded by the 1000-pending cap. systemd unit: `ProtectKernelModules`, `RestrictNamespaces`, `CapabilityBoundingSet=`, `UMask=0077`.
+- **Left open (see STATUS.md)**: `imap_last_error` has no API reader; no per-sender ticket-creation throttle on the mail paths; docs drift in `docs/API.md` (PDF inline, on-disk key, endpoint table) and a widget note in `SECURITY.md`; curl healthcheck, image digest pins, Caddy body-cap split.
+- **Lesson**: [a new outbox kind changes every test that counts `mail_outbox`](/wisdom/time-traps.md); count by `kind`.
+
 ## [2026-11-16] Rebrand SendDesk -> Deskpost (feat/rebrand)
 
 - **Done**: full rename to the site's name. Display name, `senddesk`/`sendesk` -> `deskpost` (systemd unit `deskpost-api`, `/etc|/var/lib|/srv/deskpost`, db/user `deskpost`, ghcr `deskpost-api`/`deskpost-web`, backup names, mock/cookie keys, Pages base `/deskpost/`), env `SD_*` -> `DP_*`, crates `sd-*` -> `dp-*`, scratch dbs `dp_*`. Site "site-only rename" disclaimers removed (intro, FAQ, brand.js, PRODUCT.md, DESIGN.md).

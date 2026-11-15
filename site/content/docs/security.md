@@ -28,7 +28,7 @@ Report vulnerabilities privately by emailing the maintainer (the address is in t
 - Terminate TLS at a reverse proxy and set `DP_TRUSTED_PROXIES` to that proxy only.
 - `FRONTEND_URL` lists exact origins, never `*`.
 - Leave `DP_ALLOW_PRIVATE_MAIL_HOSTS=false` in production.
-- Set `DP_ALLOW_SIGNUP=false` after `api bootstrap`, unless open sign-up is intended.
+- Set `DP_ALLOW_SIGNUP=false` after `deskpost bootstrap`, unless open sign-up is intended.
 - Pass the bootstrap password through `DP_BOOTSTRAP_PASSWORD`, not `--password`.
 - Set `DP_WEBHOOK_SECRET` only if you expose the inbound webhook.
 - Dedicated Postgres role, not exposed publicly. `.env` is `chmod 600` and never committed.
@@ -45,6 +45,8 @@ These risks were reviewed and accepted (from `SECURITY.md`):
 - A DNS rebinding window exists on the connection-test endpoints.
 - `/health/db` is unauthenticated, covered by the global timeout and in-flight cap.
 - `DP_ENV=development` returns the refresh token in the body. Never use it in production.
+- The widget page is frameable on purpose and takes a public submit-only project key from the URL.
+- Mail intake has no per-sender ticket throttle beyond body, attachment and per-project limits.
 - Mail leases assume one clock; a worker that dies mid-send can repeat that one mail.
 
 ## Rotating secrets

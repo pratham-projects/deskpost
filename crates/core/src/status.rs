@@ -16,7 +16,7 @@ pub enum TicketStatus {
 pub enum TransitionError {
     /// The ticket is already in the requested status.
     Unchanged,
-    /// Closed tickets can only be reopened to `pending`.
+    /// Closed tickets can only be manually reopened to `pending`.
     ClosedIsFinal,
 }
 
@@ -43,7 +43,7 @@ impl TicketStatus {
     }
 
     /// Agents may move a ticket between any open states and close it. A closed ticket stays
-    /// closed except for a reopen to `pending` (customer replies reopen it).
+    /// closed except for a manual reopen to `pending`.
     pub fn transition(self, to: TicketStatus) -> Result<TicketStatus, TransitionError> {
         if self == to {
             return Err(TransitionError::Unchanged);
@@ -58,10 +58,12 @@ impl TicketStatus {
         self.transition(to).is_ok()
     }
 
-    /// Status a ticket takes when the customer replies by email.
+    /// Status a ticket takes when the customer replies (email/webhook). A reply to a resolved
+    /// or closed ticket reopens it to `in_progress`; other statuses stay. This is a system
+    /// reopen and bypasses `transition`, whose closed -> `pending` rule is for MANUAL reopens.
     pub fn on_customer_reply(self) -> TicketStatus {
         match self {
-            Self::Resolved | Self::Closed | Self::OnHold => Self::Pending,
+            Self::Resolved | Self::Closed => Self::InProgress,
             other => other,
         }
     }
@@ -138,11 +140,17 @@ mod tests {
     #[test]
     fn customer_reply_reopens() {
         use TicketStatus::*;
-        assert_eq!(Resolved.on_customer_reply(), Pending);
-        assert_eq!(Closed.on_customer_reply(), Pending);
-        assert_eq!(OnHold.on_customer_reply(), Pending);
+        assert_eq!(Resolved.on_customer_reply(), InProgress);
+        assert_eq!(Closed.on_customer_reply(), InProgress);
+        assert_eq!(OnHold.on_customer_reply(), OnHold);
         assert_eq!(InProgress.on_customer_reply(), InProgress);
         assert_eq!(Pending.on_customer_reply(), Pending);
+        // Manual reopen of a closed ticket is still pending only.
+        assert_eq!(
+            Closed.transition(InProgress),
+            Err(TransitionError::ClosedIsFinal)
+        );
+        assert_eq!(Closed.transition(Pending), Ok(Pending));
     }
 
     #[test]
@@ -154,9 +162,13 @@ mod tests {
 
     proptest! {
         #[test]
-        fn customer_reply_result_is_always_a_legal_move_or_noop(s in any_status()) {
+        fn customer_reply_only_reopens_resolved_or_closed(s in any_status()) {
             let to = s.on_customer_reply();
-            prop_assert!(to == s || s.can_transition(to));
+            if matches!(s, TicketStatus::Resolved | TicketStatus::Closed) {
+                prop_assert_eq!(to, TicketStatus::InProgress);
+            } else {
+                prop_assert_eq!(to, s);
+            }
         }
 
         #[test]

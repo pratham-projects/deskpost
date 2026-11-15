@@ -143,7 +143,7 @@ interface UnreadItem { id: string; ticketId: string; projectId: string; createdA
 | `POST /auth/signout` | refresh token optional | none | `200 data: { message }`; revokes the token's family; cookie cleared. Always 200. | |
 | `POST /auth/signout-all` | user | none | `200 data: { message }`; revokes every family of the caller | 401 |
 | `GET /auth/me` | user | none | `200 data: { user: User }` | 401 |
-| `GET /auth/config` | public | none | `200 data: { signupEnabled: bool }` (`DP_ALLOW_SIGNUP`, default false; when false, `POST /auth/signup` is `403 FORBIDDEN` and the first admin comes from `api bootstrap`) | |
+| `GET /auth/config` | public | none | `200 data: { signupEnabled: bool }` (`DP_ALLOW_SIGNUP`, default false; when false, `POST /auth/signup` is `403 FORBIDDEN` and the first admin comes from `deskpost bootstrap`) | |
 
 Bootstrap: the first user ever registered gets role `admin`; every later signup is `agent`.
 Passwords are Argon2id; the account is looked up by lower-cased email.
@@ -239,7 +239,7 @@ Errors: 403/404 (admin route, not a member), 401 `TOKEN_INVALID` on the public r
 | `DELETE /tickets/:id` | project-admin | | `data: { success: true, id }` (hard delete, cascades messages/attachments/unread/viewers) |
 
 - `assignedToUserId` must be a member of the ticket's project (422 otherwise); `null` unassigns.
-- `status` change rules (state machine in `dp-core`; the query that persists it is `dp_db::tickets::update`): moves follow the state machine (an open status may go to any other; a `closed` ticket can only be reopened to `pending`, else `409 CONFLICT`; re-sending the current status is a no-op); entering `resolved` or `closed` sets `closedAt = now()` (if not already set); leaving them clears `closedAt` (TS never cleared it on reopen). Entering `resolved` sends the `resolved` email response (if enabled) after commit.
+- `status` change rules (state machine in `dp-core`; the query that persists it is `dp_db::tickets::update`): moves follow the state machine (an open status may go to any other; a `closed` ticket can only be manually reopened to `pending`, else `409 CONFLICT`; re-sending the current status is a no-op); entering `resolved` or `closed` sets `closedAt = now()` (if not already set); leaving them clears `closedAt` (TS never cleared it on reopen). Entering `resolved` sends the `resolved` email response (if enabled) after commit.
 - Every successful update bumps `updatedAt`.
 
 ### 7.4 Messages
@@ -254,7 +254,7 @@ Errors: 403/404 (admin route, not a member), 401 `TOKEN_INVALID` on the public r
 - Otherwise, unless `sendEmail === false`, the reply is queued for email **in the same transaction as the message** (a `mail_outbox` job plus a `pending` `email_logs` row). The request never talks to SMTP and always answers `201`. The outbox worker (every 15 s) sends it and stores the Message-ID headers on the message; a failure is retried with backoff (30 s, 2 min, 8 min, 32 min, then 1 h, 5 attempts) and, once given up (or when the project has no SMTP settings), the `email_logs` row is `failed` with the error. A send is cut off after 45 s. This is the single path for `/messages` and attachment uploads.
 - `attachmentIds` must belong to the same ticket and be unlinked; they are linked to the message (422 otherwise).
 - Posting bumps ticket `updatedAt`; a first agent reply sets `firstResponseAt`.
-- Inbound client messages (IMAP/webhook, not an HTTP route here) reopen `resolved`/`closed` tickets to `in_progress`, add an unread row, and de-duplicate on the email `Message-ID`.
+- Inbound client messages (IMAP/webhook, not an HTTP route here) reopen `resolved`/`closed` tickets to `in_progress` (a system reopen, unlike the manual closed -> `pending` rule above) and clear `closedAt`, add an unread row, and de-duplicate on the email `Message-ID`.
 
 ## 8. Templates, email responses
 
@@ -301,10 +301,10 @@ Files live on the server filesystem behind `dp-storage`; the database stores onl
 | `PUT /attachments/:ticketId` | member of the ticket's project | raw body = file bytes; headers `Content-Type` (file type), `X-Filename`, optional `X-Message`, `X-Send-Email: true` | `201 data: { attachmentId, messageId }` |
 | `POST /attachments/:ticketId/multiple` | member | multipart: `files` (1..n), `message?`, `sendEmail?` ("true") | `201 data: { attachmentIds: string[], messageId }` |
 | `GET /attachments/ticket/:ticketId` | member | | `data: Attachment[]` |
-| `GET /attachments/file/:attachmentId` | member (Bearer, or `?token=` signed download token minted for the viewer) | | raw bytes. `Content-Type` from the stored type; `Content-Disposition: inline` only for the allow-listed safe types (png, jpeg, gif, webp, pdf, plain text), `attachment` for everything else; always `X-Content-Type-Options: nosniff`; `Cache-Control: private` |
+| `GET /attachments/file/:attachmentId` | member (Bearer, or `?token=` signed download token minted for the viewer) | | raw bytes. `Content-Type` from the stored type; `Content-Disposition: inline` only for the allow-listed safe types (png, jpeg, gif, webp, avif, bmp, plain text, csv), `attachment` for everything else (PDF included); always `X-Content-Type-Options: nosniff`; `Cache-Control: private` |
 
 - Each upload creates an agent message carrying the file(s) (body = `message` or "Sent an attachment: name" / "Sent N attachments"); the message is queued for email (same outbox path and failure semantics as `/messages`) when `sendEmail` is true and not internal. `X-Filename` and `X-Message` may be percent-encoded UTF-8 (raw UTF-8 bytes are accepted too); a `%` that is not a valid escape stays literal.
-- Caps (configurable, defaults): 10 MB per file, 25 MB per request/email, 20 files per request, project quota `storage_quota_mb` (default 1024). Filenames are sanitised (path separators, control chars, leading dots removed, <=255 bytes); the on-disk key is generated (`{projectId}/{ticketId}/{uuid}`), never derived from user input.
+- Caps (configurable, defaults): 10 MB per file, 25 MB per request/email, 20 files per request, project quota `storage_quota_mb` (default 1024). Filenames are sanitised (path separators, control chars, leading dots removed, <=255 bytes); the on-disk key is generated (`ab/cd/abcd<28 hex>`, a random id sharded by its first four hex digits), never derived from user input.
 - Content check: a file whose bytes start like a program (Windows PE `MZ`, ELF, Mach-O, `#!`) is refused with `415` whatever type it declares. A missing or `application/octet-stream` type is resolved from the file extension when that maps to an allowed type, else `415`.
 - Allowed types: images, PDF, text, office documents, zip (see `ALLOWED_FILE_TYPES` in `apps/web/lib/api/attachments.ts`; the server list is authoritative and the UI list must be a subset). Others: `415`.
 - UI note: the mock returned a bare `{ attachmentId }`; the real API wraps it in the envelope, so `attachmentsApi.upload*` must read `.data` (R30).
