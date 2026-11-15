@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Targets: `api` (Rust server) and `web` (static UI).
-#   docker build --target api -t senddesk-api .
-#   docker build --target web -t senddesk-web .
+#   docker build --target api -t deskpost-api .
+#   docker build --target web -t deskpost-web .
 # The UI is a static export and expects the API on the same origin (leave NEXT_PUBLIC_API_URL empty).
 
 FROM rust:1-bookworm AS api-build
@@ -15,11 +15,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM debian:bookworm-slim AS api
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --system --uid 10001 --home /var/lib/senddesk senddesk \
-    && mkdir -p /var/lib/senddesk/storage && chown -R senddesk /var/lib/senddesk
+    && useradd --system --uid 10001 --home /var/lib/deskpost deskpost \
+    && mkdir -p /var/lib/deskpost/storage && chown -R deskpost /var/lib/deskpost
 COPY --from=api-build /api /usr/local/bin/api
-USER senddesk
-ENV PORT=3000 STORAGE_DIR=/var/lib/senddesk/storage
+USER deskpost
+ENV PORT=3000 STORAGE_DIR=/var/lib/deskpost/storage
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s CMD curl -fsS http://127.0.0.1:${PORT}/health || exit 1
 ENTRYPOINT ["api"]

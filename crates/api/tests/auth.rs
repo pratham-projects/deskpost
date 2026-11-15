@@ -5,7 +5,7 @@ use api::password::Hasher;
 use api::routes::auth::create_admin;
 use axum::http::StatusCode;
 use common::*;
-use sd_db::{Role, sessions, users};
+use dp_db::{Role, sessions, users};
 use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -22,7 +22,7 @@ async fn refresh(t: &TestApp, cookie: &str) -> Resp {
     t.send(t.post("/auth/refresh").cookie(cookie)).await
 }
 
-async fn family_of(t: &TestApp, email: &str) -> sd_db::Id {
+async fn family_of(t: &TestApp, email: &str) -> dp_db::Id {
     sqlx::query_scalar("SELECT f.id FROM refresh_families f JOIN users u ON u.id = f.user_id WHERE u.email = $1 ORDER BY f.created_at DESC LIMIT 1")
         .bind(email)
         .fetch_one(&t.pool)
@@ -259,7 +259,7 @@ async fn signin_returns_tokens_and_a_dev_cookie(pool: PgPool) {
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn production_cookie_is_strict_secure_and_token_stays_out_of_the_body(pool: PgPool) {
-    let c = api::config::Config::from_lookup(env_with(&[("SD_ENV", "production")])).unwrap();
+    let c = api::config::Config::from_lookup(env_with(&[("DP_ENV", "production")])).unwrap();
     let mut c = c;
     c.argon2 = Argon2Cost {
         memory_kib: 8,

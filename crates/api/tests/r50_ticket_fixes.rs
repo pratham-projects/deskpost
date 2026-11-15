@@ -5,13 +5,13 @@ mod mailkit;
 
 use axum::http::Method;
 use common::*;
+use dp_db::tickets::{Guarded, TicketPatch};
+use dp_db::{EmailResponseStatus, Role, TicketStatus, email_responses};
 use mailkit::*;
-use sd_db::tickets::{Guarded, TicketPatch};
-use sd_db::{EmailResponseStatus, Role, TicketStatus, email_responses};
 use serde_json::json;
 use sqlx::PgPool;
 
-async fn patch(k: &Kit, tok: &str, id: sd_db::Id, body: serde_json::Value) -> Resp {
+async fn patch(k: &Kit, tok: &str, id: dp_db::Id, body: serde_json::Value) -> Resp {
     k.t.send_json(
         k.t.req(Method::PATCH, &format!("/tickets/{id}"))
             .bearer(tok),
@@ -77,7 +77,7 @@ async fn restricted_member_lists_only_clients_of_visible_tickets(pool: PgPool) {
     k.t.add_member(owner.id, project.id, agent.id, Role::Agent)
         .await;
     k.ticket(&owner, &project, "other@example.com").await;
-    sd_db::tickets::update(
+    dp_db::tickets::update(
         &k.t.pool,
         owner.id,
         mine.id,
@@ -114,7 +114,7 @@ async fn guarded_update_refuses_a_stale_status(pool: PgPool) {
         status: Some(TicketStatus::Closed),
         ..Default::default()
     };
-    sd_db::tickets::update(&k.t.pool, owner.id, ticket.id, &closed)
+    dp_db::tickets::update(&k.t.pool, owner.id, ticket.id, &closed)
         .await
         .unwrap();
     // The caller validated `in_progress` against `open`, but the row is already closed.
@@ -122,7 +122,7 @@ async fn guarded_update_refuses_a_stale_status(pool: PgPool) {
         status: Some(TicketStatus::InProgress),
         ..Default::default()
     };
-    let r = sd_db::tickets::update_guarded(
+    let r = dp_db::tickets::update_guarded(
         &k.t.pool,
         owner.id,
         ticket.id,
@@ -132,14 +132,14 @@ async fn guarded_update_refuses_a_stale_status(pool: PgPool) {
     .await
     .unwrap();
     assert!(matches!(r, Guarded::Stale(TicketStatus::Closed)), "{r:?}");
-    let now = sd_db::tickets::get(&k.t.pool, owner.id, ticket.id)
+    let now = dp_db::tickets::get(&k.t.pool, owner.id, ticket.id)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(now.status, TicketStatus::Closed);
 }
 
-fn form(id: sd_db::Id, extra: &[(&str, &str)]) -> (String, Vec<u8>) {
+fn form(id: dp_db::Id, extra: &[(&str, &str)]) -> (String, Vec<u8>) {
     let mut fields = vec![
         ("projectId", id.to_string()),
         ("clientEmail", "new@example.com".into()),

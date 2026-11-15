@@ -1,4 +1,4 @@
-//! SendDesk API. `build_app(state)` returns the whole service as a `Router`, so tests drive it with
+//! Deskpost API. `build_app(state)` returns the whole service as a `Router`, so tests drive it with
 //! `tower::ServiceExt::oneshot` and no socket.
 
 use std::time::Duration;

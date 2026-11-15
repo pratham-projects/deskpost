@@ -103,8 +103,8 @@ impl ApiError {
     }
 }
 
-impl From<sd_db::Error> for ApiError {
-    fn from(e: sd_db::Error) -> Self {
+impl From<dp_db::Error> for ApiError {
+    fn from(e: dp_db::Error) -> Self {
         Self::internal(e)
     }
 }

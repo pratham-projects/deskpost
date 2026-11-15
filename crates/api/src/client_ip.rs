@@ -1,5 +1,5 @@
 //! Client address behind reverse proxies. `X-Forwarded-For` is honoured only when the TCP peer is
-//! in `SD_TRUSTED_PROXIES`, and then read from the right: the first address that is not itself a
+//! in `DP_TRUSTED_PROXIES`, and then read from the right: the first address that is not itself a
 //! trusted proxy is the client. Everything to its left is attacker-controlled and ignored.
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};

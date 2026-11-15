@@ -1,4 +1,4 @@
-# SendDesk HTTP API contract (v3)
+# Deskpost HTTP API contract (v3)
 
 Source of truth for R20-R23 (server) and R30 (UI wiring). Derived from `apps/web/mock/*`,
 `apps/web/lib/api/*.ts`, `apps/web/lib/types.ts` (what the UI needs) and cross-checked with
@@ -10,7 +10,7 @@ is wrong, this document decides; every such case is listed in [Deviations](#devi
 - Base path `/api/v3` (`API_VERSION=v3`; the UI reads `NEXT_PUBLIC_API_VERSION`). Only `/health` is outside it.
 - JSON in/out (`Content-Type: application/json`) unless an endpoint says multipart or binary.
 - IDs are UUIDs (strings). Timestamps are RFC 3339 UTC strings (`2026-10-27T10:00:00Z`). Field names are camelCase.
-- Request bodies are capped (default 64 KiB, `SD_BODY_LIMIT_BYTES`; upload and webhook routes raise their own cap, section 9). Over the cap: `413 PAYLOAD_TOO_LARGE`.
+- Request bodies are capped (default 64 KiB, `DP_BODY_LIMIT_BYTES`; upload and webhook routes raise their own cap, section 9). Over the cap: `413 PAYLOAD_TOO_LARGE`.
   Unknown JSON fields are ignored; missing/invalid required fields give `422 VALIDATION_ERROR`.
 
 ### Envelope
@@ -54,7 +54,7 @@ is wrong, this document decides; every such case is listed in [Deviations](#devi
   `refresh_token` (`HttpOnly; Path=/api/v3/auth; SameSite=Strict` in production / `Lax` in dev; `Secure` in production;
   `Max-Age` 7 days, sliding). Absolute family lifetime 90 days.
   Accepted from the cookie, else from the `X-Refresh-Token` header (cross-origin dev setups).
-  The token is also returned in the JSON body (`refreshToken`) **only when `SD_ENV != production`**, as in the TS product;
+  The token is also returned in the JSON body (`refreshToken`) **only when `DP_ENV != production`**, as in the TS product;
   the UI stores it in localStorage for those setups.
 - Reuse of an already-rotated refresh token revokes the whole family (`revoked_reason = reuse_detected`), except a replay within
   10 s of the rotation, which is answered with `401 TOKEN_EXPIRED` but does **not** revoke (parallel tabs).
@@ -143,7 +143,7 @@ interface UnreadItem { id: string; ticketId: string; projectId: string; createdA
 | `POST /auth/signout` | refresh token optional | none | `200 data: { message }`; revokes the token's family; cookie cleared. Always 200. | |
 | `POST /auth/signout-all` | user | none | `200 data: { message }`; revokes every family of the caller | 401 |
 | `GET /auth/me` | user | none | `200 data: { user: User }` | 401 |
-| `GET /auth/config` | public | none | `200 data: { signupEnabled: bool }` (`SD_ALLOW_SIGNUP`, default false; when false, `POST /auth/signup` is `403 FORBIDDEN` and the first admin comes from `api bootstrap`) | |
+| `GET /auth/config` | public | none | `200 data: { signupEnabled: bool }` (`DP_ALLOW_SIGNUP`, default false; when false, `POST /auth/signup` is `403 FORBIDDEN` and the first admin comes from `api bootstrap`) | |
 
 Bootstrap: the first user ever registered gets role `admin`; every later signup is `agent`.
 Passwords are Argon2id; the account is looked up by lower-cased email.
@@ -187,11 +187,11 @@ A project is the tenant. `GET /projects` returns only projects the caller is a m
 | `POST /projects/:id/test-imap` | same | same (`port` defaults to 993) | same | same |
 
 Notes:
-- The stored password is only used for a probe when host, port and username equal the stored ones; any other target needs `password` in the request (422 `password`). Resolved addresses are checked too (a name that resolves to a private address is refused). `tls: "none"` needs `SD_ALLOW_PRIVATE_MAIL_HOSTS=1`.
+- The stored password is only used for a probe when host, port and username equal the stored ones; any other target needs `password` in the request (422 `password`). Resolved addresses are checked too (a name that resolves to a private address is refused). `tls: "none"` needs `DP_ALLOW_PRIVATE_MAIL_HOSTS=1`.
 - TLS is not stored: port 465/993 means implicit TLS, everything else STARTTLS.
 - Changing `smtpHost`/`smtpPort`/`smtpUsername` (or the IMAP equivalents) while a password is stored requires the password again in the same PATCH (`""` clears it), otherwise 422. PATCH applies project and mail fields in one transaction.
 - `DELETE /projects/:id` is owner only (403 for other admins); the owner cannot be demoted or removed (409).
-- SMTP/IMAP hosts are validated: loopback/private targets are rejected unless `SD_ALLOW_PRIVATE_MAIL_HOSTS=1` (`422`).
+- SMTP/IMAP hosts are validated: loopback/private targets are rejected unless `DP_ALLOW_PRIVATE_MAIL_HOSTS=1` (`422`).
 - `smtpPort` defaults to 587, `smtpHost` has **no** provider default (TS defaulted to `smtp.gmail.com`); outbound mail needs a configured host or the reply endpoint returns 422 `SMTP not configured`.
 - `POST /projects` auto-created `canViewAllTickets=true` for the owner.
 
@@ -239,7 +239,7 @@ Errors: 403/404 (admin route, not a member), 401 `TOKEN_INVALID` on the public r
 | `DELETE /tickets/:id` | project-admin | | `data: { success: true, id }` (hard delete, cascades messages/attachments/unread/viewers) |
 
 - `assignedToUserId` must be a member of the ticket's project (422 otherwise); `null` unassigns.
-- `status` change rules (state machine in `sd-core`; the query that persists it is `sd_db::tickets::update`): moves follow the state machine (an open status may go to any other; a `closed` ticket can only be reopened to `pending`, else `409 CONFLICT`; re-sending the current status is a no-op); entering `resolved` or `closed` sets `closedAt = now()` (if not already set); leaving them clears `closedAt` (TS never cleared it on reopen). Entering `resolved` sends the `resolved` email response (if enabled) after commit.
+- `status` change rules (state machine in `dp-core`; the query that persists it is `dp_db::tickets::update`): moves follow the state machine (an open status may go to any other; a `closed` ticket can only be reopened to `pending`, else `409 CONFLICT`; re-sending the current status is a no-op); entering `resolved` or `closed` sets `closedAt = now()` (if not already set); leaving them clears `closedAt` (TS never cleared it on reopen). Entering `resolved` sends the `resolved` email response (if enabled) after commit.
 - Every successful update bumps `updatedAt`.
 
 ### 7.4 Messages
@@ -294,7 +294,7 @@ Clients are created by tickets and inbound mail; the TS create/update/delete rou
 
 ## 9. Attachments (`/api/v3/attachments`)
 
-Files live on the server filesystem behind `sd-storage`; the database stores only a `storage_key`. No URLs are stored.
+Files live on the server filesystem behind `dp-storage`; the database stores only a `storage_key`. No URLs are stored.
 
 | Endpoint | Auth | Request | Response |
 |---|---|---|---|
@@ -334,7 +334,7 @@ The UI calls POST every ~30 s while a ticket is open and DELETE on close.
 ## 12. Inbound email webhook (not used by the UI)
 
 `POST /api/v3/incoming-email` - for providers that push mail. Public, but requires a signature:
-`X-Webhook-Timestamp` (unix seconds, within 5 min) and `X-Webhook-Signature` = hex HMAC-SHA256 of `"{timestamp}.{raw body}"` with `SD_WEBHOOK_SECRET` (constant-time compare). Replaces TS's bare `X-Webhook-Secret` header (replayable, logged to disk with the secret in `incoming_emails.log`; no logging of payloads now).
+`X-Webhook-Timestamp` (unix seconds, within 5 min) and `X-Webhook-Signature` = hex HMAC-SHA256 of `"{timestamp}.{raw body}"` with `DP_WEBHOOK_SECRET` (constant-time compare). Replaces TS's bare `X-Webhook-Secret` header (replayable, logged to disk with the secret in `incoming_emails.log`; no logging of payloads now).
 
 Body: `{ from, to, subject?, body?, bodyHtml?, ticketNumber?: number|null, messageId?, inReplyTo?, references?, attachments?: [{ filename?, contentType?, contentBase64 }] }` (TS took attachment `url`s into S3; now inline base64, size-capped).
 - Project = the one whose `smtpEmail` equals the lower-cased `to` address (active, non-archived projects only; a global admin must approve the address first (`POST /projects/{id}/mailbox/approve` with `{smtpEmail}` of the reviewed address, `409` if it changed; tenants cannot prove an address themselves); changing the address or servers clears the approval; polling over IMAP needs no proof; unknown => `404`, TS answered 200 with `success:false`).

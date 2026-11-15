@@ -713,7 +713,7 @@ export function TicketDetail() {
                   </div>
                   {message.body && (
                     <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                      {message.body.replace(/https:\/\/[^\s]*\/sendesk-mails\/[^\s]*/g, '').trim()}
+                      {message.body.replace(/https:\/\/[^\s]*\/deskpost-mails\/[^\s]*/g, '').trim()}
                     </p>
                   )}
                   {attachments.length > 0 && (

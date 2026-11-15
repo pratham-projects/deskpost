@@ -1,10 +1,10 @@
 mod common;
 
 use common::*;
-use sd_db::mailq::{self, NewInboundTicket};
-use sd_db::{EmailLogStatus, Pool, Role, attachments};
+use dp_db::mailq::{self, NewInboundTicket};
+use dp_db::{EmailLogStatus, Pool, Role, attachments};
 
-fn inbound(project_id: sd_db::Id, mid: &str) -> NewInboundTicket {
+fn inbound(project_id: dp_db::Id, mid: &str) -> NewInboundTicket {
     NewInboundTicket {
         project_id,
         client_email: "Ann@Example.com".into(),
@@ -216,14 +216,14 @@ async fn attachment_delete_needs_uploader_or_admin_and_is_tenant_scoped(pool: Po
     add_member(&pool, a.id, pa.id, agent.id, Role::Agent).await;
     add_member(&pool, a.id, pa.id, other.id, Role::Agent).await;
     let t = ticket(&pool, a.id, pa.id, "c@example.com").await;
-    let mk = |key: &str| sd_db::attachments::NewAttachment {
+    let mk = |key: &str| dp_db::attachments::NewAttachment {
         filename: "f.txt".into(),
         mime_type: "text/plain".into(),
         size_bytes: 3,
         storage_key: key.into(),
         message_id: None,
     };
-    let sd_db::attachments::Stored::Ok(att) = attachments::create(&pool, agent.id, t.id, &mk("k1"))
+    let dp_db::attachments::Stored::Ok(att) = attachments::create(&pool, agent.id, t.id, &mk("k1"))
         .await
         .unwrap()
     else {
@@ -248,7 +248,7 @@ async fn attachment_delete_needs_uploader_or_admin_and_is_tenant_scoped(pool: Po
             .as_deref(),
         Some("k1")
     );
-    let sd_db::attachments::Stored::Ok(att) = attachments::create(&pool, agent.id, t.id, &mk("k2"))
+    let dp_db::attachments::Stored::Ok(att) = attachments::create(&pool, agent.id, t.id, &mk("k2"))
         .await
         .unwrap()
     else {
@@ -263,7 +263,7 @@ async fn attachment_delete_needs_uploader_or_admin_and_is_tenant_scoped(pool: Po
         "admin"
     );
     // Linked uploads are kept by the rollback helper.
-    let sd_db::attachments::Stored::Ok(att) = attachments::create(&pool, agent.id, t.id, &mk("k3"))
+    let dp_db::attachments::Stored::Ok(att) = attachments::create(&pool, agent.id, t.id, &mk("k3"))
         .await
         .unwrap()
     else {

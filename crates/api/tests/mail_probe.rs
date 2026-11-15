@@ -2,8 +2,8 @@ mod common;
 mod r21_world;
 
 use axum::http::Method;
+use dp_mail::testing::{FakeImap, FakeSmtp};
 use r21_world::*;
-use sd_mail::testing::{FakeImap, FakeSmtp};
 use serde_json::json;
 use sqlx::PgPool;
 

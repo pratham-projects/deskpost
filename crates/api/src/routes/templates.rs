@@ -6,8 +6,8 @@ use axum::routing::{get, patch};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use sd_db::Id;
-use sd_db::templates::{self, Template};
+use dp_db::Id;
+use dp_db::templates::{self, Template};
 
 use super::qparams::Params;
 use crate::dto::ts;

@@ -1,4 +1,4 @@
-//! sd-mail: SMTP sender (lettre), MIME parsing (mail-parser) and IMAP poller (async-imap).
+//! dp-mail: SMTP sender (lettre), MIME parsing (mail-parser) and IMAP poller (async-imap).
 //!
 //! No IO on global state: every call takes its own connection settings, so one process serves
 //! many projects with different mail servers.

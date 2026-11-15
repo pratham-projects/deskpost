@@ -5,13 +5,13 @@ mod common;
 
 use axum::http::{Method, StatusCode};
 use common::*;
-use sd_db::Role;
+use dp_db::Role;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 struct World {
     t: TestApp,
-    project: sd_db::projects::Project,
+    project: dp_db::projects::Project,
     owner: String,
     agent: String,
     outsider: String,

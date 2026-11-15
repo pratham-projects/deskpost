@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use sd_core::secret::SecretBox;
-use sd_db::Pool;
+use dp_core::secret::SecretBox;
+use dp_db::Pool;
 use tokio::sync::Semaphore;
 
 use crate::config::{Config, ConfigError};
@@ -33,7 +33,7 @@ pub struct AppState {
 impl AppState {
     pub fn new(pool: Pool, config: Config) -> Result<Self, ConfigError> {
         let secrets = SecretBox::new(&config.secret_key)
-            .map_err(|e| ConfigError(vec![format!("SD_SECRET_KEY: {e}")]))?;
+            .map_err(|e| ConfigError(vec![format!("DP_SECRET_KEY: {e}")]))?;
         let concurrency = std::thread::available_parallelism().map_or(2, |n| n.get().min(8));
         let secrets = Arc::new(secrets);
         let store = Arc::new(Store::new(&config));

@@ -35,7 +35,7 @@ function iso(msAgo: number): string {
 export const DEMO_AGENTS: AgentRecord[] = [
   {
     id: "agent_priya",
-    email: "priya@sendesk-demo.dev",
+    email: "priya@deskpost-demo.dev",
     name: "Priya Shah",
     role: "admin",
     password: "demodemo123",
@@ -47,7 +47,7 @@ export const DEMO_AGENTS: AgentRecord[] = [
   },
   {
     id: "agent_marcus",
-    email: "marcus@sendesk-demo.dev",
+    email: "marcus@deskpost-demo.dev",
     name: "Marcus Webb",
     role: "agent",
     password: "demodemo123",
@@ -59,7 +59,7 @@ export const DEMO_AGENTS: AgentRecord[] = [
   },
   {
     id: "agent_elena",
-    email: "elena@sendesk-demo.dev",
+    email: "elena@deskpost-demo.dev",
     name: "Elena Cho",
     role: "agent",
     password: "demodemo123",

@@ -1,6 +1,6 @@
 # Review: mail + storage (R50)
 
-Scope: `crates/mail`, `crates/storage`, `crates/api/src/{mail_out,ingest,mail_config,workers}.rs`, `routes/{incoming,attachments}.rs` (plus the `sd-db` queries and `mail_guard` they call). Read-only; no source edited, no tests run (static review). Docs checked: `docs/API.md` sections 9 and 12.
+Scope: `crates/mail`, `crates/storage`, `crates/api/src/{mail_out,ingest,mail_config,workers}.rs`, `routes/{incoming,attachments}.rs` (plus the `dp-db` queries and `mail_guard` they call). Read-only; no source edited, no tests run (static review). Docs checked: `docs/API.md` sections 9 and 12.
 
 Checked and fine: path traversal in storage (strict key shape, symlink checks, generated keys), download-token HMAC (length-prefixed, constant time, key-bound), webhook HMAC (constant time, signature before freshness), header injection in outbound mail (`no_control` everywhere), inline-serving allowlist (no SVG/HTML/PDF, `nosniff`), per-tenant Message-ID dedupe (`UNIQUE (project_id, email_message_id)`), quota race (project row `FOR UPDATE`), tenant scoping of attachment queries.
 
@@ -18,12 +18,12 @@ Checked and fine: path traversal in storage (strict key shape, symlink checks, g
 
 ### H2. IMAP poll can hang forever and stall every project's polling
 - `crates/mail/src/imap.rs:328-334`: `client.read_response()` for the greeting has no timeout (only TCP connect, STARTTLS, login and select are wrapped). A server that accepts the TCP connection and never sends `* OK` hangs `ImapMailbox::connect` for ever.
-- `crates/api/src/workers.rs:99-116` (`poll_all`) awaits **all** spawned tasks and `every` uses `MissedTickBehavior::Delay` (`workers.rs:140`). One hung project holds a permit and blocks the whole tick. With `SD_IMAP_CONCURRENCY` (default 4) hung projects, all IMAP polling in the deployment stops. Any project admin can configure such a host (a plain tarpit), so this is a cross-tenant DoS.
+- `crates/api/src/workers.rs:99-116` (`poll_all`) awaits **all** spawned tasks and `every` uses `MissedTickBehavior::Delay` (`workers.rs:140`). One hung project holds a permit and blocks the whole tick. With `DP_IMAP_CONCURRENCY` (default 4) hung projects, all IMAP polling in the deployment stops. Any project admin can configure such a host (a plain tarpit), so this is a cross-tenant DoS.
 - Fix: wrap the greeting read in `timeout(io, ...)`. Add an overall per-project deadline in `poll_all` (`tokio::time::timeout(60s, poll_project)`) and don't let `poll_all` wait on stragglers.
 
 ### H3. SSRF guard is connect-time-free: DNS rebinding / later flips reach internal hosts
 - `mail_guard::check_resolved` is only called for the settings probe (`routes/project_mail.rs:358`). Real traffic never re-checks: `workers.rs:44-52` → `ImapMailbox::connect` (`imap.rs:301-306`, `TcpStream::connect((host, port))`) and `mail_out.rs:208-230` → lettre (`outbound.rs:252-270`) resolve and dial whatever is stored.
-- Failure scenario: admin saves `evil.example` (public A record at probe time, TTL 0), then flips the record to `169.254.169.254` or `10.x`. The poller/outbox then connects to internal services every 15–60 s with an attacker-chosen port. Server banners and errors land in `imap_last_error` / `email_logs.error` (visible to project admins), which turns this into a blind port scanner or banner leak. `SD_ALLOW_PRIVATE_MAIL_HOSTS` is also only checked at save time. The doc comment on `check_resolved` accepts the window, but the window here is unbounded, not "between check and connect".
+- Failure scenario: admin saves `evil.example` (public A record at probe time, TTL 0), then flips the record to `169.254.169.254` or `10.x`. The poller/outbox then connects to internal services every 15–60 s with an attacker-chosen port. Server banners and errors land in `imap_last_error` / `email_logs.error` (visible to project admins), which turns this into a blind port scanner or banner leak. `DP_ALLOW_PRIVATE_MAIL_HOSTS` is also only checked at save time. The doc comment on `check_resolved` accepts the window, but the window here is unbounded, not "between check and connect".
 - Fix: resolve once at connect time, reject blocked IPs, and connect to the resolved `SocketAddr` (keep the hostname for TLS SNI/cert name). Apply it in both `imap.rs` and `outbound.rs`, or pass a pre-resolved address in `ImapConfig`/`SmtpConfig`. Consider a port allowlist (25/465/587/143/993/2525).
 
 ## Medium
@@ -56,7 +56,7 @@ Checked and fine: path traversal in storage (strict key shape, symlink checks, g
 - Fix: include `date`/a provider event id in the digest, or require `messageId` on the webhook (422).
 
 ### M7. Download endpoint loads the whole file in memory, no range/length handling
-- `routes/attachments.rs:406-412` reads the file into a `Vec` (≤ `max_file_bytes`, configurable to 512 MB via `SD_MAX_FILE_BYTES`, `mail_config.rs:56-62`) per request. `take(size_bytes+1)` also silently serves a file that grew/was replaced on disk. A few concurrent downloads of large files cost GBs.
+- `routes/attachments.rs:406-412` reads the file into a `Vec` (≤ `max_file_bytes`, configurable to 512 MB via `DP_MAX_FILE_BYTES`, `mail_config.rs:56-62`) per request. `take(size_bytes+1)` also silently serves a file that grew/was replaced on disk. A few concurrent downloads of large files cost GBs.
 - Fix: stream (`ReaderStream` + `Body::from_stream`), set `Content-Length` from `size_bytes`, error if the file length differs.
 
 ### M8. IMAP fetch buffers whole batches before any size check
@@ -73,11 +73,11 @@ Checked and fine: path traversal in storage (strict key shape, symlink checks, g
 - **L6. Outbox lease vs batch time.** `mail_out.rs:395-410`: 20 jobs are leased for 300 s but sent sequentially (SMTP total timeout 60 s each = up to 20 min). With >1 API instance, later jobs' leases expire and are re-claimed (double send). An early `?` on `mark_sent`/`mark_failed` abandons the rest of the batch with burned attempts (`attempts` is incremented at claim). Fix: extend the lease per job, or send with bounded concurrency and don't `?`-abort the loop.
 - **L7. Non-ASCII `X-Filename` / `X-Message` are silently dropped** (`attachments.rs:238-262`: `to_str()` fails on non-ASCII, so the file becomes `file` and the message is lost). The UI should percent-encode and the server decode (document it).
 - **L8. Signed download token** (`attachments.rs:440-446`) is a bearer capability in the URL: not bound to the user, not revocable when membership is removed (valid up to 5 min plus 30 s leeway; `download_ttl` is not configurable, `mail_config.rs:82`). It will appear in access logs. Acceptable, but log redaction of `token=` should be ensured.
-- **L9. Config drift.** `SD_UPLOAD_LIMIT_BYTES` (26 MB, `config.rs:185`) and `SD_WEBHOOK_LIMIT_BYTES` (36 MB, `config.rs:193`) are independent of `SD_MAX_REQUEST_BYTES` (up to 512 MB, `mail_config.rs:64`). Raising one without the others yields a 413 before the intended cap, and `max_file_bytes > max_request_bytes` is accepted. Fix: derive or validate at startup. The webhook base64 pre-check (`incoming.rs:126-131`) estimates size from text length and never rechecks decoded size.
+- **L9. Config drift.** `DP_UPLOAD_LIMIT_BYTES` (26 MB, `config.rs:185`) and `DP_WEBHOOK_LIMIT_BYTES` (36 MB, `config.rs:193`) are independent of `DP_MAX_REQUEST_BYTES` (up to 512 MB, `mail_config.rs:64`). Raising one without the others yields a 413 before the intended cap, and `max_file_bytes > max_request_bytes` is accepted. Fix: derive or validate at startup. The webhook base64 pre-check (`incoming.rs:126-131`) estimates size from text length and never rechecks decoded size.
 - **L10. Webhook `to` stored raw** (`incoming.rs:207`: `to: vec![p.to]` before normalisation; also unbounded `subject`/`references` flow into `email_subject`/`email_references`). The sender is trusted (signed) but this is the same unbounded-column class as H1.
-- **L11. Duplicate filename sanitisers.** `sd_core::filename::sanitize_filename` (API) and `sd_storage::sanitize_filename` differ (the storage one is char-set based and can end in a trailing dot/space after truncation, `name.rs:21-26`). Behaviour is safe today but they can drift; keep one.
+- **L11. Duplicate filename sanitisers.** `dp_core::filename::sanitize_filename` (API) and `dp_storage::sanitize_filename` differ (the storage one is char-set based and can end in a trailing dot/space after truncation, `name.rs:21-26`). Behaviour is safe today but they can drift; keep one.
 - **L12. `random_id()`** in `outbound.rs:146-152` uses `RandomState` (SipHash keys, not a CSPRNG) for the fallback Message-ID. Callers here always pass an id, so it is dormant; use `Uuid::new_v4()`.
-- **L13. Unused code.** `sd_storage::check_quota` and `Storage::exists` are not used by the API (quota is done in SQL); keep tests or drop.
+- **L13. Unused code.** `dp_storage::check_quota` and `Storage::exists` are not used by the API (quota is done in SQL); keep tests or drop.
 
 ## Contract drift vs docs/API.md
 
@@ -94,5 +94,5 @@ Checked and fine: path traversal in storage (strict key shape, symlink checks, g
 ## Suggested order
 1. H1 + M8 (same wedge; cheap fix: sanitise/truncate and consume-on-data-error).
 2. H2 (one timeout line plus a per-project deadline).
-3. H3 (resolve-at-connect guard shared by `sd-mail`).
+3. H3 (resolve-at-connect guard shared by `dp-mail`).
 4. M1, M2, M3, then the rest.

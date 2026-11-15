@@ -1,5 +1,5 @@
 //! `/attachments`: upload (raw and multipart), list, signed download links, download, delete.
-//! Files live in `sd-storage`; the ticket's project decides who may touch them.
+//! Files live in `dp-storage`; the ticket's project decides who may touch them.
 
 use axum::Router;
 use axum::body::{Body, Bytes};
@@ -9,11 +9,11 @@ use axum::http::request::Parts;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::Response;
 use axum::routing::{get, post, put};
-use sd_core::content_type::{self, normalize};
-use sd_core::filename::sanitize_filename;
-use sd_db::messages::{NewAgentMessage, Posted};
-use sd_db::{Id, attachments, mailq, tickets};
-use sd_storage::{Disposition, PutMeta, Storage};
+use dp_core::content_type::{self, normalize};
+use dp_core::filename::sanitize_filename;
+use dp_db::messages::{NewAgentMessage, Posted};
+use dp_db::{Id, attachments, mailq, tickets};
+use dp_storage::{Disposition, PutMeta, Storage};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::io::AsyncReadExt;
@@ -150,7 +150,7 @@ async fn post_files(
         };
         let obj = match fs.put(&u.bytes[..], meta).await {
             Ok(o) => o,
-            Err(sd_storage::Error::TooLarge { .. }) => {
+            Err(dp_storage::Error::TooLarge { .. }) => {
                 failure = Some(too_large("storage cap"));
                 break;
             }
@@ -232,7 +232,7 @@ async fn save_message(
         outbox,
         ..Default::default()
     };
-    let message = match sd_db::messages::post_agent(&state.pool, user, ticket.id, &new).await? {
+    let message = match dp_db::messages::post_agent(&state.pool, user, ticket.id, &new).await? {
         Posted::Ok(m) => m,
         Posted::NoAccess => return Err(ApiError::not_found("Ticket")),
         Posted::BadAttachments => {
@@ -438,7 +438,7 @@ async fn download(
     };
     let fs = s.store.fs().await?;
     let (reader, _) = fs.get(&att.storage_key).await.map_err(|e| match e {
-        sd_storage::Error::NotFound => ApiError::not_found("Attachment"),
+        dp_storage::Error::NotFound => ApiError::not_found("Attachment"),
         e => ApiError::internal(e),
     })?;
     // Streamed, never held in memory; the length is the recorded size, so a file that changed on
@@ -504,7 +504,7 @@ async fn remove(
         })?;
     // The row is gone; a file that is already missing is the state we wanted.
     match s.store.fs().await?.delete(&key).await {
-        Ok(()) | Err(sd_storage::Error::NotFound) => {}
+        Ok(()) | Err(dp_storage::Error::NotFound) => {}
         Err(e) => tracing::warn!(error = %e, "attachment file not removed"),
     }
     Ok(Envelope::ok(json!({ "success": true, "id": id })))

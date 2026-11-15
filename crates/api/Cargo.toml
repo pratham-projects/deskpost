@@ -17,10 +17,10 @@ name = "api"
 path = "src/main.rs"
 
 [dependencies]
-sd-core.workspace = true
-sd-db.workspace = true
-sd-mail.workspace = true
-sd-storage.workspace = true
+dp-core.workspace = true
+dp-db.workspace = true
+dp-mail.workspace = true
+dp-storage.workspace = true
 argon2 = "0.5"
 axum = { version = "0.8", features = ["multipart"] }
 base64 = "0.23.1"
@@ -42,7 +42,7 @@ tokio-util = { version = "0.7", features = ["io"] }
 uuid = { version = "1", features = ["serde", "v4"] }
 
 [dev-dependencies]
-sd-mail = { workspace = true, features = ["testing"] }
+dp-mail = { workspace = true, features = ["testing"] }
 tempfile = "3"
 http-body-util = "0.1"
 proptest = "1.12.0"

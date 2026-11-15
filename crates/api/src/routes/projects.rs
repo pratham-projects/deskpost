@@ -3,10 +3,10 @@
 use axum::Router;
 use axum::extract::State;
 use axum::routing::{get, post};
-use sd_core::api_key::generate_api_key;
-use sd_db::projects::{self, MailSettings, NewProject, Project, ProjectPatch};
-use sd_db::{Id, Status, constraint, is_unique_violation};
-use sd_storage::{FsStorage, Storage};
+use dp_core::api_key::generate_api_key;
+use dp_db::projects::{self, MailSettings, NewProject, Project, ProjectPatch};
+use dp_db::{Id, Status, constraint, is_unique_violation};
+use dp_storage::{FsStorage, Storage};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -154,7 +154,7 @@ fn check_description(f: &mut Fields, d: &Option<String>) {
     }
 }
 
-fn conflict(e: sd_db::Error) -> ApiError {
+fn conflict(e: dp_db::Error) -> ApiError {
     if !is_unique_violation(&e) {
         return e.into();
     }
@@ -309,7 +309,7 @@ async fn remove(
             "Only the project owner can delete it.".into(),
         ));
     }
-    let keys = sd_db::attachments::storage_keys_for_project(&s.pool, user.id, id).await?;
+    let keys = dp_db::attachments::storage_keys_for_project(&s.pool, user.id, id).await?;
     if !projects::delete(&s.pool, user.id, id).await? {
         return Err(ApiError::not_found("Project"));
     }

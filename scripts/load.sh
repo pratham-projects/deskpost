@@ -12,7 +12,7 @@ case "$BASE_DB" in
   *@localhost[:/]*|*@127.0.0.1[:/]*|*//localhost[:/]*|*//127.0.0.1[:/]*) ;;
   *) echo "refusing non-local database host" >&2; exit 1 ;;
 esac
-DB_NAME=sd_load
+DB_NAME=dp_load
 DB_URL="${BASE_DB%/*}/$DB_NAME"
 PORT=${LOAD_API_PORT:-3200}
 SECS=${LOAD_SECS:-10}
@@ -41,14 +41,14 @@ cargo build -q --release -p api
 API=$ROOT/target/release/api
 
 export DATABASE_URL=$DB_URL
-export JWT_SECRET=$(openssl rand -hex 32) SD_SECRET_KEY=$(openssl rand -hex 32)
-export SD_ENV=development PORT=$PORT FRONTEND_URL=$BASE SD_TRUSTED_PROXIES=127.0.0.1
-export STORAGE_DIR=$ROOT/$RUN/load-storage SD_WEBHOOK_SECRET=$(openssl rand -hex 32)
+export JWT_SECRET=$(openssl rand -hex 32) DP_SECRET_KEY=$(openssl rand -hex 32)
+export DP_ENV=development PORT=$PORT FRONTEND_URL=$BASE DP_TRUSTED_PROXIES=127.0.0.1
+export STORAGE_DIR=$ROOT/$RUN/load-storage DP_WEBHOOK_SECRET=$(openssl rand -hex 32)
 # every request comes from one address: lift the per-address quotas so the server is measured, not the limiter
-export SD_RATE_LIMIT_SCALE=100000
+export DP_RATE_LIMIT_SCALE=100000
 rm -rf "$STORAGE_DIR"
 "$API" migrate >/dev/null
-SD_BOOTSTRAP_PASSWORD=$ADMIN_PASS "$API" bootstrap --email $ADMIN_EMAIL --name "Load Admin" >/dev/null
+DP_BOOTSTRAP_PASSWORD=$ADMIN_PASS "$API" bootstrap --email $ADMIN_EMAIL --name "Load Admin" >/dev/null
 "$API" serve >"$RUN/load-api.log" 2>&1 &
 API_PID=$!
 for _ in $(seq 1 60); do nc -z 127.0.0.1 "$PORT" 2>/dev/null && break; sleep 0.5; done

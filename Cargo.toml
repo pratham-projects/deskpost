@@ -6,14 +6,14 @@ members = ["crates/core", "crates/db", "crates/mail", "crates/storage", "crates/
 version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-only"
-repository = "https://github.com/pratham-projects/sendesk"
+repository = "https://github.com/pratham-projects/deskpost"
 publish = false
 
 [workspace.dependencies]
-sd-core = { path = "crates/core" }
-sd-db = { path = "crates/db" }
-sd-mail = { path = "crates/mail" }
-sd-storage = { path = "crates/storage" }
+dp-core = { path = "crates/core" }
+dp-db = { path = "crates/db" }
+dp-mail = { path = "crates/mail" }
+dp-storage = { path = "crates/storage" }
 
 # The profile that 'dist' will build with
 [profile.dist]

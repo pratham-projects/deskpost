@@ -2,9 +2,9 @@
 okf_version: "0.1"
 ---
 
-# SendDesk Knowledge Bundle
+# Deskpost Knowledge Bundle
 
-Project brain for SendDesk (Rust): multi-tenant support-ticket inbox. Read this index first, then follow links.
+Project brain for Deskpost (Rust): multi-tenant support-ticket inbox. Read this index first, then follow links.
 
 ## Directory Map
 

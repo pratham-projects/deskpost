@@ -6,9 +6,9 @@ use std::sync::Arc;
 
 use api::mail_out::{Mailer, RecordingMailer, imap_aad, smtp_aad};
 use api::{AppState, build_app};
-use sd_db::projects::Project;
-use sd_db::tickets::{Access, NewTicket, Ticket};
-use sd_db::{Id, Pool, Priority, Role, TicketSource, tickets};
+use dp_db::projects::Project;
+use dp_db::tickets::{Access, NewTicket, Ticket};
+use dp_db::{Id, Pool, Priority, Role, TicketSource, tickets};
 use tempfile::TempDir;
 
 use crate::common::{Session, TestApp, test_config};
@@ -63,7 +63,7 @@ impl Kit {
         &self,
         owner: &str,
         slug: &str,
-    ) -> (sd_db::users::User, Project, Ticket, Session) {
+    ) -> (dp_db::users::User, Project, Ticket, Session) {
         let user = self.t.user(owner, Role::Agent).await;
         let project = self.t.project(user.id, slug).await;
         let ticket = self.ticket(&user, &project, "client@example.com").await;
@@ -73,7 +73,7 @@ impl Kit {
 
     pub async fn ticket(
         &self,
-        actor: &sd_db::users::User,
+        actor: &dp_db::users::User,
         project: &Project,
         client: &str,
     ) -> Ticket {

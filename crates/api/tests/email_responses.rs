@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-async fn make(w: &W, project: sd_db::Id, who: &Actor, status: &str) -> Value {
+async fn make(w: &W, project: dp_db::Id, who: &Actor, status: &str) -> Value {
     let r = w
         .post("/email-responses", &who.token, json!({ "projectId": project, "status": status, "subject": "Got it", "body": "We got it." }))
         .await;

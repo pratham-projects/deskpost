@@ -1,14 +1,14 @@
 ---
 type: Architecture
-title: sd-core (pure logic crate)
+title: dp-core (pure logic crate)
 description: Modules of crates/core, their contracts, and where they deliberately differ from the TypeScript product.
 tags: [architecture, core, security, email]
 timestamp: 2026-10-27
 ---
 
-# sd-core
+# dp-core
 
-Pure logic, no IO, no async. Consumed by `sd-db`, `sd-mail`, `sd-storage`, `api`. Deps: aes-gcm, hkdf, sha2, subtle, base64, rand, regex (linear-time), idna; proptest (dev).
+Pure logic, no IO, no async. Consumed by `dp-db`, `dp-mail`, `dp-storage`, `api`. Deps: aes-gcm, hkdf, sha2, subtle, base64, rand, regex (linear-time), idna; proptest (dev).
 
 | module | contract |
 |--------|----------|
@@ -35,6 +35,6 @@ Pure logic, no IO, no async. Consumed by `sd-db`, `sd-mail`, `sd-storage`, `api`
 
 ## Notes
 
-- MIME parsing (headers, multipart, attachments) belongs to `sd-mail`; `sd-core` takes already-extracted text/html.
+- MIME parsing (headers, multipart, attachments) belongs to `dp-mail`; `dp-core` takes already-extracted text/html.
 - `SecretBox` does not zeroize key material (no `zeroize` crate); the process holds the key for its lifetime anyway.
 - PDF is download-only by choice; revisit only with a sandboxed viewer origin.

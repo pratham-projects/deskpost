@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use axum::extract::{FromRequestParts, Query};
 use axum::http::request::Parts;
-use sd_db::{MAX_LIMIT, Page};
+use dp_db::{MAX_LIMIT, Page};
 
 use crate::error::{ApiError, Fields};
 
@@ -26,7 +26,7 @@ impl Params {
     }
 
     /// Required UUID query parameter (422 when absent or malformed).
-    pub fn uuid(&self, key: &str, f: &mut Fields) -> Option<sd_db::Id> {
+    pub fn uuid(&self, key: &str, f: &mut Fields) -> Option<dp_db::Id> {
         match self.get(key).map(str::parse) {
             Some(Ok(id)) => Some(id),
             _ => {
@@ -90,7 +90,7 @@ mod tests {
 
     #[test]
     fn uuid_param() {
-        let id = sd_db::new_id().to_string();
+        let id = dp_db::new_id().to_string();
         let mut f = Fields::default();
         assert!(
             params(&[("projectId", &id)])

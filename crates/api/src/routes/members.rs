@@ -7,8 +7,8 @@ use axum::routing::get;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use sd_db::members::{self, Member, MemberPatch};
-use sd_db::{Id, Role, is_unique_violation, projects, users};
+use dp_db::members::{self, Member, MemberPatch};
+use dp_db::{Id, Role, is_unique_violation, projects, users};
 
 use super::qparams::Params;
 use crate::dto::ts;
@@ -113,7 +113,7 @@ async fn add(
     let target = req.user_id.unwrap_or_default();
     // Only users the actor can already see, and only active ones: no UUID probing, no suspended members.
     match users::get_visible(&s.pool, user.id, target).await? {
-        Some(u) if u.status == sd_db::Status::Active => {}
+        Some(u) if u.status == dp_db::Status::Active => {}
         _ => return Err(ApiError::not_found("User")),
     }
     let m = members::add(

@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-async fn make(w: &W, project: sd_db::Id, who: &Actor, title: &str) -> Value {
+async fn make(w: &W, project: dp_db::Id, who: &Actor, title: &str) -> Value {
     let r = w
         .post(
             "/template-responses/",
@@ -64,12 +64,12 @@ async fn create_needs_admin_or_the_templates_flag(pool: PgPool) {
     );
 
     // The flag opens it for an agent.
-    sd_db::members::update(
+    dp_db::members::update(
         &w.t.pool,
         w.owner.id,
         w.project.id,
         w.agent.id,
-        &sd_db::members::MemberPatch {
+        &dp_db::members::MemberPatch {
             can_manage_templates: Some(true),
             ..Default::default()
         },

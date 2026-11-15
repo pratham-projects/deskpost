@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-use sd_db::projects::{NewProject, Project};
-use sd_db::tickets::{Access, NewTicket, Ticket};
-use sd_db::users::User;
-use sd_db::{Id, Pool, Priority, Role, TicketSource, members, projects, tickets, users};
+use dp_db::projects::{NewProject, Project};
+use dp_db::tickets::{Access, NewTicket, Ticket};
+use dp_db::users::User;
+use dp_db::{Id, Pool, Priority, Role, TicketSource, members, projects, tickets, users};
 
 pub async fn user(pool: &Pool, email: &str) -> User {
     users::create(pool, email, &format!("User {email}"), "hash", Role::Agent)

@@ -2,9 +2,9 @@ mod common;
 
 use chrono::{Duration, Utc};
 use common::*;
-use sd_db::{Pool, resets, sessions, users};
+use dp_db::{Pool, resets, sessions, users};
 
-async fn live_families(pool: &Pool, user: sd_db::Id) -> i64 {
+async fn live_families(pool: &Pool, user: dp_db::Id) -> i64 {
     sqlx::query_scalar(
         "SELECT count(*) FROM refresh_families WHERE user_id = $1 AND revoked_at IS NULL",
     )
@@ -14,7 +14,7 @@ async fn live_families(pool: &Pool, user: sd_db::Id) -> i64 {
     .unwrap()
 }
 
-async fn session(pool: &Pool, user: sd_db::Id, hash: &str) {
+async fn session(pool: &Pool, user: dp_db::Id, hash: &str) {
     let now = Utc::now();
     sessions::start_family(
         pool,

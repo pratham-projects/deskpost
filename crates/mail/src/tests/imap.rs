@@ -309,7 +309,7 @@ async fn smtp_to_imap_loop_through_fakes_keeps_threading() {
 }
 
 /// Needs a GreenMail standalone server; skipped unless run with `GREENMAIL=1 cargo test -p
-/// sd-mail -- --ignored`.
+/// dp-mail -- --ignored`.
 ///
 /// Setup (jar from Maven Central into the gitignored `.tools/`):
 ///   mkdir -p .tools && curl -L -o .tools/greenmail.jar \

@@ -28,11 +28,11 @@ impl std::fmt::Debug for SystemSmtp {
 
 #[derive(Clone)]
 pub struct MailConfig {
-    /// `SD_SYSTEM_SMTP_*`; without a host, password reset is switched off.
+    /// `DP_SYSTEM_SMTP_*`; without a host, password reset is switched off.
     pub system_smtp: Option<SystemSmtp>,
-    /// `SD_WEBHOOK_SECRET`; without it `POST /incoming-email` answers 404.
+    /// `DP_WEBHOOK_SECRET`; without it `POST /incoming-email` answers 404.
     pub webhook_secret: Option<Vec<u8>>,
-    /// `SD_MAIL_PLAINTEXT=1`: never use TLS to project mail servers (local dev and tests only).
+    /// `DP_MAIL_PLAINTEXT=1`: never use TLS to project mail servers (local dev and tests only).
     pub plaintext: bool,
     pub max_file_bytes: usize,
     /// Per upload request and per inbound email.
@@ -64,12 +64,12 @@ impl MailConfig {
     pub fn from_lookup(get: &impl Fn(&str) -> Option<String>, errs: &mut Vec<String>) -> Self {
         let d = Self::default();
         let webhook_secret =
-            get("SD_WEBHOOK_SECRET").map(|_| secret(get, "SD_WEBHOOK_SECRET", errs));
-        let plaintext = match get("SD_MAIL_PLAINTEXT").as_deref() {
+            get("DP_WEBHOOK_SECRET").map(|_| secret(get, "DP_WEBHOOK_SECRET", errs));
+        let plaintext = match get("DP_MAIL_PLAINTEXT").as_deref() {
             None | Some("0" | "false") => false,
             Some("1" | "true") => true,
             Some(_) => {
-                errs.push("SD_MAIL_PLAINTEXT must be true or false".into());
+                errs.push("DP_MAIL_PLAINTEXT must be true or false".into());
                 false
             }
         };
@@ -79,7 +79,7 @@ impl MailConfig {
             plaintext,
             max_file_bytes: num(
                 get,
-                "SD_MAX_FILE_BYTES",
+                "DP_MAX_FILE_BYTES",
                 d.max_file_bytes,
                 1,
                 512 * MB,
@@ -87,22 +87,22 @@ impl MailConfig {
             ),
             max_request_bytes: num(
                 get,
-                "SD_MAX_REQUEST_BYTES",
+                "DP_MAX_REQUEST_BYTES",
                 d.max_request_bytes,
                 1,
                 512 * MB,
                 errs,
             ),
-            max_files: num(get, "SD_MAX_FILES", d.max_files, 1, 100, errs),
+            max_files: num(get, "DP_MAX_FILES", d.max_files, 1, 100, errs),
             imap_poll_interval: Duration::from_secs(num(
                 get,
-                "SD_IMAP_POLL_SECS",
+                "DP_IMAP_POLL_SECS",
                 60,
                 5,
                 86_400,
                 errs,
             ) as u64),
-            imap_concurrency: num(get, "SD_IMAP_CONCURRENCY", d.imap_concurrency, 1, 32, errs),
+            imap_concurrency: num(get, "DP_IMAP_CONCURRENCY", d.imap_concurrency, 1, 32, errs),
             download_ttl: d.download_ttl,
         }
     }
@@ -112,36 +112,36 @@ fn system_smtp(
     get: &impl Fn(&str) -> Option<String>,
     errs: &mut Vec<String>,
 ) -> Option<SystemSmtp> {
-    let host = get("SD_SYSTEM_SMTP_HOST");
+    let host = get("DP_SYSTEM_SMTP_HOST");
     let other = [
-        "SD_SYSTEM_SMTP_PORT",
-        "SD_SYSTEM_SMTP_USER",
-        "SD_SYSTEM_SMTP_PASSWORD",
-        "SD_SYSTEM_SMTP_FROM",
+        "DP_SYSTEM_SMTP_PORT",
+        "DP_SYSTEM_SMTP_USER",
+        "DP_SYSTEM_SMTP_PASSWORD",
+        "DP_SYSTEM_SMTP_FROM",
     ]
     .into_iter()
     .any(|k| get(k).is_some());
     let Some(host) = host else {
         if other {
-            errs.push("SD_SYSTEM_SMTP_HOST is required when other SD_SYSTEM_SMTP_* are set".into());
+            errs.push("DP_SYSTEM_SMTP_HOST is required when other DP_SYSTEM_SMTP_* are set".into());
         }
         return None;
     };
-    let from = get("SD_SYSTEM_SMTP_FROM").unwrap_or_else(|| {
-        errs.push("SD_SYSTEM_SMTP_FROM is required with SD_SYSTEM_SMTP_HOST".into());
+    let from = get("DP_SYSTEM_SMTP_FROM").unwrap_or_else(|| {
+        errs.push("DP_SYSTEM_SMTP_FROM is required with DP_SYSTEM_SMTP_HOST".into());
         String::new()
     });
-    if !from.is_empty() && !sd_core::email_addr::is_valid_email(&from) {
-        errs.push("SD_SYSTEM_SMTP_FROM must be an email address".into());
+    if !from.is_empty() && !dp_core::email_addr::is_valid_email(&from) {
+        errs.push("DP_SYSTEM_SMTP_FROM must be an email address".into());
     }
-    let username = get("SD_SYSTEM_SMTP_USER");
-    let password = get("SD_SYSTEM_SMTP_PASSWORD");
+    let username = get("DP_SYSTEM_SMTP_USER");
+    let password = get("DP_SYSTEM_SMTP_PASSWORD");
     if username.is_some() != password.is_some() {
-        errs.push("SD_SYSTEM_SMTP_USER and SD_SYSTEM_SMTP_PASSWORD go together".into());
+        errs.push("DP_SYSTEM_SMTP_USER and DP_SYSTEM_SMTP_PASSWORD go together".into());
     }
     Some(SystemSmtp {
         host,
-        port: num(get, "SD_SYSTEM_SMTP_PORT", 587, 1, u16::MAX as usize, errs) as u16,
+        port: num(get, "DP_SYSTEM_SMTP_PORT", 587, 1, u16::MAX as usize, errs) as u16,
         username,
         password,
         from,

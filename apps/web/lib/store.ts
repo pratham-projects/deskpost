@@ -78,7 +78,7 @@ let refreshInflight: Promise<boolean> | null = null
 /** Single-flight + cross-tab lock: refresh tokens are single-use, so parallel refreshes would trip reuse detection. */
 const withRefreshLock = <T,>(fn: () => Promise<T>): Promise<T> =>
   typeof navigator !== "undefined" && navigator.locks
-    ? navigator.locks.request("sd-refresh", fn)
+    ? navigator.locks.request("dp-refresh", fn)
     : fn()
 export const useAuthStore = create<AuthStore>()((set, get) => ({
   agent: null,

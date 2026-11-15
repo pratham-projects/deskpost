@@ -1,7 +1,7 @@
 //! Attachment storage handle: the filesystem driver (created on first use, because creating the
 //! root is async) plus the signer for download links.
 
-use sd_storage::{DownloadSigner, FsStorage};
+use dp_storage::{DownloadSigner, FsStorage};
 use sha2::{Digest, Sha256};
 use tokio::sync::OnceCell;
 

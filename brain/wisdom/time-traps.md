@@ -1,7 +1,7 @@
 ---
 type: TimeTrap
 title: Time Traps
-description: Things that burned time on SendDesk.
+description: Things that burned time on Deskpost.
 tags: [wisdom]
 timestamp: 2026-10-27
 ---
@@ -46,3 +46,4 @@ Carried over from bunfiiliate:
 
 - Parallel branches pick the next migration number independently: two `0004_*` files fail with a duplicate version at merge. Renumber the later one and bump the applied-count test.
 - `sqlx::migrate!` embeds at compile time and cargo does not notice a newly added file, so tests fail with `VersionMissing(n)` until the db crate is rebuilt (`touch crates/db/src/lib.rs`).
+- **Mass rename**: run `cargo fmt --all` before `make ci` (import order moves). `deploy-check` backup step needs `pg_dump` = server major (`PATH=/opt/homebrew/opt/postgresql@16/bin:$PATH`); site smoke needs `CHROME_PATH`. Env vars read in code must also be in compose and `.env.example`: `deploy-check` catches drift, so run it after any config change.

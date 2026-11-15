@@ -1,6 +1,6 @@
 # One domain: API and health under the same origin, everything else is the static UI
-# (`cd apps/web && bun run build`, then copy out/ to /srv/senddesk/web).
-# Caddy runs on the host next to the api, so the api sees it as 127.0.0.1: SD_TRUSTED_PROXIES=127.0.0.1.
+# (`cd apps/web && bun run build`, then copy out/ to /srv/deskpost/web).
+# Caddy runs on the host next to the api, so the api sees it as 127.0.0.1: DP_TRUSTED_PROXIES=127.0.0.1.
 # If Caddy runs in a container instead, trust that container's network address, not 127.0.0.1.
 # Also set FRONTEND_URL=https://desk.example.com.
 desk.example.com {
@@ -8,7 +8,7 @@ desk.example.com {
 
 	@api path /api/* /health /health/*
 	handle @api {
-		# Large enough for SD_WEBHOOK_LIMIT_BYTES; the api enforces the real limits.
+		# Large enough for DP_WEBHOOK_LIMIT_BYTES; the api enforces the real limits.
 		request_body {
 			max_size 40MB
 		}
@@ -36,7 +36,7 @@ desk.example.com {
 	header @widget Referrer-Policy no-referrer
 
 	handle {
-		root * /srv/senddesk/web
+		root * /srv/deskpost/web
 		try_files {path} {path}/ {path}/index.html
 		file_server
 	}

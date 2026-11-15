@@ -1,8 +1,8 @@
 //! Wire shapes `Ticket`, `Message`, `UnreadItem` (`docs/API.md` section 2).
 
-use sd_db::Id;
-use sd_db::messages::Message;
-use sd_db::tickets::{Ticket, TicketStats};
+use dp_db::Id;
+use dp_db::messages::Message;
+use dp_db::tickets::{Ticket, TicketStats};
 use serde::Serialize;
 use serde_json::{Value, json};
 

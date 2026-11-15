@@ -1,4 +1,4 @@
-//! sd-core: pure logic (no IO, no async). Statuses, email parsing, threading,
+//! dp-core: pure logic (no IO, no async). Statuses, email parsing, threading,
 //! reply stripping, secret box, API keys, filename and content-type safety.
 
 pub mod api_key;

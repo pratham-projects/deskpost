@@ -5,16 +5,16 @@
 //! The Message-ID unique key makes replays a no-op even when the webhook and IMAP race.
 
 use chrono::DateTime;
-use sd_core::body::{body_from_parts, html_to_text};
-use sd_core::content_type::normalize;
-use sd_core::email_addr::{is_bounce_message, normalize_email};
-use sd_core::filename::sanitize_filename;
-use sd_core::threading::{parse_ticket_number, strip_reply_prefixes, ticket_id_from_message_id};
-use sd_db::mailq::{self, NewInboundTicket};
-use sd_db::messages::NewInbound;
-use sd_db::{EmailResponseStatus, Id, attachments, messages, projects, tickets};
-use sd_mail::{InboundAttachment, InboundEmail, Limits};
-use sd_storage::{PutMeta, Storage};
+use dp_core::body::{body_from_parts, html_to_text};
+use dp_core::content_type::normalize;
+use dp_core::email_addr::{is_bounce_message, normalize_email};
+use dp_core::filename::sanitize_filename;
+use dp_core::threading::{parse_ticket_number, strip_reply_prefixes, ticket_id_from_message_id};
+use dp_db::mailq::{self, NewInboundTicket};
+use dp_db::messages::NewInbound;
+use dp_db::{EmailResponseStatus, Id, attachments, messages, projects, tickets};
+use dp_mail::{InboundAttachment, InboundEmail, Limits};
+use dp_storage::{PutMeta, Storage};
 
 use crate::config::Config;
 use crate::mail_out::enqueue_auto_response;
@@ -120,7 +120,7 @@ async fn find_thread(
     email: &InboundEmail,
     from: &str,
     ticket_number: Option<i64>,
-) -> sd_db::Result<Option<Id>> {
+) -> dp_db::Result<Option<Id>> {
     let pool = &state.pool;
     let allowed = |t: Id| mailq::sender_on_ticket(pool, project_id, t, from);
     if let Some(n) = ticket_number
@@ -232,7 +232,7 @@ pub async fn ingest(
     project_id: Id,
     email: &InboundEmail,
     ticket_number: Option<i64>,
-) -> sd_db::Result<Outcome> {
+) -> dp_db::Result<Outcome> {
     let Some(settings) = projects::mail_settings(&state.pool, project_id).await? else {
         return Ok(Outcome::Ignored("unknown project"));
     };
@@ -261,7 +261,7 @@ pub async fn ingest(
     if !email.attachments.is_empty()
         && let Err(e) = state.store.fs().await
     {
-        return Err(sd_db::Error::Io(std::io::Error::other(format!(
+        return Err(dp_db::Error::Io(std::io::Error::other(format!(
             "attachment storage unavailable: {e:?}"
         ))));
     }

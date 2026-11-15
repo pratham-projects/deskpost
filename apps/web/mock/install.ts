@@ -30,8 +30,8 @@ import { getCurrentAgentId } from "./session"
 
 declare global {
   interface Window {
-    __sendeskMockInstalled?: boolean
-    __sendeskMockNativeFetch?: typeof fetch
+    __deskpostMockInstalled?: boolean
+    __deskpostMockNativeFetch?: typeof fetch
   }
 }
 
@@ -70,11 +70,11 @@ function ensureAutoLogin(): void {
 export function installMockApi(): void {
   if (typeof window === "undefined") return
   if (process.env.NEXT_PUBLIC_DEMO === "0") return // default is demo-on
-  if (window.__sendeskMockInstalled) return
-  window.__sendeskMockInstalled = true
+  if (window.__deskpostMockInstalled) return
+  window.__deskpostMockInstalled = true
 
   const nativeFetch = window.fetch.bind(window)
-  window.__sendeskMockNativeFetch = nativeFetch
+  window.__deskpostMockNativeFetch = nativeFetch
 
   ensureAutoLogin()
   startTicker()

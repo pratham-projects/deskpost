@@ -18,7 +18,7 @@ Read-only review. Scope: `apps/web` (API client, auth, XSS), `Dockerfile`, `dock
 ### H3. Long-lived refresh token stored in localStorage; access token and user object too
 - `apps/web/lib/store.ts:62-67, 180-194, 101-112`, `apps/web/lib/api/auth.ts:118-135`.
 - Failure: any XSS, or any compromised npm dependency (the `bun.lock` tree is large), reads `refreshToken`/`accessToken`. The refresh token is a 90-day family credential that defeats the HttpOnly cookie design in `docs/API.md` section 1.
-- In production the API does not return `refreshToken` (`SD_ENV != production`), so the localStorage path is dead there. In dev or staging (`SD_ENV=development`) it is active. Deploying with `SD_ENV=development` to fix a cookie problem silently downgrades the security model.
+- In production the API does not return `refreshToken` (`DP_ENV != production`), so the localStorage path is dead there. In dev or staging (`DP_ENV=development`) it is active. Deploying with `DP_ENV=development` to fix a cookie problem silently downgrades the security model.
 - The access token is also persisted (`store.ts:189`) and re-used for 5 minutes after a reload. The comment at `store.ts:26` ("No persist ... don't survive reload") contradicts the code.
 - Fix: remove all `localStorage` token handling. Use the cookie plus in-memory access token, and call `/auth/refresh` on load. Gate any dev-only header path behind `process.env.NODE_ENV !== "production"` at build time so it is tree-shaken.
 
@@ -38,7 +38,7 @@ Read-only review. Scope: `apps/web` (API client, auth, XSS), `Dockerfile`, `dock
 ### M3. Concurrent refresh race against single-use rotating refresh tokens
 - `client.ts:57-60, 134-143` plus `store.ts:41-92`. There is no single-flight guard around `refreshToken()`.
 - Failure: the dashboard fires several requests in parallel (tickets, unread, projects). When the token expires, each one calls `authApi.refresh()` at the same time. The server rotates the token on every use (`docs/API.md` section 1). The grace window is 10 s, but a second rotation of an already-rotated token beyond the grace window revokes the whole family (`reuse_detected`). The user is logged out randomly. Cross-tab is worse: two tabs both refresh with the same stored `refreshToken`.
-- Fix: memoize the in-flight promise (`let inflight: Promise<boolean> | null`) and clear it in `finally`. For cross-tab, use `navigator.locks.request("sd-refresh", ...)`.
+- Fix: memoize the in-flight promise (`let inflight: Promise<boolean> | null`) and clear it in `finally`. For cross-tab, use `navigator.locks.request("dp-refresh", ...)`.
 
 ### M4. Missing browser hardening headers on the UI
 - `deploy/Caddyfile:20-26, 37-41`: no `Content-Security-Policy` for the app. Only `frame-ancestors 'none'` is set, and `/widget` is excluded from it. HSTS has no `includeSubDomains` or `preload` (acceptable, but note it). No `Permissions-Policy`.
@@ -71,7 +71,7 @@ Read-only review. Scope: `apps/web` (API client, auth, XSS), `Dockerfile`, `dock
 - Fix: pin `sha256` and verify with `shasum -a 256 -c` before `mv`.
 
 ### L2. e2e drops a database on whatever server `DATABASE_URL` names
-- `scripts/e2e.sh:9-11, 39`: `BASE_DB=${DATABASE_URL:-...}` then `DROP DATABASE IF EXISTS sd_e2e`. Only `sd_e2e` is dropped, but `DATABASE_URL` pointing at a shared or production server will create and drop a database there.
+- `scripts/e2e.sh:9-11, 39`: `BASE_DB=${DATABASE_URL:-...}` then `DROP DATABASE IF EXISTS dp_e2e`. Only `dp_e2e` is dropped, but `DATABASE_URL` pointing at a shared or production server will create and drop a database there.
 - Fix: require an explicit `E2E_DATABASE_URL` or refuse hosts other than `localhost`/`127.0.0.1`.
 
 ### L3. e2e leaves the `Set -e` race and orphan processes on failure paths
@@ -85,10 +85,10 @@ Read-only review. Scope: `apps/web` (API client, auth, XSS), `Dockerfile`, `dock
 ### L5. Docker and compose hygiene
 - `Dockerfile:12, 28, 38`: base images are not pinned by digest (`rust:1-bookworm`, `oven/bun:1`). Reproducibility and supply chain.
 - `Dockerfile:39`: the `web` runtime stage copies the whole build directory including `node_modules` and sources (`COPY --from=web-build /web ./`). This disappears once H1 is fixed with a static image.
-- `docker-compose.yml:13, 22`: `app` and `migrate` use `env_file: .env`, which also injects `POSTGRES_PASSWORD` and `SD_BOOTSTRAP_PASSWORD` into the app container. Use an explicit `environment:` allow-list.
+- `docker-compose.yml:13, 22`: `app` and `migrate` use `env_file: .env`, which also injects `POSTGRES_PASSWORD` and `DP_BOOTSTRAP_PASSWORD` into the app container. Use an explicit `environment:` allow-list.
 - `docker-compose.yml:2-3, 49-52`: `mailpit` is in the default profile. Anyone who runs the compose file in production gets a catch-all SMTP sink on loopback. Put it in `profiles: ["dev"]`.
 - `.dockerignore` does not exclude `apps/web/out`, `e2e`, `.coord` (it does exclude `.coord`), `docs`. Build context bloat only.
-- `deploy/senddesk-api.service`: good baseline. Consider adding `ProtectKernelModules=true`, `RestrictNamespaces=true`, `SystemCallFilter=@system-service`, `MemoryDenyWriteExecute=true`, `CapabilityBoundingSet=` and `UMask=0077`.
+- `deploy/deskpost-api.service`: good baseline. Consider adding `ProtectKernelModules=true`, `RestrictNamespaces=true`, `SystemCallFilter=@system-service`, `MemoryDenyWriteExecute=true`, `CapabilityBoundingSet=` and `UMask=0077`.
 
 ### L6. Caddy: API paths get no `X-Content-Type-Options` guarantee beyond the API's own
 - `deploy/Caddyfile:12-20`: the `header` block with `nosniff` and HSTS applies to every response, which is fine. Note `-Server` removes the Caddy header only.
@@ -105,7 +105,7 @@ Read-only review. Scope: `apps/web` (API client, auth, XSS), `Dockerfile`, `dock
 - Tenant isolation: the client sends only the Bearer token and IDs, with no client-supplied tenant claims. Authorization must be (and per the API doc is) enforced server-side, which was not reviewed here.
 - Attachment fetch uses `Authorization` header and blob URLs. The `?token=` URL form in the API doc is not used by the UI, so tokens do not end up in URLs or `Referer`.
 - CORS: not an issue for the documented same-origin deployment. `credentials: 'include'` is set on all calls, which is harmless same-origin.
-- `deploy/senddesk-api.service`: runs as an unprivileged user with `NoNewPrivileges`, `ProtectSystem=strict`, an `EnvironmentFile` outside the repo. Good.
+- `deploy/deskpost-api.service`: runs as an unprivileged user with `NoNewPrivileges`, `ProtectSystem=strict`, an `EnvironmentFile` outside the repo. Good.
 - `.env.example`: contains no real secrets, and `DATABASE_URL` carries a `CHANGE_ME` placeholder that the API rejects at startup per the comment.
 
 ## Suggested order

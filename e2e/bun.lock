@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "sendesk-e2e",
+      "name": "deskpost-e2e",
       "devDependencies": {
         "@playwright/test": "1.65.0",
         "@types/node": "^25.8.0",

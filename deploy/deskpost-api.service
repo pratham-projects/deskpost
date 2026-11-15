@@ -1,22 +1,22 @@
-# /etc/systemd/system/senddesk-api.service
-# Install: copy the release binary to /usr/local/bin/api, put secrets in /etc/senddesk/env (chmod 600),
-# set STORAGE_DIR=/var/lib/senddesk/storage in that file (it overrides Environment= below), create the user
-# (`useradd --system --home /var/lib/senddesk --shell /usr/sbin/nologin senddesk`), run `api migrate` once, then `systemctl enable --now senddesk-api`.
+# /etc/systemd/system/deskpost-api.service
+# Install: copy the release binary to /usr/local/bin/api, put secrets in /etc/deskpost/env (chmod 600),
+# set STORAGE_DIR=/var/lib/deskpost/storage in that file (it overrides Environment= below), create the user
+# (`useradd --system --home /var/lib/deskpost --shell /usr/sbin/nologin deskpost`), run `api migrate` once, then `systemctl enable --now deskpost-api`.
 [Unit]
-Description=SendDesk API
+Description=Deskpost API
 After=network-online.target postgresql.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=senddesk
-Group=senddesk
-EnvironmentFile=/etc/senddesk/env
-Environment=STORAGE_DIR=/var/lib/senddesk/storage
+User=deskpost
+Group=deskpost
+EnvironmentFile=/etc/deskpost/env
+Environment=STORAGE_DIR=/var/lib/deskpost/storage
 ExecStart=/usr/local/bin/api serve
 Restart=on-failure
 RestartSec=3
-StateDirectory=senddesk
+StateDirectory=deskpost
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
@@ -26,7 +26,7 @@ ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 LockPersonality=true
-ReadWritePaths=/var/lib/senddesk
+ReadWritePaths=/var/lib/deskpost
 
 [Install]
 WantedBy=multi-user.target

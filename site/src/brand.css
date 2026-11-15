@@ -1,4 +1,4 @@
-/* sendesk skin: mirrors the product UI (apps/web/app/globals.css): cool paper, navy primary, Geist, 10px radius.
+/* deskpost skin: mirrors the product UI (apps/web/app/globals.css): cool paper, navy primary, Geist, 10px radius.
    Light by default, dark follows the OS. Pixel type stays on the wordmark and the ASCII scene only. */
 @font-face { font-family: "Geist Sans"; font-weight: 100 900; src: url("/fonts/GeistVariable.woff2") format("woff2"); font-display: swap; }
 :root {

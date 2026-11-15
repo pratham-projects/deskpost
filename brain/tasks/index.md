@@ -20,5 +20,6 @@
 | P4-merge | feat/webload | merged to staging (migration renumbered 0006) |
 | R60 | final gate | ci + e2e green on staging, main merge awaits approval |
 | S2 | feat/site | done, merged (Deskpost site in `site/`) |
+| R70 | feat/rebrand | done: SendDesk -> Deskpost full rename + deploy-check env fix; awaiting merge to staging |
 
 Rules: [Pre-Merge Gate](/wisdom/pre-merge-gate.md).

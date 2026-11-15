@@ -4,9 +4,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use sd_db::projects::MailSettings;
-use sd_db::{mailq, projects, tickets};
-use sd_mail::{ImapConfig, ImapMailbox, PollOptions, PollState, poll};
+use dp_db::projects::MailSettings;
+use dp_db::{mailq, projects, tickets};
+use dp_mail::{ImapConfig, ImapMailbox, PollOptions, PollState, poll};
 use tokio::sync::Semaphore;
 use tokio::task::{JoinHandle, JoinSet};
 use tokio::time::{MissedTickBehavior, interval};
@@ -27,8 +27,8 @@ const OUTBOX_RETENTION_DAYS: i32 = 30;
 
 /// The database refused the data itself (bad value, NUL byte, too long, check/not-null violation),
 /// as opposed to a pool, IO or serialization failure that a retry can fix.
-pub(crate) fn is_data_error(e: &sd_db::Error) -> bool {
-    matches!(e, sd_db::Error::Database(d)
+pub(crate) fn is_data_error(e: &dp_db::Error) -> bool {
+    matches!(e, dp_db::Error::Database(d)
         if d.code().is_some_and(|c| c.starts_with("22") || c == "23514" || c == "23502"))
 }
 
@@ -112,7 +112,7 @@ pub async fn poll_project(state: &AppState, s: &MailSettings) -> Result<usize, S
 
 /// One tick: every IMAP-enabled project, at most `imap_concurrency` at a time. Each project's
 /// outcome (error text without secrets, or cleared) is recorded on the project. Returns projects polled.
-pub async fn poll_all(state: &AppState) -> sd_db::Result<usize> {
+pub async fn poll_all(state: &AppState) -> dp_db::Result<usize> {
     let all = projects::list_imap_enabled(&state.pool).await?;
     let permits = Arc::new(Semaphore::new(state.config.mail.imap_concurrency));
     let mut set = JoinSet::new();
@@ -135,13 +135,13 @@ pub async fn poll_all(state: &AppState) -> sd_db::Result<usize> {
 }
 
 /// Resolved tickets idle past the project's `auto_close_days` become closed.
-pub async fn auto_close_once(state: &AppState) -> sd_db::Result<usize> {
+pub async fn auto_close_once(state: &AppState) -> dp_db::Result<usize> {
     Ok(tickets::auto_close_resolved(&state.pool).await?.len())
 }
 
 const TMP_MAX_AGE: Duration = Duration::from_secs(24 * 3600);
 
-async fn housekeeping_once(state: &AppState) -> sd_db::Result<()> {
+async fn housekeeping_once(state: &AppState) -> dp_db::Result<()> {
     let closed = auto_close_once(state).await?;
     if closed > 0 {
         tracing::info!(closed, "auto-closed resolved tickets");
@@ -162,7 +162,7 @@ async fn housekeeping_once(state: &AppState) -> sd_db::Result<()> {
 fn every<F, Fut>(period: Duration, name: &'static str, f: F) -> JoinHandle<()>
 where
     F: Fn() -> Fut + Send + 'static,
-    Fut: std::future::Future<Output = sd_db::Result<()>> + Send,
+    Fut: std::future::Future<Output = dp_db::Result<()>> + Send,
 {
     tokio::spawn(async move {
         let mut tick = interval(period);

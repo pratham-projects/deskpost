@@ -13,7 +13,7 @@ done
 python3 - <<'PY'
 import re, sys, yaml
 cfg = open("crates/api/src/config.rs").read() + open("crates/api/src/mail_config.rs").read()
-read = set(re.findall(r'"((?:SD_)?[A-Z][A-Z_]{3,})"', cfg))
+read = set(re.findall(r'"((?:DP_)?[A-Z][A-Z_]{3,})"', cfg))
 fixed_by_image = {"PORT", "STORAGE_DIR"}  # set in the Dockerfile
 compose = yaml.safe_load(open("docker-compose.yml"))
 errs = []
@@ -23,9 +23,9 @@ for svc in ("migrate", "app"):
     errs += [f"compose {svc}: config.rs reads {v} but compose does not pass it" for v in read - env - fixed_by_image]
 example = set(re.findall(r"^([A-Z][A-Z_]+)=", open(".env.example").read(), re.M))
 errs += [f".env.example lacks {v}" for v in read - example]
-errs += [f".env.example has unknown {v}" for v in example - read - {"SD_BOOTSTRAP_PASSWORD", "POSTGRES_PASSWORD", "RUST_LOG", "PUBLIC_URL"}]
-unit = open("deploy/senddesk-api.service").read()
-for needle in ("User=senddesk", "EnvironmentFile=/etc/senddesk/env", "ExecStart=/usr/local/bin/api serve", "ReadWritePaths=/var/lib/senddesk"):
+errs += [f".env.example has unknown {v}" for v in example - read - {"DP_BOOTSTRAP_PASSWORD", "POSTGRES_PASSWORD", "RUST_LOG", "PUBLIC_URL"}]
+unit = open("deploy/deskpost-api.service").read()
+for needle in ("User=deskpost", "EnvironmentFile=/etc/deskpost/env", "ExecStart=/usr/local/bin/api serve", "ReadWritePaths=/var/lib/deskpost"):
     if needle not in unit: errs.append(f"systemd unit lacks {needle}")
 for sec in ("[Unit]", "[Service]", "[Install]"):
     if sec not in unit: errs.append(f"systemd unit lacks {sec}")
@@ -44,14 +44,14 @@ case "$BASE" in
   *) echo "skip backup test: non-local database" >&2; exit 0 ;;
 esac
 W=$(mktemp -d)
-trap 'psql "$BASE" -q -c "DROP DATABASE IF EXISTS sd_bk_src" -c "DROP DATABASE IF EXISTS sd_bk_dst" >/dev/null 2>&1; rm -rf "$W"' EXIT
-psql "$BASE" -q -c "DROP DATABASE IF EXISTS sd_bk_src" -c "CREATE DATABASE sd_bk_src" -c "DROP DATABASE IF EXISTS sd_bk_dst" -c "CREATE DATABASE sd_bk_dst"
-SRC="${BASE%/*}/sd_bk_src"; DST="${BASE%/*}/sd_bk_dst"
+trap 'psql "$BASE" -q -c "DROP DATABASE IF EXISTS dp_bk_src" -c "DROP DATABASE IF EXISTS dp_bk_dst" >/dev/null 2>&1; rm -rf "$W"' EXIT
+psql "$BASE" -q -c "DROP DATABASE IF EXISTS dp_bk_src" -c "CREATE DATABASE dp_bk_src" -c "DROP DATABASE IF EXISTS dp_bk_dst" -c "CREATE DATABASE dp_bk_dst"
+SRC="${BASE%/*}/dp_bk_src"; DST="${BASE%/*}/dp_bk_dst"
 psql "$SRC" -q -c "CREATE TABLE t(id int primary key, v text)" -c "INSERT INTO t VALUES (1,'a'),(2,'b')"
 mkdir -p "$W/storage/ab/cd" && echo data >"$W/storage/ab/cd/abcdfile"
 DATABASE_URL=$SRC STORAGE_DIR=$W/storage BACKUP_DIR=$W/bk scripts/backup.sh >/dev/null
-pg_restore --no-owner --exit-on-error --dbname="$DST" "$W"/bk/senddesk-db-*.dump
+pg_restore --no-owner --exit-on-error --dbname="$DST" "$W"/bk/deskpost-db-*.dump
 [ "$(psql "$DST" -tAc 'select count(*) from t')" = 2 ] || { echo "FAIL restore row count" >&2; exit 1; }
-tar -tzf "$W"/bk/senddesk-files-*.tar.gz | grep -q abcdfile || { echo "FAIL files tarball" >&2; exit 1; }
-[ "$(stat -f %Lp "$W"/bk/senddesk-db-*.dump 2>/dev/null || stat -c %a "$W"/bk/senddesk-db-*.dump)" = 600 ] || { echo "FAIL dump mode" >&2; exit 1; }
+tar -tzf "$W"/bk/deskpost-files-*.tar.gz | grep -q abcdfile || { echo "FAIL files tarball" >&2; exit 1; }
+[ "$(stat -f %Lp "$W"/bk/deskpost-db-*.dump 2>/dev/null || stat -c %a "$W"/bk/deskpost-db-*.dump)" = 600 ] || { echo "FAIL dump mode" >&2; exit 1; }
 echo "ok backup -> restore round-trip"

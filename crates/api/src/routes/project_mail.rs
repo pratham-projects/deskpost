@@ -9,10 +9,10 @@ use std::time::Duration;
 use axum::Router;
 use axum::extract::State;
 use axum::routing::post;
-use sd_core::email_addr::is_valid_email;
-use sd_core::secret::SecretBox;
-use sd_db::projects::{self, MailSettings, MailUpdate};
-use sd_mail::{ImapConfig, ImapMailbox, SmtpConfig, TlsMode};
+use dp_core::email_addr::is_valid_email;
+use dp_core::secret::SecretBox;
+use dp_db::projects::{self, MailSettings, MailUpdate};
+use dp_mail::{ImapConfig, ImapMailbox, SmtpConfig, TlsMode};
 use serde::{Deserialize, Serialize};
 
 use super::mail_guard;
@@ -26,7 +26,7 @@ const MAX_PASSWORD_CHARS: usize = 512;
 const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Associated data binding a ciphertext to its project and field (`kind`: `smtp` or `imap`).
-pub fn password_aad(project: sd_db::Id, kind: &str) -> Vec<u8> {
+pub fn password_aad(project: dp_db::Id, kind: &str) -> Vec<u8> {
     format!("{project}:{kind}_password").into_bytes()
 }
 
@@ -58,7 +58,7 @@ struct ApproveReq {
 async fn approve_mailbox(
     State(s): State<AppState>,
     GlobalAdmin(_): GlobalAdmin,
-    ApiPath(id): ApiPath<sd_db::Id>,
+    ApiPath(id): ApiPath<dp_db::Id>,
     ApiJson(req): ApiJson<ApproveReq>,
 ) -> Result<Envelope<serde_json::Value>, ApiError> {
     // The address the admin looked at; a tenant that changed it in the meantime is not approved.
@@ -215,7 +215,7 @@ impl CleanMail {
     }
 
     /// Encrypts the passwords for `project` and builds the column update.
-    pub fn into_update(self, secrets: &SecretBox, project: sd_db::Id) -> MailUpdate {
+    pub fn into_update(self, secrets: &SecretBox, project: dp_db::Id) -> MailUpdate {
         let seal = |kind: &str, p: Option<String>| {
             p.map(|p| {
                 if p.is_empty() {
@@ -243,12 +243,12 @@ impl CleanMail {
 }
 
 /// Maps a driver error to a fixed message: server banners and OS errors stay in the logs.
-fn probe_message(e: &sd_mail::Error) -> &'static str {
+fn probe_message(e: &dp_mail::Error) -> &'static str {
     tracing::info!(error = %e, "mail connection test failed");
     match e {
-        sd_mail::Error::Timeout(_) => "The server did not answer in time.",
-        sd_mail::Error::Tls(_) => "The TLS handshake failed.",
-        sd_mail::Error::Io(_) => "Could not connect to the server.",
+        dp_mail::Error::Timeout(_) => "The server did not answer in time.",
+        dp_mail::Error::Tls(_) => "The TLS handshake failed.",
+        dp_mail::Error::Io(_) => "Could not connect to the server.",
         _ => "The server refused the connection or the login.",
     }
 }
@@ -258,7 +258,7 @@ fn probe_message(e: &sd_mail::Error) -> &'static str {
 struct ProbeReq {
     host: Option<String>,
     port: Option<i64>,
-    /// `starttls` | `implicit` | `none` (`none` only with `SD_ALLOW_PRIVATE_MAIL_HOSTS`).
+    /// `starttls` | `implicit` | `none` (`none` only with `DP_ALLOW_PRIVATE_MAIL_HOSTS`).
     tls: Option<String>,
     username: Option<String>,
     password: Option<String>,
@@ -369,8 +369,8 @@ fn resolve(
 async fn load(
     s: &AppState,
     ip: std::net::IpAddr,
-    user: sd_db::Id,
-    id: sd_db::Id,
+    user: dp_db::Id,
+    id: dp_db::Id,
 ) -> Result<MailSettings, ApiError> {
     s.limiter.check(Rule::MailProbe, ip)?;
     project_admin(s, user, id).await?;
@@ -389,7 +389,7 @@ async fn test_smtp(
     State(s): State<AppState>,
     ClientIp(ip): ClientIp,
     AuthUser(user): AuthUser,
-    ApiPath(id): ApiPath<sd_db::Id>,
+    ApiPath(id): ApiPath<dp_db::Id>,
     ApiJson(req): ApiJson<ProbeReq>,
 ) -> Result<Envelope<ProbeResult>, ApiError> {
     let cur = load(&s, ip, user.id, id).await?;
@@ -405,7 +405,7 @@ async fn test_smtp(
     cfg.password = t.password;
     cfg.io_timeout = PROBE_TIMEOUT;
     cfg.total_timeout = PROBE_TIMEOUT * 2;
-    let r = sd_mail::check_smtp(&cfg).await;
+    let r = dp_mail::check_smtp(&cfg).await;
     Ok(Envelope::ok(result(r)))
 }
 
@@ -413,7 +413,7 @@ async fn test_imap(
     State(s): State<AppState>,
     ClientIp(ip): ClientIp,
     AuthUser(user): AuthUser,
-    ApiPath(id): ApiPath<sd_db::Id>,
+    ApiPath(id): ApiPath<dp_db::Id>,
     ApiJson(req): ApiJson<ProbeReq>,
 ) -> Result<Envelope<ProbeResult>, ApiError> {
     let cur = load(&s, ip, user.id, id).await?;
@@ -440,7 +440,7 @@ async fn test_imap(
     Ok(Envelope::ok(result(r)))
 }
 
-fn result(r: Result<(), sd_mail::Error>) -> ProbeResult {
+fn result(r: Result<(), dp_mail::Error>) -> ProbeResult {
     match r {
         Ok(()) => ProbeResult {
             ok: true,

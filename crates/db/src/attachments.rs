@@ -26,7 +26,7 @@ pub struct NewAttachment {
     pub filename: String,
     pub mime_type: String,
     pub size_bytes: i64,
-    /// Opaque key from `sd-storage`; never a URL or a user-supplied path.
+    /// Opaque key from `dp-storage`; never a URL or a user-supplied path.
     pub storage_key: String,
     /// Inbound mail: the message the file arrived with (must belong to the same ticket).
     pub message_id: Option<Id>,

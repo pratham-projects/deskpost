@@ -3,8 +3,8 @@
 use axum::Router;
 use axum::extract::State;
 use axum::routing::{get, patch};
-use sd_db::email_responses::{self, EmailResponse};
-use sd_db::{EmailResponseStatus, Id, is_unique_violation};
+use dp_db::email_responses::{self, EmailResponse};
+use dp_db::{EmailResponseStatus, Id, is_unique_violation};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 

@@ -34,5 +34,5 @@ export function clearSession(): void {
   window.localStorage.removeItem("tokenExpiresAt")
   window.localStorage.removeItem("user")
   window.localStorage.removeItem("refreshToken")
-  window.localStorage.removeItem("sendesk_demo_current_agent")
+  window.localStorage.removeItem("deskpost_demo_current_agent")
 }

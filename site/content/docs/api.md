@@ -9,7 +9,7 @@ description: The /api/v3 contract in brief: envelope, auth, routes and errors.
 
 Everything is under `/api/v3` (`API_VERSION`), except `GET /health` and `GET /health/db`. The full contract, including every field and deviation from the product it replaced, is `docs/API.md` in the repository.
 
-JSON in and out, camelCase fields, UUID ids, RFC 3339 UTC timestamps. Bodies are capped at 64 KiB by default (`SD_BODY_LIMIT_BYTES`); upload and webhook routes raise their own cap. Unknown JSON fields are ignored.
+JSON in and out, camelCase fields, UUID ids, RFC 3339 UTC timestamps. Bodies are capped at 64 KiB by default (`DP_BODY_LIMIT_BYTES`); upload and webhook routes raise their own cap. Unknown JSON fields are ignored.
 
 ## Envelope
 

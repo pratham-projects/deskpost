@@ -1,12 +1,12 @@
 ---
 type: Architecture
-title: Storage crate (sd-storage)
+title: Storage crate (dp-storage)
 description: Attachment store trait, filesystem driver, signed download tokens, quota helper, and TS-product weaknesses.
 tags: [architecture, storage, security]
 timestamp: 2026-10-27
 ---
 
-# sd-storage
+# dp-storage
 
 `Storage` trait (`put` stream -> `StoredObject`, `get`, `delete`, `exists`; native async-fn-in-trait, no `dyn`).
 Only driver: `FsStorage`. S3 driver is **future work**, deliberately out of scope.

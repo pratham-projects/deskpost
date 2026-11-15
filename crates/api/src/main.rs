@@ -7,7 +7,7 @@ use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
-#[command(name = "api", about = "SendDesk API server")]
+#[command(name = "api", about = "Deskpost API server")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -24,7 +24,7 @@ enum Command {
         #[arg(long)]
         email: String,
         /// Prefer the environment variable: command-line arguments are visible in `ps`.
-        #[arg(long, env = "SD_BOOTSTRAP_PASSWORD", hide_env_values = true)]
+        #[arg(long, env = "DP_BOOTSTRAP_PASSWORD", hide_env_values = true)]
         password: String,
         #[arg(long)]
         name: String,
@@ -44,10 +44,10 @@ async fn main() {
 
 async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env()?;
-    let pool = sd_db::connect(&config.database_url, 10).await?;
+    let pool = dp_db::connect(&config.database_url, 10).await?;
     match cli.command {
         Command::Migrate => {
-            sd_db::migrate(&pool).await?;
+            dp_db::migrate(&pool).await?;
             println!("migrations applied");
         }
         Command::Bootstrap {
@@ -65,7 +65,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
             if config.trusted_proxies.is_empty() {
                 tracing::warn!(
-                    "SD_TRUSTED_PROXIES is empty: behind a reverse proxy every client shares the proxy's address and one rate-limit bucket"
+                    "DP_TRUSTED_PROXIES is empty: behind a reverse proxy every client shares the proxy's address and one rate-limit bucket"
                 );
             }
             let state = AppState::new(pool, config)?;

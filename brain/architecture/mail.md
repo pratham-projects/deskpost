@@ -1,12 +1,12 @@
 ---
 type: Architecture
-title: Mail Crate (sd-mail)
+title: Mail Crate (dp-mail)
 description: SMTP sender, MIME parser, IMAP poller and in-process fake servers.
 tags: [mail, smtp, imap, testing]
 timestamp: 2026-10-27
 ---
 
-# Mail Crate (sd-mail)
+# Mail Crate (dp-mail)
 
 Behaviour and free-provider settings: `docs/free-email.md`. Decision: [ADR-0001](/decisions/0001-free-email.md).
 

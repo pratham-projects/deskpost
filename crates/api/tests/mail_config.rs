@@ -20,10 +20,10 @@ fn defaults_match_the_contract() {
 #[test]
 fn settings_are_read_and_validated() {
     let ok = Config::from_lookup(env_with(&[
-        ("SD_WEBHOOK_SECRET", "Qw3rTy9uIo1pAs5dFg7hJk2lZx4cVb6N"),
-        ("SD_MAIL_PLAINTEXT", "1"),
-        ("SD_MAX_FILES", "3"),
-        ("SD_IMAP_POLL_SECS", "30"),
+        ("DP_WEBHOOK_SECRET", "Qw3rTy9uIo1pAs5dFg7hJk2lZx4cVb6N"),
+        ("DP_MAIL_PLAINTEXT", "1"),
+        ("DP_MAX_FILES", "3"),
+        ("DP_IMAP_POLL_SECS", "30"),
     ]))
     .unwrap()
     .mail;
@@ -35,12 +35,12 @@ fn settings_are_read_and_validated() {
     assert_eq!((ok.max_files, ok.imap_poll_interval.as_secs()), (3, 30));
 
     for (k, v) in [
-        ("SD_WEBHOOK_SECRET", "short"),
-        ("SD_WEBHOOK_SECRET", "changeme-changeme-changeme-changeme"),
-        ("SD_MAIL_PLAINTEXT", "maybe"),
-        ("SD_MAX_FILES", "0"),
-        ("SD_IMAP_POLL_SECS", "1"),
-        ("SD_IMAP_CONCURRENCY", "1000"),
+        ("DP_WEBHOOK_SECRET", "short"),
+        ("DP_WEBHOOK_SECRET", "changeme-changeme-changeme-changeme"),
+        ("DP_MAIL_PLAINTEXT", "maybe"),
+        ("DP_MAX_FILES", "0"),
+        ("DP_IMAP_POLL_SECS", "1"),
+        ("DP_IMAP_CONCURRENCY", "1000"),
     ] {
         assert!(Config::from_lookup(env_with(&[(k, v)])).is_err(), "{k}={v}");
     }

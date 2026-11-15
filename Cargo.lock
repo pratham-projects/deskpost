@@ -126,15 +126,15 @@ dependencies = [
  "base64 0.23.1",
  "chrono",
  "clap",
+ "dp-core",
+ "dp-db",
+ "dp-mail",
+ "dp-storage",
  "hmac 0.13.0",
  "http-body-util",
  "ipnet",
  "proptest",
  "rand 0.10.3",
- "sd-core",
- "sd-db",
- "sd-mail",
- "sd-storage",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -728,6 +728,62 @@ name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
+
+[[package]]
+name = "dp-core"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "base64 0.23.1",
+ "hkdf 0.13.0",
+ "idna",
+ "proptest",
+ "rand 0.10.3",
+ "regex",
+ "sha2 0.11.1",
+ "subtle",
+]
+
+[[package]]
+name = "dp-db"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "sqlx",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "dp-mail"
+version = "0.1.0"
+dependencies = [
+ "async-imap",
+ "futures",
+ "lettre",
+ "mail-parser",
+ "proptest",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "uuid",
+ "webpki-roots",
+]
+
+[[package]]
+name = "dp-storage"
+version = "0.1.0"
+dependencies = [
+ "hmac 0.12.1",
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "uuid",
+]
 
 [[package]]
 name = "either"
@@ -2087,62 +2143,6 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
-
-[[package]]
-name = "sd-core"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "base64 0.23.1",
- "hkdf 0.13.0",
- "idna",
- "proptest",
- "rand 0.10.3",
- "regex",
- "sha2 0.11.1",
- "subtle",
-]
-
-[[package]]
-name = "sd-db"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "sqlx",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "sd-mail"
-version = "0.1.0"
-dependencies = [
- "async-imap",
- "futures",
- "lettre",
- "mail-parser",
- "proptest",
- "sha2 0.10.9",
- "thiserror 2.0.21",
- "tokio",
- "tokio-rustls",
- "uuid",
- "webpki-roots",
-]
-
-[[package]]
-name = "sd-storage"
-version = "0.1.0"
-dependencies = [
- "hmac 0.12.1",
- "proptest",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "tokio",
- "uuid",
-]
 
 [[package]]
 name = "self_cell"

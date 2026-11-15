@@ -25,7 +25,7 @@ export function agentFromHeaders(headers: Headers): AgentRecord | null {
 
 /** The identity the demo badge's role switcher currently has "signed in" —
  *  persisted separately from the zustand store so a page refresh keeps it. */
-const CURRENT_AGENT_KEY = "sendesk_demo_current_agent"
+const CURRENT_AGENT_KEY = "deskpost_demo_current_agent"
 
 export function getCurrentAgentId(): string {
   if (typeof window === "undefined") return getDB().agents[0].id

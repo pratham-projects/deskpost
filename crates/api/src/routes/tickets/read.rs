@@ -1,10 +1,10 @@
 //! List, search, counts, get, update and delete of tickets.
 
 use axum::extract::State;
-use sd_core::status::{TicketStatus as Core, TransitionError};
-use sd_db::tickets::{self, Guarded, TicketFilter, TicketPatch};
-use sd_db::{EmailResponseStatus, Id, Priority, TicketStatus, is_foreign_key_violation};
-use sd_storage::Storage;
+use dp_core::status::{TicketStatus as Core, TransitionError};
+use dp_db::tickets::{self, Guarded, TicketFilter, TicketPatch};
+use dp_db::{EmailResponseStatus, Id, Priority, TicketStatus, is_foreign_key_violation};
+use dp_storage::Storage;
 use serde::{Deserialize, Deserializer};
 use serde_json::{Value, json};
 
@@ -227,7 +227,7 @@ pub async fn delete(
         .await?
         .ok_or_else(|| ApiError::not_found("Ticket"))?;
     project_admin(&s, user.id, ticket.project_id).await?;
-    let keys = sd_db::attachments::storage_keys_for_ticket(&s.pool, user.id, id).await?;
+    let keys = dp_db::attachments::storage_keys_for_ticket(&s.pool, user.id, id).await?;
     if !tickets::delete(&s.pool, user.id, id).await? {
         return Err(ApiError::not_found("Ticket"));
     }
@@ -237,7 +237,7 @@ pub async fn delete(
             Ok(fs) => {
                 for key in keys {
                     match fs.delete(&key).await {
-                        Ok(()) | Err(sd_storage::Error::NotFound) => {}
+                        Ok(()) | Err(dp_storage::Error::NotFound) => {}
                         Err(e) => tracing::warn!(error = %e, "attachment file not removed"),
                     }
                 }

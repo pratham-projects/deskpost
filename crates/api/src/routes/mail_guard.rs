@@ -1,13 +1,13 @@
 //! SSRF guard for the SMTP/IMAP hosts an admin can configure. The server dials these hosts (mail
 //! worker, connection tests), so by default they must not point at loopback, private, link-local or
-//! otherwise internal addresses. `SD_ALLOW_PRIVATE_MAIL_HOSTS=1` lifts the address rule (dev, e2e).
+//! otherwise internal addresses. `DP_ALLOW_PRIVATE_MAIL_HOSTS=1` lifts the address rule (dev, e2e).
 
 use std::net::IpAddr;
 
 /// Internal-only name suffixes; a host that has no dot at all is also internal.
 const INTERNAL_SUFFIXES: [&str; 5] = [".localhost", ".local", ".internal", ".localdomain", ".lan"];
 
-pub use sd_mail::guard::is_blocked_ip;
+pub use dp_mail::guard::is_blocked_ip;
 
 /// Syntax and static policy check, no DNS. Returns the normalised (lower-case, no trailing dot) host.
 pub fn check_host(host: &str, allow_private: bool) -> Result<String, &'static str> {

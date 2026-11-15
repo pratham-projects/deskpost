@@ -2,8 +2,8 @@ mod common;
 mod r21_world;
 
 use axum::http::Method;
+use dp_db::Role;
 use r21_world::*;
-use sd_db::Role;
 use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -51,7 +51,7 @@ async fn list_and_search_are_member_only(pool: PgPool) {
 }
 
 /// A user the project admins can see because they share another project with them.
-async fn visible_user(w: &W, email: &str, slug: &str) -> sd_db::users::User {
+async fn visible_user(w: &W, email: &str, slug: &str) -> dp_db::users::User {
     let u = w.t.user(email, Role::Agent).await;
     let side = w.t.project(w.owner.id, slug).await;
     w.t.add_member(w.owner.id, side.id, w.admin.id, Role::Agent)
@@ -232,7 +232,7 @@ async fn the_owner_cannot_be_demoted_or_removed(pool: PgPool) {
     let still = data(&w.get(&base(&w), &w.owner.token).await);
     assert_eq!(still.as_array().unwrap().len(), 3);
     // The project still has its owner as admin.
-    let role = sd_db::members::role_of(&w.t.pool, w.owner.id, w.project.id)
+    let role = dp_db::members::role_of(&w.t.pool, w.owner.id, w.project.id)
         .await
         .unwrap();
     assert_eq!(role, Some(Role::Admin));

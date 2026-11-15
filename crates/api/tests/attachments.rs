@@ -4,16 +4,16 @@ mod mailkit;
 use axum::body::Body;
 use axum::http::Method;
 use common::*;
+use dp_db::Role;
+use dp_storage::Disposition;
 use mailkit::*;
-use sd_db::Role;
-use sd_storage::Disposition;
 use serde_json::{Value, json};
 use sqlx::PgPool;
 
 const PNG: &[u8] = b"\x89PNG\r\n\x1a\n-not-really-a-png";
 
 impl Kit {
-    async fn put(&self, tok: &str, ticket: sd_db::Id, name: &str, ct: &str, bytes: &[u8]) -> Resp {
+    async fn put(&self, tok: &str, ticket: dp_db::Id, name: &str, ct: &str, bytes: &[u8]) -> Resp {
         let req = self
             .t
             .req(Method::PUT, &format!("/attachments/{ticket}"))
@@ -26,7 +26,7 @@ impl Kit {
     async fn multipart(
         &self,
         tok: &str,
-        ticket: sd_db::Id,
+        ticket: dp_db::Id,
         files: &[(&str, &str, &[u8])],
         fields: &[(&str, &str)],
     ) -> Resp {
@@ -516,7 +516,7 @@ async fn delete_removes_row_and_file_for_uploader_or_admin_only(pool: PgPool) {
 async fn multipart_with_email_sends_attachments_and_threads(pool: PgPool) {
     let k = Kit::new(pool).await;
     let (_, project, ticket, s) = k.tenant("owner@example.com", "acme").await;
-    let smtp = sd_mail::testing::FakeSmtp::start_requiring_auth("u", "smtp-secret-pw").await;
+    let smtp = dp_mail::testing::FakeSmtp::start_requiring_auth("u", "smtp-secret-pw").await;
     k.configure_mail(project.id, smtp.port(), None).await;
 
     let files: Vec<(&str, &str, &[u8])> = vec![
@@ -541,7 +541,7 @@ async fn multipart_with_email_sends_attachments_and_threads(pool: PgPool) {
     let mails = smtp.messages();
     assert_eq!(mails.len(), 1);
     assert_eq!(mails[0].rcpt_to, ["client@example.com"]);
-    let parsed = sd_mail::parse_inbound(&mails[0].data, &sd_mail::Limits::default()).unwrap();
+    let parsed = dp_mail::parse_inbound(&mails[0].data, &dp_mail::Limits::default()).unwrap();
     assert_eq!(parsed.text.as_deref().map(str::trim), Some("Here you go"));
     let mut names: Vec<_> = parsed
         .attachments
@@ -761,7 +761,7 @@ async fn deleting_a_file_whose_bytes_are_gone_still_succeeds(pool: PgPool) {
         .unwrap();
     k.t.state.store.fs().await.unwrap();
     // remove the bytes behind the row's back
-    use sd_storage::Storage;
+    use dp_storage::Storage;
     k.t.state
         .store
         .fs()

@@ -1,21 +1,21 @@
-use sd_db::Pool;
+use dp_db::Pool;
 
 #[tokio::test]
 async fn connect_works_and_migrate_is_idempotent() {
     let url = std::env::var("DATABASE_URL").expect("DATABASE_URL");
-    let pool = sd_db::connect(&url, 2).await.unwrap();
+    let pool = dp_db::connect(&url, 2).await.unwrap();
     let one: i32 = sqlx::query_scalar("SELECT 1")
         .fetch_one(&pool)
         .await
         .unwrap();
     assert_eq!(one, 1);
-    assert!(sd_db::connect("not a url", 1).await.is_err());
+    assert!(dp_db::connect("not a url", 1).await.is_err());
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn migrate_twice_is_a_no_op(pool: Pool) {
-    sd_db::migrate(&pool).await.unwrap();
-    sd_db::migrate(&pool).await.unwrap();
+    dp_db::migrate(&pool).await.unwrap();
+    dp_db::migrate(&pool).await.unwrap();
     let applied: i64 = sqlx::query_scalar("SELECT count(*) FROM _sqlx_migrations")
         .fetch_one(&pool)
         .await

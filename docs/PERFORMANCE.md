@@ -1,8 +1,8 @@
 # Performance
 
-`scripts/load.sh` boots a release API on a scratch db (`sd_load`), seeds 500 tickets, then runs
+`scripts/load.sh` boots a release API on a scratch db (`dp_load`), seeds 500 tickets, then runs
 [oha](https://github.com/hatoo/oha) for 10 s per scenario at 32 connections (login: 8, it is Argon2).
-It sets `SD_RATE_LIMIT_SCALE=100000` because every request comes from one address; production keeps 1.
+It sets `DP_RATE_LIMIT_SCALE=100000` because every request comes from one address; production keeps 1.
 Raw output lands in `e2e/.run/load.md`. Re-run after any query or pool change.
 
 Host: Apple M4 (10 cpu), Postgres 16 on localhost, pool size 10, same box for load generator and server.

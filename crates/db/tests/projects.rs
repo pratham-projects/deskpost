@@ -1,8 +1,8 @@
 mod common;
 
 use common::*;
-use sd_db::projects::{MailUpdate, NewProject, ProjectPatch};
-use sd_db::{Page, Pool, Role, Status, constraint, is_unique_violation, projects};
+use dp_db::projects::{MailUpdate, NewProject, ProjectPatch};
+use dp_db::{Page, Pool, Role, Status, constraint, is_unique_violation, projects};
 
 fn new_project(slug: &str, hash: &str) -> NewProject {
     NewProject {
@@ -29,7 +29,7 @@ async fn create_makes_owner_a_full_admin_member(pool: Pool) {
         (owner.id, Status::Active, 587, "INBOX")
     );
     assert!(!p.has_smtp_password && !p.has_imap_password);
-    let m = sd_db::members::list(&pool, owner.id, p.id).await.unwrap();
+    let m = dp_db::members::list(&pool, owner.id, p.id).await.unwrap();
     assert_eq!(m.len(), 1);
     assert_eq!(m[0].role, Role::Admin);
     assert!(m[0].should_notify && m[0].can_view_all_tickets && m[0].can_manage_templates);
@@ -296,7 +296,7 @@ async fn mail_settings_roundtrip_and_never_leak_through_project(pool: Pool) {
         25
     );
     assert!(
-        projects::mail_settings(&pool, sd_db::new_id())
+        projects::mail_settings(&pool, dp_db::new_id())
             .await
             .unwrap()
             .is_none()
@@ -371,15 +371,15 @@ async fn delete_is_owner_only_and_cascades_everything(pool: Pool) {
     let admin = user(&pool, "admin@example.com").await;
     add_member(&pool, a.id, pa.id, admin.id, Role::Admin).await;
     let t = ticket(&pool, a.id, pa.id, "c@example.com").await;
-    sd_db::templates::create(&pool, a.id, pa.id, "T", "B")
+    dp_db::templates::create(&pool, a.id, pa.id, "T", "B")
         .await
         .unwrap()
         .unwrap();
-    sd_db::email_responses::create(
+    dp_db::email_responses::create(
         &pool,
         a.id,
         pa.id,
-        sd_db::EmailResponseStatus::Created,
+        dp_db::EmailResponseStatus::Created,
         "",
         "hi",
         true,
@@ -387,7 +387,7 @@ async fn delete_is_owner_only_and_cascades_everything(pool: Pool) {
     .await
     .unwrap()
     .unwrap();
-    sd_db::viewers::touch(&pool, a.id, t.id).await.unwrap();
+    dp_db::viewers::touch(&pool, a.id, t.id).await.unwrap();
 
     assert!(!projects::delete(&pool, b.id, pa.id).await.unwrap());
     assert!(
@@ -478,7 +478,7 @@ async fn inbound_routing_and_imap_cursor(pool: Pool) {
         .unwrap();
     assert_eq!((s.imap_uid_validity, s.imap_last_uid), (Some(77), 1234));
     assert!(
-        !projects::set_imap_cursor(&pool, sd_db::new_id(), 1, 1)
+        !projects::set_imap_cursor(&pool, dp_db::new_id(), 1, 1)
             .await
             .unwrap()
     );

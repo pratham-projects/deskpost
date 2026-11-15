@@ -1,5 +1,5 @@
 {
-  "name": "sendesk-e2e",
+  "name": "deskpost-e2e",
   "private": true,
   "type": "module",
   "devDependencies": {

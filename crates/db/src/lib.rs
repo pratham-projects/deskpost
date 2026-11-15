@@ -1,4 +1,4 @@
-//! sd-db: Postgres 16 schema, migrations and tenant-scoped queries.
+//! dp-db: Postgres 16 schema, migrations and tenant-scoped queries.
 //!
 //! Conventions
 //! - Functions that take an `actor` (user id) check project membership/role inside the SQL. A project

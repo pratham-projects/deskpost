@@ -1,4 +1,4 @@
-# SendDesk (Rust) Plan
+# Deskpost (Rust) Plan
 
 Multi-tenant support-ticket inbox. This repo is the **Rust backend + web UI**. The UI started as the
 portfolio demo (mock API); the mock is replaced by a real Axum/Postgres API that serves the same
@@ -45,13 +45,13 @@ changed in the same task.
 - Access token 5 min + rotating refresh token in an HttpOnly cookie; reuse of a rotated token revokes the
   family (with a 10 s grace for parallel tabs); family capped at 90 days.
 - Login / register / webhook / public widget endpoints rate limited (in-process sliding window) and body limited.
-- Trusted-proxy aware client IP (`SD_TRUSTED_PROXIES`); never trust `X-Forwarded-For` from anyone else.
+- Trusted-proxy aware client IP (`DP_TRUSTED_PROXIES`); never trust `X-Forwarded-For` from anyone else.
 - Webhook secrets compared in constant time; email webhook requires a signed timestamp (5 min tolerance).
-- Per-project SMTP/IMAP passwords encrypted at rest (AES-256-GCM, key from `SD_SECRET_KEY`), never returned by the API.
+- Per-project SMTP/IMAP passwords encrypted at rest (AES-256-GCM, key from `DP_SECRET_KEY`), never returned by the API.
 - Every query is tenant-scoped by project membership; a test per route proves another tenant gets 404/403.
 - Attachments: size caps, filename sanitising, content-type allowlist for inline display, `Content-Disposition:
   attachment` otherwise, no path built from user input, quota per project.
-- Outbound HTTP/SMTP/IMAP hosts configured by admins only; reject loopback/private targets unless `SD_ALLOW_PRIVATE_MAIL_HOSTS=1`.
+- Outbound HTTP/SMTP/IMAP hosts configured by admins only; reject loopback/private targets unless `DP_ALLOW_PRIVATE_MAIL_HOSTS=1`.
 - Unbounded anything is a bug: queues, request bodies, result pages, IMAP fetch batches.
 
 ## 5. Tasks
@@ -61,7 +61,7 @@ commits and brain touch-ups by the coordinator. Short commit messages. **No push
 
 | id  | branch | scope | agent |
 |-----|--------|-------|-------|
-| R10 | feat/db-contract | `docs/API.md`; migrations 0001+ from the Drizzle schema (hardened); `sd-db` connect/migrate/queries; db tests | claude |
+| R10 | feat/db-contract | `docs/API.md`; migrations 0001+ from the Drizzle schema (hardened); `dp-db` connect/migrate/queries; db tests | claude |
 | R11 | feat/core | status machine, email address/subject/threading, reply stripping + body extraction (port the 705-line `emailParser.test.ts` cases), secret box, key hashing; proptest | claude |
 | R12 | feat/storage | storage trait, fs driver, signed tokens, quota, traversal tests | claude |
 | R13 | feat/mail | lettre sender (attachments, threading headers), IMAP poller + MIME to `InboundEmail`, hermetic SMTP sink for tests | claude |

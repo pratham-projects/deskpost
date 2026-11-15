@@ -194,7 +194,7 @@ Full-bleed `x-ascii` canvas, aria-hidden, three tones read from tokens (dim pape
 - **Do** keep real numbers only (live GitHub counts, measured figures with their hardware) and hide a figure rather than invent it.
 - **Do** keep text in real DOM; the canvas is decorative and aria-hidden.
 - **Do** keep a 2px accent focus ring with 3px offset (ink on the amber band).
-- **Do** re-skin only through `brand.css` tokens, and state the real repo and binary names (`sendesk`, `api`) where Deskpost is mentioned in docs.
+- **Do** re-skin only through `brand.css` tokens, and state the repo and binary names (`deskpost`, `api`) where docs need them.
 
 ### Don't:
 - **Don't** add shadows, glass, decorative gradients, or rounded corners; the only gradient is the hero legibility scrim.

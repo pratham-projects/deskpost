@@ -20,7 +20,7 @@ jobs:
       run:
         working-directory: site
     env:
-      SITE_BASE: /sendesk/
+      SITE_BASE: /deskpost/
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -33,7 +33,7 @@ jobs:
           bunx playwright-core install --with-deps chromium
           bunx vite preview --port 4173 &
           sleep 3
-          node scripts/smoke.mjs http://localhost:4173/sendesk
+          node scripts/smoke.mjs http://localhost:4173/deskpost
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site/dist

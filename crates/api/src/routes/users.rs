@@ -4,9 +4,9 @@
 use axum::Router;
 use axum::extract::State;
 use axum::routing::{get, post};
-use sd_core::email_addr::is_valid_email;
-use sd_db::users::{self, AdminPatch, Guarded, ProfilePatch, UserFilter};
-use sd_db::{Id, Role, Status, is_foreign_key_violation, is_unique_violation, sessions};
+use dp_core::email_addr::is_valid_email;
+use dp_db::users::{self, AdminPatch, Guarded, ProfilePatch, UserFilter};
+use dp_db::{Id, Role, Status, is_foreign_key_violation, is_unique_violation, sessions};
 use serde::Deserialize;
 use serde_json::{Value, json};
 

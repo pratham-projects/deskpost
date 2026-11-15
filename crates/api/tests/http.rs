@@ -89,7 +89,7 @@ async fn unknown_routes_and_methods_use_the_envelope(pool: PgPool) {
 #[sqlx::test(migrations = "../db/migrations")]
 async fn database_failure_is_a_generic_500(pool: PgPool) {
     let t = TestApp::new(pool).await;
-    t.user("ada@example.com", sd_db::Role::Agent).await;
+    t.user("ada@example.com", dp_db::Role::Agent).await;
     t.pool.close().await;
     let res = t
         .send_json(

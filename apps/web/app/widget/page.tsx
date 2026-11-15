@@ -21,7 +21,7 @@ export default function WidgetPage() {
       <div className="w-full max-w-md">
         <div className="bg-card border border-border rounded-lg p-6">
           <div className="text-center mb-6">
-            <h2 className="text-xl font-semibold">Contact SendDesk</h2>
+            <h2 className="text-xl font-semibold">Contact Deskpost</h2>
             <p className="text-sm text-muted-foreground mt-1">We typically respond within 24 hours</p>
           </div>
           <Suspense fallback={null}>
