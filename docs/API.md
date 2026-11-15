@@ -239,7 +239,7 @@ Errors: 403/404 (admin route, not a member), 401 `TOKEN_INVALID` on the public r
 | `DELETE /tickets/:id` | project-admin | | `data: { success: true, id }` (hard delete, cascades messages/attachments/unread/viewers) |
 
 - `assignedToUserId` must be a member of the ticket's project (422 otherwise); `null` unassigns.
-- `status` change rules (state machine in `dp-core`; the query that persists it is `dp_db::tickets::update`): moves follow the state machine (an open status may go to any other; a `closed` ticket can only be reopened to `pending`, else `409 CONFLICT`; re-sending the current status is a no-op); entering `resolved` or `closed` sets `closedAt = now()` (if not already set); leaving them clears `closedAt` (TS never cleared it on reopen). Entering `resolved` sends the `resolved` email response (if enabled) after commit.
+- `status` change rules (state machine in `dp-core`; the query that persists it is `dp_db::tickets::update`): moves follow the state machine (an open status may go to any other; a `closed` ticket can only be manually reopened to `pending`, else `409 CONFLICT`; re-sending the current status is a no-op); entering `resolved` or `closed` sets `closedAt = now()` (if not already set); leaving them clears `closedAt` (TS never cleared it on reopen). Entering `resolved` sends the `resolved` email response (if enabled) after commit.
 - Every successful update bumps `updatedAt`.
 
 ### 7.4 Messages
@@ -254,7 +254,7 @@ Errors: 403/404 (admin route, not a member), 401 `TOKEN_INVALID` on the public r
 - Otherwise, unless `sendEmail === false`, the reply is queued for email **in the same transaction as the message** (a `mail_outbox` job plus a `pending` `email_logs` row). The request never talks to SMTP and always answers `201`. The outbox worker (every 15 s) sends it and stores the Message-ID headers on the message; a failure is retried with backoff (30 s, 2 min, 8 min, 32 min, then 1 h, 5 attempts) and, once given up (or when the project has no SMTP settings), the `email_logs` row is `failed` with the error. A send is cut off after 45 s. This is the single path for `/messages` and attachment uploads.
 - `attachmentIds` must belong to the same ticket and be unlinked; they are linked to the message (422 otherwise).
 - Posting bumps ticket `updatedAt`; a first agent reply sets `firstResponseAt`.
-- Inbound client messages (IMAP/webhook, not an HTTP route here) reopen `resolved`/`closed` tickets to `in_progress`, add an unread row, and de-duplicate on the email `Message-ID`.
+- Inbound client messages (IMAP/webhook, not an HTTP route here) reopen `resolved`/`closed` tickets to `in_progress` (a system reopen, unlike the manual closed -> `pending` rule above) and clear `closedAt`, add an unread row, and de-duplicate on the email `Message-ID`.
 
 ## 8. Templates, email responses
 

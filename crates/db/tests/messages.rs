@@ -342,6 +342,38 @@ async fn bad_attachment_ids_roll_the_whole_post_back(pool: Pool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn inbound_reopens_closed_to_in_progress_but_manual_reopen_is_pending(pool: Pool) {
+    let (a, pa, _b, _pb) = two_tenants(&pool).await;
+    let t = ticket(&pool, a.id, pa.id, "c@example.com").await;
+    let set = |s| TicketPatch {
+        status: Some(s),
+        ..Default::default()
+    };
+    tickets::update(&pool, a.id, t.id, &set(TicketStatus::Closed))
+        .await
+        .unwrap()
+        .unwrap();
+    messages::post_inbound(&pool, &inbound(pa.id, t.id, Some("<cl1@mail.example>")))
+        .await
+        .unwrap()
+        .expect("stored");
+    let after = tickets::get(&pool, a.id, t.id).await.unwrap().unwrap();
+    assert_eq!(after.status, TicketStatus::InProgress);
+    assert!(after.closed_at.is_none());
+
+    // Manual reopen of a closed ticket lands on pending.
+    tickets::update(&pool, a.id, t.id, &set(TicketStatus::Closed))
+        .await
+        .unwrap()
+        .unwrap();
+    let r = tickets::update(&pool, a.id, t.id, &set(TicketStatus::Pending))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(r.ticket.status, TicketStatus::Pending);
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn inbound_appends_reopens_marks_unread_and_dedups(pool: Pool) {
     let (a, pa, _b, _pb) = two_tenants(&pool).await;
     let t = ticket(&pool, a.id, pa.id, "c@example.com").await;
