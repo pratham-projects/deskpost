@@ -122,7 +122,7 @@ export default {
     ["Do I need AWS or a paid email service?", "No. Outbound mail is any SMTP server and inbound is IMAP polling or a signed webhook. Gmail, Brevo, Resend and Mailgun settings are in the free email guide, and each project can use a different provider."],
     ["Can one install serve several clients?", "Yes. A project is the tenant: its own members, clients, templates, mail settings and API key. Queries are scoped by project membership and a non-member gets `404`."],
     ["Where do attachments live?", "On the server's filesystem under `STORAGE_DIR`, with only a storage key in Postgres. There is no S3 driver. Back up the database and the directory together."],
-    ["Which license?", "AGPL-3.0-only, as declared in `Cargo.toml`."],
+    ["Which license?", "AGPL-3.0-only. Full text in `LICENSE`, also declared in `Cargo.toml`."],
   ],
 
   footBlurb: "A self-hosted support inbox. Repository `deskpost`, binary `api`.",

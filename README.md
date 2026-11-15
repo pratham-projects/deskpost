@@ -61,3 +61,7 @@ brain/    project knowledge bundle (OKF)
 ```
 
 `UPSTREAM.md` describes the origin of the UI.
+
+## License
+
+Copyright (C) 2026 Pratham Bhavsar. Licensed under the [GNU AGPL-3.0-only](LICENSE).
