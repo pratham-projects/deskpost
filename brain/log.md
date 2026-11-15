@@ -1,5 +1,10 @@
 # Changelog
 
+## [2026-11-16] New-ticket notice no longer reflects raw sender text (fix/new-ticket-notice-excerpt)
+
+- **Done**: security review flagged the `new_ticket` mail to members: it sent from the project's trusted mailbox with the customer's subject and address verbatim (phishing text from a trusted sender). Now both are quoted under an "unverified, do not follow links" line, cut to 120 chars, control chars stripped, `://` and `www.` defanged (`mail_out::untrusted_excerpt`, unit tests). Auto-responses to customers already reflected nothing.
+- **Gate**: `make ci` green.
+
 ## [2026-11-16] Pre-release pass (feat/pre-release)
 
 - **Done**: binary `api` -> `deskpost` (crate, bin, Dockerfile, unit ExecStart, installer `deskpost-installer.sh`, scripts, docs, site; lib name stays `api`). Customer reply reopens resolved/closed to `in_progress` (core `on_customer_reply` now matches db; manual reopen of closed stays `pending`); auto-close default 7 days verified in migration, docs, site. `LICENSE` (AGPL-3.0), `CHANGELOG.md`, `docs/releasing.md` (main, first tag `v0.1.0-rc.1`), CI jobs `docker-build` (api+web, no push) and `deploy-check`; `dist plan` + local `dist build` ok. Compose gets `name: deskpost`.
