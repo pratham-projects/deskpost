@@ -19,7 +19,7 @@ const VERSION: &str = "v1:";
 const NONCE_LEN: usize = 12;
 const TAG_LEN: usize = 16;
 const MIN_SECRET_LEN: usize = 32;
-const HKDF_INFO: &[u8] = b"sendesk secret-box v1 aes-256-gcm";
+const HKDF_INFO: &[u8] = b"deskpost secret-box v1 aes-256-gcm";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SecretError {

@@ -2,8 +2,8 @@ mod common;
 mod r21_world;
 
 use axum::http::Method;
+use dp_core::api_key::hash_api_key;
 use r21_world::*;
-use sd_core::api_key::hash_api_key;
 use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -282,7 +282,7 @@ async fn a_patch_whose_mail_half_conflicts_rolls_back_the_project_half(pool: PgP
 
 #[sqlx::test(migrations = "../db/migrations")]
 async fn delete_is_owner_only_and_removes_attachment_files(pool: PgPool) {
-    use sd_storage::{FsStorage, PutMeta, Storage};
+    use dp_storage::{FsStorage, PutMeta, Storage};
     let dir = std::env::temp_dir().join(format!("sd-r21-{}", Uuid::new_v4()));
     let mut cfg = test_config();
     cfg.storage_dir = dir.clone();
@@ -293,12 +293,12 @@ async fn delete_is_owner_only_and_removes_attachment_files(pool: PgPool) {
     let store = FsStorage::new(&dir, 1 << 20).await.unwrap();
     let obj = store.put(&b"hello"[..], PutMeta::default()).await.unwrap();
     sqlx::query("INSERT INTO clients (id, project_id, email) VALUES ($1, $2, 'c@example.com')")
-        .bind(sd_db::new_id())
+        .bind(dp_db::new_id())
         .bind(w.project.id)
         .execute(&w.t.pool)
         .await
         .unwrap();
-    let ticket = sd_db::new_id();
+    let ticket = dp_db::new_id();
     sqlx::query(
         "INSERT INTO tickets (id, project_id, ticket_number, client_id, subject)
          SELECT $1, $2, 1, id, 'subject' FROM clients WHERE project_id = $2",
@@ -312,7 +312,7 @@ async fn delete_is_owner_only_and_removes_attachment_files(pool: PgPool) {
         "INSERT INTO attachments (id, project_id, ticket_id, filename, mime_type, size_bytes, storage_key)
          VALUES ($1, $2, $3, 'a.txt', 'text/plain', 5, $4)",
     )
-    .bind(sd_db::new_id())
+    .bind(dp_db::new_id())
     .bind(w.project.id)
     .bind(ticket)
     .bind(&obj.key)

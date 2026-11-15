@@ -1,10 +1,10 @@
 // Deskpost: all site copy and config. Every claim here is traceable to the repo (README, SECURITY.md, docs/API.md,
-// docs/OPERATIONS.md, docs/free-email.md, docs/PERFORMANCE.md, crates/*). Deskpost is the site name only: the repository
-// is `sendesk`, the binary is `api`, env vars start with `SD_`.
+// docs/OPERATIONS.md, docs/free-email.md, docs/PERFORMANCE.md, crates/*). Names: repository `deskpost`, binary `api`,
+// env vars start with `DP_`.
 export default {
   name: "Deskpost",
   wordmark: "desk<b>post</b>",
-  repo: "pratham-projects/sendesk",
+  repo: "pratham-projects/deskpost",
   scene: "inbox",
   shot: { name: "inbox", alt: "The ticket inbox: status and project filters on the left, the ticket list, a threaded conversation with an internal note, and customer details." },
   license: "AGPL-3.0-only",
@@ -12,11 +12,11 @@ export default {
   status: "pre-release",
   headline: "Support inbox you host <em>yourself.</em>",
   sub: "A shared queue across projects, threaded replies, internal notes and an embeddable widget. Customers can just email. <strong>A Rust API, a web UI and one Postgres.</strong> No paid services.",
-  heroCmdPre: "git clone https://github.com/pratham-projects/sendesk && cd sendesk",
-  heroCmd: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pratham-projects/sendesk/releases/latest/download/api-installer.sh | sh",
+  heroCmdPre: "git clone https://github.com/pratham-projects/deskpost && cd deskpost",
+  heroCmd: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pratham-projects/deskpost/releases/latest/download/api-installer.sh | sh",
 
   liveTitle: "Project facts.",
-  liveNote: "GitHub counts show up when GitHub answers. The rest is read from files in the repo. The repository is `sendesk` and the binary is `api`; Deskpost is only the name of this site. Load figures come from one laptop, so see `docs/PERFORMANCE.md` before quoting them.",
+  liveNote: "GitHub counts show up when GitHub answers. The rest is read from files in the repo. The repository is `deskpost` and the binary is `api`. Load figures come from one laptop, so see `docs/PERFORMANCE.md` before quoting them.",
   facts: [
     ["License", "AGPL-3.0-only"],
     ["Backend", "Rust, Axum, SQLx, Postgres 16"],
@@ -40,8 +40,8 @@ export default {
     ]},
     { title: "Email in and out", blurb: "Plain SMTP out, IMAP or a signed webhook in, and no AWS account.", items: [
       ["send", "Outbound over SMTP", "Replies are queued with the message in one transaction and sent by a worker over the project's own SMTP server. The request itself never waits on SMTP and always answers `201`."],
-      ["mailbox", "Inbound by IMAP poll", "Per-project mailbox polled every 60 s by default (`SD_IMAP_POLL_SECS`), up to 50 messages per fetch with `BODY.PEEK`. A message that cannot be parsed is consumed, so it cannot wedge the poller."],
-      ["webhook", "Inbound by signed webhook", "`POST /api/v3/incoming-email` for providers that push mail. HMAC-SHA256 over `timestamp.body`, five minute tolerance, constant-time compare. Unset `SD_WEBHOOK_SECRET` and it is off."],
+      ["mailbox", "Inbound by IMAP poll", "Per-project mailbox polled every 60 s by default (`DP_IMAP_POLL_SECS`), up to 50 messages per fetch with `BODY.PEEK`. A message that cannot be parsed is consumed, so it cannot wedge the poller."],
+      ["webhook", "Inbound by signed webhook", "`POST /api/v3/incoming-email` for providers that push mail. HMAC-SHA256 over `timestamp.body`, five minute tolerance, constant-time compare. Unset `DP_WEBHOOK_SECRET` and it is off."],
       ["branch", "Threading and reply stripping", "Replies find their ticket by the `[Ticket #N]` subject tag, `In-Reply-To` and `References`. Quoted replies, \"On … wrote:\" blocks and signatures are cut, in several languages."],
       ["support", "Auto-replies", "Per-project confirmation and resolved emails, one entry per event, each switchable. Auto-responders such as `mailer-daemon` are ignored on the way in."],
       ["plug", "Free email, documented", "Settings for Gmail (app password), Brevo, Resend and Mailgun, plus Mailpit as a dev inbox that shows everything the app would send."],
@@ -87,44 +87,44 @@ export default {
   installLede: "Download the binary, pull the images, or build from source. SHA-256 checksums are attached to every release.",
   install: [
     { id: "docker", label: "Docker", cmds: [
-      "git clone https://github.com/pratham-projects/sendesk && cd sendesk",
-      "cp .env.example .env   # fill POSTGRES_PASSWORD, JWT_SECRET, SD_SECRET_KEY, SD_BOOTSTRAP_PASSWORD",
+      "git clone https://github.com/pratham-projects/deskpost && cd deskpost",
+      "cp .env.example .env   # fill POSTGRES_PASSWORD, JWT_SECRET, DP_SECRET_KEY, DP_BOOTSTRAP_PASSWORD",
       "docker compose up --build",
       "docker compose run --rm app bootstrap --email admin@example.com --name Admin",
     ], note: "Builds the API and web images from the clone. UI on `localhost:4000`, API on `localhost:3000`, caught mail on `localhost:8025`." },
     { id: "source", label: "Source", cmds: [
-      "git clone https://github.com/pratham-projects/sendesk && cd sendesk",
+      "git clone https://github.com/pratham-projects/deskpost && cd deskpost",
       "cargo build --release -p api --locked",
-      "# export DATABASE_URL, JWT_SECRET and SD_SECRET_KEY first, see .env.example",
+      "# export DATABASE_URL, JWT_SECRET and DP_SECRET_KEY first, see .env.example",
       "./target/release/api migrate && ./target/release/api serve",
       "cd apps/web && bun install && bun run dev",
     ], note: "Rust stable and PostgreSQL 16, plus bun for the UI. The first admin comes from `api bootstrap`, see the quickstart." },
     { id: "images", label: "Images", cmds: [
-      "V=v0.1.0; B=https://github.com/pratham-projects/sendesk/releases/download/$V",
+      "V=v0.1.0; B=https://github.com/pratham-projects/deskpost/releases/download/$V",
       "mkdir deskpost && cd deskpost",
       "curl -LO $B/docker-compose.yml && curl -L $B/.env.example -o .env",
-      "# edit .env: POSTGRES_PASSWORD, JWT_SECRET, SD_SECRET_KEY, FRONTEND_URL",
+      "# edit .env: POSTGRES_PASSWORD, JWT_SECRET, DP_SECRET_KEY, FRONTEND_URL",
       "docker compose pull && docker compose up -d --no-build",
-      "docker compose run --rm -e SD_BOOTSTRAP_PASSWORD app bootstrap --email you@example.com --name \"You\"",
-    ], note: "Images are `ghcr.io/pratham-projects/sendesk-api` and `sendesk-web`. Set `V` to a tag that exists. UI on `127.0.0.1:4000`, API on `127.0.0.1:3000`: put Caddy in front.", pending: "No images are published yet: they arrive with the first release. Use the Docker tab today." },
+      "docker compose run --rm -e DP_BOOTSTRAP_PASSWORD app bootstrap --email you@example.com --name \"You\"",
+    ], note: "Images are `ghcr.io/pratham-projects/deskpost-api` and `deskpost-web`. Set `V` to a tag that exists. UI on `127.0.0.1:4000`, API on `127.0.0.1:3000`: put Caddy in front.", pending: "No images are published yet: they arrive with the first release. Use the Docker tab today." },
     { id: "binary", label: "Binary", cmds: [
-      "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pratham-projects/sendesk/releases/latest/download/api-installer.sh | sh",
-      "# export DATABASE_URL, JWT_SECRET and SD_SECRET_KEY first, see .env.example",
+      "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/pratham-projects/deskpost/releases/latest/download/api-installer.sh | sh",
+      "# export DATABASE_URL, JWT_SECRET and DP_SECRET_KEY first, see .env.example",
       "api migrate",
-      "SD_BOOTSTRAP_PASSWORD='choose-a-long-one' api bootstrap --email you@example.com --name \"You\"",
+      "DP_BOOTSTRAP_PASSWORD='choose-a-long-one' api bootstrap --email you@example.com --name \"You\"",
       "api serve",
     ], note: "Installs `api` to `~/.cargo/bin` for macOS and Linux, x86_64 and arm64. Needs PostgreSQL 16. It is the API only: serve the UI from the web image or a static export.", pending: "No release is tagged yet: this URL works from the first release." },
   ],
 
   faq: [
     ["Is it production ready?", "Not yet. It is pre-release with no tagged release. It has unit, property, integration and browser tests and a reviewed hardening pass, but the container build is not exercised in CI. `SECURITY.md` lists the accepted risks."],
-    ["Why Deskpost, when the repo says sendesk?", "Deskpost is the name of this site. The project is still `sendesk` on GitHub: the binary is `api`, environment variables start with `SD_`, and the systemd unit is `senddesk-api`."],
+    ["What are the repo, binary and unit called?", "The repository is `deskpost` on GitHub, the binary is `api`, environment variables start with `DP_`, and the systemd unit is `deskpost-api`."],
     ["Do I need AWS or a paid email service?", "No. Outbound mail is any SMTP server and inbound is IMAP polling or a signed webhook. Gmail, Brevo, Resend and Mailgun settings are in the free email guide, and each project can use a different provider."],
     ["Can one install serve several clients?", "Yes. A project is the tenant: its own members, clients, templates, mail settings and API key. Queries are scoped by project membership and a non-member gets `404`."],
     ["Where do attachments live?", "On the server's filesystem under `STORAGE_DIR`, with only a storage key in Postgres. There is no S3 driver. Back up the database and the directory together."],
     ["Which license?", "AGPL-3.0-only, as declared in `Cargo.toml`."],
   ],
 
-  footBlurb: "A self-hosted support inbox. Repository `sendesk`, binary `api`.",
+  footBlurb: "A self-hosted support inbox. Repository `deskpost`, binary `api`.",
   footNote: "Pre-release. Figures come from one laptop.",
 };

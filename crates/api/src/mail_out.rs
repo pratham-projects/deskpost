@@ -6,14 +6,14 @@
 use std::future::Future;
 use std::sync::{Arc, Mutex};
 
-use sd_core::secret::SecretBox;
-use sd_core::threading::{
+use dp_core::secret::SecretBox;
+use dp_core::threading::{
     build_references, parse_ticket_number, reply_message_id, ticket_message_id, ticket_subject,
 };
-use sd_db::projects::MailSettings;
-use sd_db::{EmailResponseStatus, Id, Pool, email_responses, mailq, messages, projects};
-use sd_mail::{OutAttachment, OutboundEmail, SmtpConfig, TlsMode};
-use sd_storage::Storage;
+use dp_db::projects::MailSettings;
+use dp_db::{EmailResponseStatus, Id, Pool, email_responses, mailq, messages, projects};
+use dp_mail::{OutAttachment, OutboundEmail, SmtpConfig, TlsMode};
+use dp_storage::Storage;
 use tokio::io::AsyncReadExt;
 
 use crate::config::Config;
@@ -124,8 +124,8 @@ impl From<MailError> for ApiError {
     }
 }
 
-impl From<sd_db::Error> for MailError {
-    fn from(e: sd_db::Error) -> Self {
+impl From<dp_db::Error> for MailError {
+    fn from(e: dp_db::Error) -> Self {
         Self::Internal(e.to_string())
     }
 }
@@ -161,7 +161,7 @@ impl Mailer {
     }
 }
 
-/// Account mail from the platform mailbox (`SD_SYSTEM_SMTP_*`), e.g. password reset.
+/// Account mail from the platform mailbox (`DP_SYSTEM_SMTP_*`), e.g. password reset.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SystemMail {
     pub to: String,
@@ -204,7 +204,7 @@ impl SmtpMailer {
             &sys.from,
         );
         cfg.allow_private = true;
-        cfg.from_name = Some("SendDesk".into());
+        cfg.from_name = Some("Deskpost".into());
         if let (Some(u), Some(p)) = (&sys.username, &sys.password) {
             cfg.username = Some(u.clone());
             cfg.password = Some(p.clone());
@@ -216,7 +216,7 @@ impl SmtpMailer {
             ..Default::default()
         };
         let secrets = [sys.password.as_deref().unwrap_or("")];
-        sd_mail::send(&cfg, &email)
+        dp_mail::send(&cfg, &email)
             .await
             .map(|_| ())
             .map_err(|e| MailError::Delivery(redact(&e.to_string(), &secrets)))
@@ -393,7 +393,7 @@ impl OutboundMailer for SmtpMailer {
             attachments,
             ..Default::default()
         };
-        match sd_mail::send(&smtp, &email).await {
+        match dp_mail::send(&smtp, &email).await {
             Ok(id) => Ok(SentReply {
                 email_message_id: bare(&id),
                 in_reply_to,
@@ -434,7 +434,7 @@ pub async fn enqueue_auto_response(
     project_id: Id,
     ticket_id: Id,
     kind: EmailResponseStatus,
-) -> sd_db::Result<bool> {
+) -> dp_db::Result<bool> {
     let Some(resp) = email_responses::get_enabled(pool, project_id, kind).await? else {
         return Ok(false);
     };
@@ -460,7 +460,7 @@ pub async fn reply_outbox(
     pool: &Pool,
     project_id: Id,
     ticket_id: Id,
-) -> sd_db::Result<Option<messages::ReplyOutbox>> {
+) -> dp_db::Result<Option<messages::ReplyOutbox>> {
     Ok(mailq::ticket_mail(pool, project_id, ticket_id)
         .await?
         .map(|t| messages::ReplyOutbox {
@@ -476,7 +476,7 @@ pub async fn reply_outbox(
 /// Send what is due. Each job gets one attempt, bounded by `JOB_TIMEOUT`; failures are rescheduled
 /// with backoff or, after `MAX_ATTEMPTS`, given up. A bookkeeping error on one job never abandons
 /// the rest of the batch. Returns the number of jobs handled. Never more than one batch.
-pub async fn run_outbox_once(state: &AppState) -> sd_db::Result<usize> {
+pub async fn run_outbox_once(state: &AppState) -> dp_db::Result<usize> {
     let dead = mailq::dead_letter_exhausted(&state.pool, MAX_ATTEMPTS).await?;
     if dead > 0 {
         tracing::error!(dead, "outbox jobs given up after repeated worker crashes");
@@ -509,7 +509,7 @@ async fn send_reply_job(
     state: &AppState,
     job: &mailq::OutboxJob,
 ) -> Result<String, (String, bool)> {
-    let db = |e: sd_db::Error| (redact(&e.to_string(), &[]), true);
+    let db = |e: dp_db::Error| (redact(&e.to_string(), &[]), true);
     let message_id = job
         .message_id
         .ok_or_else(|| ("reply job without a message".to_string(), false))?;
@@ -552,7 +552,7 @@ async fn send_job(state: &AppState, job: &mailq::OutboxJob) -> Result<String, (S
         return send_reply_job(state, job).await;
     }
     let fatal = |m: &str| (m.to_string(), false);
-    let db = |e: sd_db::Error| (redact(&e.to_string(), &[]), true);
+    let db = |e: dp_db::Error| (redact(&e.to_string(), &[]), true);
     let settings = projects::mail_settings(&state.pool, job.project_id)
         .await
         .map_err(db)?
@@ -603,7 +603,7 @@ async fn send_job(state: &AppState, job: &mailq::OutboxJob) -> Result<String, (S
         references,
         ..Default::default()
     };
-    sd_mail::send(&smtp, &email)
+    dp_mail::send(&smtp, &email)
         .await
         .map(|id| bare(&id))
         .map_err(|e| (redact(&e.to_string(), &[&password]), true))

@@ -1,12 +1,12 @@
 ---
 type: Overview
-title: SendDesk Overview
-description: What SendDesk is, goals and non-goals.
+title: Deskpost Overview
+description: What Deskpost is, goals and non-goals.
 tags: [overview]
 timestamp: 2026-10-27
 ---
 
-# SendDesk Overview
+# Deskpost Overview
 
 Shared support inbox across projects: threaded conversations, internal notes, canned responses, live viewer presence, auto-replies, embeddable widget, email in and out.
 

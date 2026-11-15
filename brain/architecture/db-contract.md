@@ -1,7 +1,7 @@
 ---
 type: Architecture
 title: DB crate and API contract
-description: sd-db schema, tenant-scoping rules, query module map and the docs/API.md contract (R10).
+description: dp-db schema, tenant-scoping rules, query module map and the docs/API.md contract (R10).
 tags: [db, api, tenancy]
 timestamp: 2026-10-27
 ---

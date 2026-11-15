@@ -644,7 +644,7 @@ export function SettingsPage() {
                   Team Members
                 </h2>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Manage admins and developers with access to SendDesk
+                  Manage admins and developers with access to Deskpost
                 </p>
               </div>
               {isAdmin ? (
@@ -658,7 +658,7 @@ export function SettingsPage() {
                   <DialogContent className="max-w-[95vw] sm:max-w-md">
                     <DialogHeader>
                       <DialogTitle>Add Team Member</DialogTitle>
-                      <DialogDescription>Add a new team member to SendDesk.</DialogDescription>
+                      <DialogDescription>Add a new team member to Deskpost.</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 pt-4">
                       <div>
@@ -1128,7 +1128,7 @@ export function SettingsPage() {
               <div>
                 <h2 className="text-base sm:text-lg font-medium">Projects</h2>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Manage websites connected to SendDesk
+                  Manage websites connected to Deskpost
                 </p>
               </div>
               {isAdmin ? (
@@ -1142,7 +1142,7 @@ export function SettingsPage() {
                   <DialogContent className="max-w-[95vw] sm:max-w-md">
                     <DialogHeader>
                       <DialogTitle>Add New Project</DialogTitle>
-                      <DialogDescription>Create a new project to connect to SendDesk.</DialogDescription>
+                      <DialogDescription>Create a new project to connect to Deskpost.</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 pt-4 max-h-[70vh] overflow-y-auto">
                       <div>

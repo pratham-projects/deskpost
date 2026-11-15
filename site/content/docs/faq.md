@@ -11,9 +11,9 @@ description: Short answers about status, names, mail, storage and licensing.
 
 Not yet. It is pre-release with no tagged release. It has unit, property, integration and browser tests, a review pass and a local final gate, but the container build is not exercised in CI. Read the accepted risks in [Security](#/security).
 
-## Why Deskpost, when the repo says sendesk?
+## What are the repo, binary and unit called?
 
-Deskpost is the name of this site. The repository is `sendesk`, the binary is `api`, variables start with `SD_` and the unit is `senddesk-api`.
+The repository is `deskpost`, the binary is `api`, variables start with `DP_` and the systemd unit is `deskpost-api`.
 
 ## Do I need AWS or a paid email service?
 
@@ -29,7 +29,7 @@ On the server's filesystem under `STORAGE_DIR`. There is no S3 driver. Back them
 
 ## How do I get the first admin in?
 
-`api bootstrap --email ... --name ...` with `SD_BOOTSTRAP_PASSWORD` in the environment. Public sign-up is off by default.
+`api bootstrap --email ... --name ...` with `DP_BOOTSTRAP_PASSWORD` in the environment. Public sign-up is off by default.
 
 ## How fast is it?
 

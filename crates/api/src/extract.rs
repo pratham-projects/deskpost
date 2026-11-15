@@ -6,8 +6,8 @@ use axum::extract::{FromRequest, FromRequestParts, Path, Request};
 use axum::http::StatusCode;
 use axum::http::header::AUTHORIZATION;
 use axum::http::request::Parts;
-use sd_db::users::User;
-use sd_db::{Id, Role, Status, members};
+use dp_db::users::User;
+use dp_db::{Id, Role, Status, members};
 use serde::de::DeserializeOwned;
 
 use crate::error::ApiError;
@@ -83,7 +83,7 @@ impl FromRequestParts<AppState> for AuthUser {
             JwtError::Expired => ApiError::TokenExpired,
             JwtError::Invalid => ApiError::TokenInvalid,
         })?;
-        let user = sd_db::users::get(&state.pool, claims.sub)
+        let user = dp_db::users::get(&state.pool, claims.sub)
             .await?
             .filter(|u| u.status == Status::Active)
             .ok_or(ApiError::TokenInvalid)?;

@@ -2,7 +2,7 @@ mod common;
 mod tickets_fixture;
 
 use axum::http::Method;
-use sd_db::Role;
+use dp_db::Role;
 use serde_json::json;
 use sqlx::PgPool;
 use tickets_fixture::*;

@@ -3,13 +3,13 @@ mod mailkit;
 
 use api::error::ApiError;
 use api::mail_out::*;
+use dp_db::{EmailResponseStatus, email_responses};
+use dp_mail::{Limits, parse_inbound};
 use mailkit::*;
 use proptest::prelude::*;
-use sd_db::{EmailResponseStatus, email_responses};
-use sd_mail::{Limits, parse_inbound};
 use sqlx::PgPool;
 
-fn reply(project: sd_db::Id, ticket: sd_db::Id, body: &str) -> ReplyMail {
+fn reply(project: dp_db::Id, ticket: dp_db::Id, body: &str) -> ReplyMail {
     ReplyMail {
         project_id: project,
         ticket_id: ticket,
@@ -23,7 +23,7 @@ fn reply(project: sd_db::Id, ticket: sd_db::Id, body: &str) -> ReplyMail {
 async fn reply_has_threading_headers_credentials_and_a_log(pool: PgPool) {
     let k = Kit::new(pool).await;
     let (_, project, ticket, _) = k.tenant("owner@example.com", "acme").await;
-    let smtp = sd_mail::testing::FakeSmtp::start_requiring_auth("u", "smtp-secret-pw").await;
+    let smtp = dp_mail::testing::FakeSmtp::start_requiring_auth("u", "smtp-secret-pw").await;
     k.configure_mail(project.id, smtp.port(), None).await;
     sqlx::query("UPDATE messages SET email_message_id = 'client-1@mail.example'")
         .execute(&k.t.pool)
@@ -65,9 +65,9 @@ async fn reply_has_threading_headers_credentials_and_a_log(pool: PgPool) {
 
     // The next reply continues the chain from the one before (known through the email log the
     // outbox marks sent).
-    let log = sd_db::email_logs::create(
+    let log = dp_db::email_logs::create(
         &k.t.pool,
-        &sd_db::email_logs::NewEmailLog {
+        &dp_db::email_logs::NewEmailLog {
             project_id: project.id,
             ticket_id: ticket.id,
             message_id: None,
@@ -78,7 +78,7 @@ async fn reply_has_threading_headers_credentials_and_a_log(pool: PgPool) {
     )
     .await
     .unwrap();
-    sd_db::email_logs::mark_sent(&k.t.pool, log.id, &first.email_message_id)
+    dp_db::email_logs::mark_sent(&k.t.pool, log.id, &first.email_message_id)
         .await
         .unwrap();
     let second =
@@ -101,7 +101,7 @@ async fn reply_has_threading_headers_credentials_and_a_log(pool: PgPool) {
 async fn hostile_project_name_cannot_inject_headers(pool: PgPool) {
     let k = Kit::new(pool).await;
     let (_, project, ticket, _) = k.tenant("owner@example.com", "acme").await;
-    let smtp = sd_mail::testing::FakeSmtp::start().await;
+    let smtp = dp_mail::testing::FakeSmtp::start().await;
     k.configure_mail(project.id, smtp.port(), None).await;
     sqlx::query("UPDATE projects SET name = E'Acme\\r\\nBcc: evil@attacker.test'")
         .execute(&k.t.pool)
@@ -167,8 +167,8 @@ async fn reply_errors_are_typed_and_leak_no_password(pool: PgPool) {
 
 async fn response(
     k: &Kit,
-    owner: sd_db::Id,
-    project: sd_db::Id,
+    owner: dp_db::Id,
+    project: dp_db::Id,
     kind: EmailResponseStatus,
     subject: &str,
     enabled: bool,
@@ -191,7 +191,7 @@ async fn response(
 async fn created_auto_response_is_queued_then_sent_with_tagged_subject(pool: PgPool) {
     let k = Kit::new(pool).await;
     let (owner, project, ticket, _) = k.tenant("owner@example.com", "acme").await;
-    let smtp = sd_mail::testing::FakeSmtp::start().await;
+    let smtp = dp_mail::testing::FakeSmtp::start().await;
     k.configure_mail(project.id, smtp.port(), None).await;
 
     // Nothing configured: nothing queued.
@@ -259,7 +259,7 @@ async fn created_auto_response_is_queued_then_sent_with_tagged_subject(pool: PgP
 async fn disabled_response_is_not_queued_and_removed_response_is_not_sent(pool: PgPool) {
     let k = Kit::new(pool).await;
     let (owner, project, ticket, _) = k.tenant("owner@example.com", "acme").await;
-    let smtp = sd_mail::testing::FakeSmtp::start().await;
+    let smtp = dp_mail::testing::FakeSmtp::start().await;
     k.configure_mail(project.id, smtp.port(), None).await;
     response(
         &k,
@@ -315,7 +315,7 @@ async fn disabled_response_is_not_queued_and_removed_response_is_not_sent(pool: 
 async fn resolved_response_threads_onto_the_conversation(pool: PgPool) {
     let k = Kit::new(pool).await;
     let (owner, project, ticket, _) = k.tenant("owner@example.com", "acme").await;
-    let smtp = sd_mail::testing::FakeSmtp::start().await;
+    let smtp = dp_mail::testing::FakeSmtp::start().await;
     k.configure_mail(project.id, smtp.port(), None).await;
     sqlx::query("UPDATE messages SET email_message_id = 'c1@mail.example'")
         .execute(&k.t.pool)
@@ -441,7 +441,7 @@ async fn a_recovered_server_gets_the_queued_mail(pool: PgPool) {
     .await
     .unwrap();
     run_outbox_once(&k.t.state).await.unwrap();
-    let smtp = sd_mail::testing::FakeSmtp::start_requiring_auth("u", "smtp-secret-pw").await;
+    let smtp = dp_mail::testing::FakeSmtp::start_requiring_auth("u", "smtp-secret-pw").await;
     k.configure_mail(project.id, smtp.port(), None).await;
     sqlx::query("UPDATE mail_outbox SET next_attempt_at = now()")
         .execute(&k.t.pool)
@@ -501,7 +501,7 @@ fn backoff_grows_and_is_capped() {
 
 #[test]
 fn tls_follows_port_unless_plaintext() {
-    use sd_mail::TlsMode::*;
+    use dp_mail::TlsMode::*;
     assert_eq!(tls_for(465, false, 465), Implicit);
     assert_eq!(tls_for(587, false, 465), StartTls);
     assert_eq!(tls_for(465, true, 465), None);
@@ -532,7 +532,7 @@ proptest! {
 async fn auto_response_quotes_only_a_short_excerpt(pool: PgPool) {
     let k = Kit::new(pool).await;
     let (owner, project, ticket, _) = k.tenant("owner@example.com", "acme").await;
-    let smtp = sd_mail::testing::FakeSmtp::start().await;
+    let smtp = dp_mail::testing::FakeSmtp::start().await;
     k.configure_mail(project.id, smtp.port(), None).await;
     sqlx::query("UPDATE tickets SET description = repeat('a', 5000)")
         .execute(&k.t.pool)

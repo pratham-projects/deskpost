@@ -9,13 +9,13 @@ use uuid::Uuid;
 #[sqlx::test(migrations = "../db/migrations")]
 async fn clients_are_listed_per_project_for_members(pool: PgPool) {
     let w = world(pool).await;
-    let mine = sd_db::clients::upsert(&w.t.pool, w.project.id, "Alice@Client.com", Some("Alice"))
+    let mine = dp_db::clients::upsert(&w.t.pool, w.project.id, "Alice@Client.com", Some("Alice"))
         .await
         .unwrap();
-    sd_db::clients::upsert(&w.t.pool, w.project.id, "bob@client.com", None)
+    dp_db::clients::upsert(&w.t.pool, w.project.id, "bob@client.com", None)
         .await
         .unwrap();
-    let theirs = sd_db::clients::upsert(
+    let theirs = dp_db::clients::upsert(
         &w.t.pool,
         w.foreign.id,
         "alice@client.com",
@@ -54,7 +54,7 @@ async fn clients_are_listed_per_project_for_members(pool: PgPool) {
         404
     );
 
-    let one = |c: &sd_db::clients::Client| format!("/clients/{}", c.id);
+    let one = |c: &dp_db::clients::Client| format!("/clients/{}", c.id);
     assert_eq!(
         w.matrix(Method::GET, &one(&mine), None).await,
         [200, 200, 200, 404, 404]

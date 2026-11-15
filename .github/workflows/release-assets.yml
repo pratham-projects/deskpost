@@ -34,4 +34,4 @@ jobs:
             .env.example \
             deploy/Caddyfile \
             deploy/web.Caddyfile \
-            deploy/senddesk-api.service
+            deploy/deskpost-api.service

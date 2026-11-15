@@ -1,4 +1,4 @@
--- SendDesk schema, Postgres 16. IDs are UUIDs minted in Rust (v7); no PG18 functions.
+-- Deskpost schema, Postgres 16. IDs are UUIDs minted in Rust (v7); no PG18 functions.
 -- Tenant = project. Every child row carries project_id and is tied to its parent with a composite FK,
 -- so a row can never point at another tenant's ticket/client even through a bug in the application.
 
@@ -180,7 +180,7 @@ CREATE TABLE attachments (
     filename            text NOT NULL CHECK (length(filename) BETWEEN 1 AND 255),
     mime_type           text NOT NULL CHECK (length(mime_type) <= 100),
     size_bytes          bigint NOT NULL CHECK (size_bytes >= 0),
-    storage_key         text NOT NULL UNIQUE,   -- opaque key resolved by sd-storage; never a URL
+    storage_key         text NOT NULL UNIQUE,   -- opaque key resolved by dp-storage; never a URL
     uploaded_by_user_id uuid REFERENCES users (id) ON DELETE SET NULL,
     created_at          timestamptz NOT NULL DEFAULT now(),
     FOREIGN KEY (project_id, ticket_id) REFERENCES tickets (project_id, id) ON DELETE CASCADE,

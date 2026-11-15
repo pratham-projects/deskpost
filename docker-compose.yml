@@ -1,84 +1,96 @@
 # api containers get an explicit env allow-list (no POSTGRES_PASSWORD/bootstrap secrets leak in); unset vars use api defaults.
-# Release install (no source): `docker compose pull && docker compose up -d --no-build`; pin with SD_API_IMAGE/SD_WEB_IMAGE.
+# Release install (no source): `docker compose pull && docker compose up -d --no-build`; pin with DP_API_IMAGE/DP_WEB_IMAGE.
 # Quick start: cp .env.example .env, fill the secrets, then `docker compose up --build`.
-# To use mailpit as a project's SMTP server set SD_ALLOW_PRIVATE_MAIL_HOSTS=true in .env (dev only).
+# To use mailpit as a project's SMTP server set DP_ALLOW_PRIVATE_MAIL_HOSTS=true in .env (dev only).
 # Mailpit (profile `dev`) catches all outbound mail (UI on :8025) so nothing leaves the machine.
 services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: senddesk
+      POSTGRES_USER: deskpost
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: senddesk
+      POSTGRES_DB: deskpost
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U senddesk"]
+      test: ["CMD-SHELL", "pg_isready -U deskpost"]
       interval: 5s
       retries: 10
 
   migrate:
-    image: ${SD_API_IMAGE:-ghcr.io/pratham-projects/sendesk-api:latest}
+    image: ${DP_API_IMAGE:-ghcr.io/pratham-projects/deskpost-api:latest}
     build: { context: ., target: api }
     command: ["migrate"]
     environment:
-      DATABASE_URL: postgres://senddesk:${POSTGRES_PASSWORD}@postgres:5432/senddesk
+      DATABASE_URL: postgres://deskpost:${POSTGRES_PASSWORD}@postgres:5432/deskpost
       JWT_SECRET:
-      SD_SECRET_KEY:
-      SD_ENV:
+      DP_SECRET_KEY:
+      DP_ENV:
       API_VERSION:
       FRONTEND_URL:
       COOKIE_SECURE:
-      SD_TRUSTED_PROXIES:
-      SD_ALLOW_SIGNUP:
-      SD_FIRST_USER_ADMIN:
-      SD_ALLOW_PRIVATE_MAIL_HOSTS:
-      SD_BODY_LIMIT_BYTES:
-      SD_UPLOAD_LIMIT_BYTES:
-      SD_WEBHOOK_LIMIT_BYTES:
-      SD_WEBHOOK_SECRET:
-      SD_MAIL_PLAINTEXT:
-      SD_MAX_FILE_BYTES:
-      SD_MAX_REQUEST_BYTES:
-      SD_MAX_FILES:
-      SD_IMAP_POLL_SECS:
-      SD_IMAP_CONCURRENCY:
+      DP_TRUSTED_PROXIES:
+      DP_ALLOW_SIGNUP:
+      DP_FIRST_USER_ADMIN:
+      DP_ALLOW_PRIVATE_MAIL_HOSTS:
+      DP_BODY_LIMIT_BYTES:
+      DP_UPLOAD_LIMIT_BYTES:
+      DP_WEBHOOK_LIMIT_BYTES:
+      DP_WEBHOOK_SECRET:
+      DP_MAIL_PLAINTEXT:
+      DP_MAX_FILE_BYTES:
+      DP_MAX_REQUEST_BYTES:
+      DP_MAX_FILES:
+      DP_IMAP_POLL_SECS:
+      DP_IMAP_CONCURRENCY:
+      DP_RATE_LIMIT_SCALE:
+      DP_SYSTEM_SMTP_HOST:
+      DP_SYSTEM_SMTP_PORT:
+      DP_SYSTEM_SMTP_USER:
+      DP_SYSTEM_SMTP_PASSWORD:
+      DP_SYSTEM_SMTP_FROM:
       RUST_LOG:
     depends_on:
       postgres: { condition: service_healthy }
 
   app:
-    image: ${SD_API_IMAGE:-ghcr.io/pratham-projects/sendesk-api:latest}
+    image: ${DP_API_IMAGE:-ghcr.io/pratham-projects/deskpost-api:latest}
     build: { context: ., target: api }
     environment:
-      DATABASE_URL: postgres://senddesk:${POSTGRES_PASSWORD}@postgres:5432/senddesk
+      DATABASE_URL: postgres://deskpost:${POSTGRES_PASSWORD}@postgres:5432/deskpost
       JWT_SECRET:
-      SD_SECRET_KEY:
-      SD_ENV:
+      DP_SECRET_KEY:
+      DP_ENV:
       API_VERSION:
       FRONTEND_URL:
       COOKIE_SECURE:
-      SD_TRUSTED_PROXIES:
-      SD_ALLOW_SIGNUP:
-      SD_FIRST_USER_ADMIN:
-      SD_ALLOW_PRIVATE_MAIL_HOSTS:
-      SD_BODY_LIMIT_BYTES:
-      SD_UPLOAD_LIMIT_BYTES:
-      SD_WEBHOOK_LIMIT_BYTES:
-      SD_WEBHOOK_SECRET:
-      SD_MAIL_PLAINTEXT:
-      SD_MAX_FILE_BYTES:
-      SD_MAX_REQUEST_BYTES:
-      SD_MAX_FILES:
-      SD_IMAP_POLL_SECS:
-      SD_IMAP_CONCURRENCY:
+      DP_TRUSTED_PROXIES:
+      DP_ALLOW_SIGNUP:
+      DP_FIRST_USER_ADMIN:
+      DP_ALLOW_PRIVATE_MAIL_HOSTS:
+      DP_BODY_LIMIT_BYTES:
+      DP_UPLOAD_LIMIT_BYTES:
+      DP_WEBHOOK_LIMIT_BYTES:
+      DP_WEBHOOK_SECRET:
+      DP_MAIL_PLAINTEXT:
+      DP_MAX_FILE_BYTES:
+      DP_MAX_REQUEST_BYTES:
+      DP_MAX_FILES:
+      DP_IMAP_POLL_SECS:
+      DP_IMAP_CONCURRENCY:
+      DP_RATE_LIMIT_SCALE:
+      DP_SYSTEM_SMTP_HOST:
+      DP_SYSTEM_SMTP_PORT:
+      DP_SYSTEM_SMTP_USER:
+      DP_SYSTEM_SMTP_PASSWORD:
+      DP_SYSTEM_SMTP_FROM:
       RUST_LOG:
     ports: ["127.0.0.1:3000:3000"]
-    volumes: [storage:/var/lib/senddesk/storage]
+    volumes: [storage:/var/lib/deskpost/storage]
     depends_on:
       migrate: { condition: service_completed_successfully }
 
   web:
-    image: ${SD_WEB_IMAGE:-ghcr.io/pratham-projects/sendesk-web:latest}
+    image: ${DP_WEB_IMAGE:-ghcr.io/pratham-projects/deskpost-web:latest}
     build:
       context: .
       target: web

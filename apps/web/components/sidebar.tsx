@@ -116,7 +116,7 @@ export function Sidebar() {
     <>
       <div className="p-4 border-b border-border flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">SendDesk</h1>
+          <h1 className="text-lg font-semibold tracking-tight">Deskpost</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Ticket Management</p>
         </div>
         <button

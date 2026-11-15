@@ -4,8 +4,8 @@
 
 use api::config::{Argon2Cost, Config};
 use axum::http::Method;
-use sd_db::projects::Project;
-use sd_db::{Id, Role};
+use dp_db::projects::Project;
+use dp_db::{Id, Role};
 use serde_json::Value;
 use sqlx::PgPool;
 
@@ -33,7 +33,7 @@ pub struct Actor {
 }
 
 pub fn config_allowing_private_hosts() -> Config {
-    let mut c = Config::from_lookup(env_with(&[("SD_ALLOW_PRIVATE_MAIL_HOSTS", "1")])).unwrap();
+    let mut c = Config::from_lookup(env_with(&[("DP_ALLOW_PRIVATE_MAIL_HOSTS", "1")])).unwrap();
     c.argon2 = Argon2Cost {
         memory_kib: 8,
         iterations: 1,

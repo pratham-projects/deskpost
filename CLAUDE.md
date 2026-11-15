@@ -1,4 +1,4 @@
-# SendDesk (Rust)
+# Deskpost (Rust)
 
 Multi-tenant support-ticket inbox: Rust API (Axum/SQLx/Postgres) + Next.js UI. Plan: `docs/PLAN.md`.
 

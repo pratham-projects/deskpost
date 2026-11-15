@@ -33,13 +33,13 @@ Helpers: `project_role` (404 non-member), `project_admin` (403 agent). Project `
 
 ## SSRF
 
-`SD_ALLOW_PRIVATE_MAIL_HOSTS` (`Config.allow_private_mail_hosts`) lifts the address rule only. Saving a host runs `check_host` (loopback/private/link-local/CGNAT/doc ranges, IPv4-mapped and NAT64 IPv6, `localhost`, `.local`/`.internal`/`.lan`, dotless names, numeric tails like `2130706433`). The probes also `check_resolved` (every DNS answer must be public) and are limited by `Rule::MailProbe` (5/min per IP). Probe answers are fixed strings, never server text. Residual risk: DNS can change between the check and the connect (sd-mail connects by name for TLS); the worker should re-run `check_resolved` before each connection.
+`DP_ALLOW_PRIVATE_MAIL_HOSTS` (`Config.allow_private_mail_hosts`) lifts the address rule only. Saving a host runs `check_host` (loopback/private/link-local/CGNAT/doc ranges, IPv4-mapped and NAT64 IPv6, `localhost`, `.local`/`.internal`/`.lan`, dotless names, numeric tails like `2130706433`). The probes also `check_resolved` (every DNS answer must be public) and are limited by `Rule::MailProbe` (5/min per IP). Probe answers are fixed strings, never server text. Residual risk: DNS can change between the check and the connect (dp-mail connects by name for TLS); the worker should re-run `check_resolved` before each connection.
 
 ## Decisions and hand-offs
 
 - TLS is not stored (no schema change): ports 465/993 are implicit TLS, else STARTTLS.
 - `PATCH /projects/{id}` applies project and mail columns in one transaction (`projects::update_with_mail`); `POST` creates the row, then the mail half, and deletes the new project if that half conflicts.
-- `sd_db::users::{admin_update_guarded, delete_guarded}` keep one active admin (advisory lock, concurrency test).
+- `dp_db::users::{admin_update_guarded, delete_guarded}` keep one active admin (advisory lock, concurrency test).
 - `DELETE /projects/{id}` removes attachment files itself through `FsStorage` on `STORAGE_DIR` (keys from `attachments::storage_keys_for_project`); failures are only logged. R23 may swap in the shared storage handle.
 - Added beyond the old contract: `POST /users/me/password` (needs current password, revokes sessions, `Rule::PasswordChange`), read-only `/clients`.
 - Collection routes answer both `/x` and `/x/` (the UI uses both).

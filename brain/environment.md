@@ -1,7 +1,7 @@
 ---
 type: Environment
 title: Local Environment and Git Flow
-description: Toolchain, git flow and worker routing for SendDesk.
+description: Toolchain, git flow and worker routing for Deskpost.
 tags: [environment, git, orca, workers]
 timestamp: 2026-10-27
 ---

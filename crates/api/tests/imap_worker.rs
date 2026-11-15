@@ -5,14 +5,14 @@ use std::time::Duration;
 
 use api::mail_out::{enqueue_auto_response, redact};
 use api::workers::{auto_close_once, poll_all, poll_project, spawn};
+use dp_db::{EmailResponseStatus, Role, email_responses, mailq, projects};
+use dp_mail::testing::{FakeImap, FakeSmtp};
 use mailkit::*;
-use sd_db::{EmailResponseStatus, Role, email_responses, mailq, projects};
-use sd_mail::testing::{FakeImap, FakeSmtp};
 use sqlx::PgPool;
 
 const IMAP_PW: &str = "imap-secret-pw";
 
-async fn project_with_imap(k: &Kit, owner: &str, slug: &str, imap: &FakeImap) -> sd_db::Id {
+async fn project_with_imap(k: &Kit, owner: &str, slug: &str, imap: &FakeImap) -> dp_db::Id {
     let user = k.t.user(owner, Role::Agent).await;
     let p = k.t.project(user.id, slug).await;
     k.configure_mail(
@@ -24,7 +24,7 @@ async fn project_with_imap(k: &Kit, owner: &str, slug: &str, imap: &FakeImap) ->
     p.id
 }
 
-async fn cursor(k: &Kit, p: sd_db::Id) -> (Option<i64>, i64) {
+async fn cursor(k: &Kit, p: dp_db::Id) -> (Option<i64>, i64) {
     sqlx::query_as("SELECT imap_uid_validity, imap_last_uid FROM projects WHERE id = $1")
         .bind(p)
         .fetch_one(&k.t.pool)
@@ -253,7 +253,7 @@ async fn auto_close_only_closes_old_resolved_tickets_with_the_job_enabled(pool: 
         .unwrap();
 
     assert_eq!(auto_close_once(&k.t.state).await.unwrap(), 1);
-    let rows: Vec<(sd_db::Id, String, bool)> =
+    let rows: Vec<(dp_db::Id, String, bool)> =
         sqlx::query_as("SELECT id, status, closed_at IS NOT NULL FROM tickets")
             .fetch_all(&k.t.pool)
             .await

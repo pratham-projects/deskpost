@@ -6,8 +6,8 @@ use axum::body::Body;
 use axum::http::Method;
 use base64::Engine;
 use common::*;
+use dp_db::{EmailResponseStatus, Role, email_responses};
 use mailkit::*;
-use sd_db::{EmailResponseStatus, Role, email_responses};
 use serde_json::{Value, json};
 use sqlx::PgPool;
 
@@ -37,7 +37,7 @@ impl Kit {
     }
 
     /// Project "acme" with its mailbox configured (no live SMTP needed for ingest).
-    async fn acme(&self) -> (sd_db::users::User, sd_db::projects::Project) {
+    async fn acme(&self) -> (dp_db::users::User, dp_db::projects::Project) {
         let owner = self.t.user("owner@example.com", Role::Agent).await;
         let project = self.t.project(owner.id, "acme").await;
         self.configure_mail(project.id, closed_port(), None).await;
@@ -328,7 +328,7 @@ async fn replies_thread_by_number_headers_and_tag(pool: PgPool) {
     let k = Kit::new(pool).await;
     let (_, project) = k.acme().await;
     k.hook(mail("<t1@x>", "Printer", "first")).await;
-    let ticket_id: sd_db::Id = sqlx::query_scalar("SELECT id FROM tickets")
+    let ticket_id: dp_db::Id = sqlx::query_scalar("SELECT id FROM tickets")
         .fetch_one(&k.t.pool)
         .await
         .unwrap();

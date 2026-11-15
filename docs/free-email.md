@@ -1,4 +1,4 @@
-# Free email with `sd-mail`
+# Free email with `dp-mail`
 
 No AWS. Outbound is plain SMTP, inbound is IMAP polling (or the signed webhook). Every call takes its
 own settings, so each project can use a different provider. Passwords are stored encrypted by the API
@@ -23,7 +23,7 @@ let mut cfg = SmtpConfig::new("smtp.gmail.com", 587, TlsMode::StartTls, "desk@gm
 cfg.username = Some("desk@gmail.com".into());
 cfg.password = Some(app_password);
 cfg.from_name = Some("Acme Support".into());
-let message_id = sd_mail::send(&cfg, &OutboundEmail {
+let message_id = dp_mail::send(&cfg, &OutboundEmail {
     to: vec!["customer@example.org".into()],
     subject: "Re: Printer".into(),
     text: Some("...".into()),
@@ -52,7 +52,7 @@ Any CR/LF or control character in a subject, address, name, id or custom header 
 
 ```rust
 let mut mb = ImapMailbox::connect(&ImapConfig::new("imap.gmail.com", 993, TlsMode::Implicit, user, pass)).await?;
-let out = sd_mail::poll(&mut mb, saved_state, &PollOptions { batch_size: 50, mark_seen: true, ..Default::default() }).await?;
+let out = dp_mail::poll(&mut mb, saved_state, &PollOptions { batch_size: 50, mark_seen: true, ..Default::default() }).await?;
 // persist out.state (uid_validity + last_uid); handle out.emails; if out.has_more poll again now
 // else sleep for the poll interval and reconnect.
 ```
@@ -69,6 +69,6 @@ let out = sd_mail::poll(&mut mb, saved_state, &PollOptions { batch_size: 50, mar
 - **GreenMail**: SMTP 3025 + IMAP 3143 with both sides sharing mailboxes (see the header of
   `greenmail_round_trip` in `crates/mail/src/tests/imap.rs`):
   `java -Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imap -Dgreenmail.hostname=127.0.0.1 -Dgreenmail.users=desk:pw@example.com -jar .tools/greenmail.jar`
-  then `GREENMAIL=1 cargo test -p sd-mail -- --ignored`.
-- **In-process fakes** (no setup): `sd_mail::testing::{FakeSmtp, FakeImap}`, behind `cfg(test)` or
-  `--features testing` for other crates (`sd-mail = { workspace = true, features = ["testing"] }` in dev-dependencies).
+  then `GREENMAIL=1 cargo test -p dp-mail -- --ignored`.
+- **In-process fakes** (no setup): `dp_mail::testing::{FakeSmtp, FakeImap}`, behind `cfg(test)` or
+  `--features testing` for other crates (`dp-mail = { workspace = true, features = ["testing"] }` in dev-dependencies).

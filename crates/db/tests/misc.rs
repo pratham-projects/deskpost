@@ -1,8 +1,8 @@
 mod common;
 
 use common::*;
-use sd_db::email_logs::NewEmailLog;
-use sd_db::{
+use dp_db::email_logs::NewEmailLog;
+use dp_db::{
     EmailLogStatus, EmailResponseStatus as Status, Page, Pool, Role, constraint, email_logs,
     email_responses, new_id, templates, unread, viewers,
 };
@@ -111,12 +111,12 @@ async fn templates_are_project_scoped_with_manage_permission(pool: Pool) {
             .is_none()
     );
     assert!(!templates::delete(&pool, agent.id, t.id).await.unwrap());
-    sd_db::members::update(
+    dp_db::members::update(
         &pool,
         a.id,
         pa.id,
         agent.id,
-        &sd_db::members::MemberPatch {
+        &dp_db::members::MemberPatch {
             can_manage_templates: Some(true),
             ..Default::default()
         },
@@ -192,7 +192,7 @@ async fn email_responses_one_per_status_and_admin_managed(pool: Pool) {
     let dup = email_responses::create(&pool, a.id, pa.id, Status::Created, "", "again", true)
         .await
         .unwrap_err();
-    assert!(sd_db::is_unique_violation(&dup));
+    assert!(dp_db::is_unique_violation(&dup));
     assert_eq!(
         constraint(&dup),
         Some("email_responses_project_id_status_key")
@@ -371,12 +371,12 @@ async fn email_log_lifecycle_and_tenant_consistency(pool: Pool) {
         project_id: pb.id,
         ..new.clone()
     };
-    assert!(sd_db::is_foreign_key_violation(
+    assert!(dp_db::is_foreign_key_violation(
         &email_logs::create(&pool, &mixed).await.unwrap_err()
     ));
 
     // The message link is dropped, the log kept, when a message is deleted.
-    let m: sd_db::Id = sqlx::query_scalar("SELECT id FROM messages WHERE ticket_id = $1")
+    let m: dp_db::Id = sqlx::query_scalar("SELECT id FROM messages WHERE ticket_id = $1")
         .bind(t.id)
         .fetch_one(&pool)
         .await
@@ -401,7 +401,7 @@ async fn email_log_lifecycle_and_tenant_consistency(pool: Pool) {
         .unwrap()
         .unwrap();
     assert!(logs.iter().all(|l| l.message_id.is_none()) && logs.len() == 3);
-    sd_db::tickets::delete(&pool, a.id, t.id).await.unwrap();
+    dp_db::tickets::delete(&pool, a.id, t.id).await.unwrap();
     assert_eq!(count(&pool, "email_logs").await, 0);
 }
 

@@ -59,11 +59,11 @@ pub struct Config {
     pub upload_limit: usize,
     pub webhook_limit: usize,
     pub allow_signup: bool,
-    /// With sign-up open, the first account becomes the global admin (`SD_FIRST_USER_ADMIN`).
+    /// With sign-up open, the first account becomes the global admin (`DP_FIRST_USER_ADMIN`).
     pub first_user_admin: bool,
-    /// `SD_ALLOW_PRIVATE_MAIL_HOSTS`: let SMTP/IMAP settings point at loopback/private addresses.
+    /// `DP_ALLOW_PRIVATE_MAIL_HOSTS`: let SMTP/IMAP settings point at loopback/private addresses.
     pub allow_private_mail_hosts: bool,
-    /// `SD_RATE_LIMIT_SCALE`: multiplies every per-address quota (load tests; keep 1 in production).
+    /// `DP_RATE_LIMIT_SCALE`: multiplies every per-address quota (load tests; keep 1 in production).
     pub rate_limit_scale: usize,
     pub argon2: Argon2Cost,
     pub mail: crate::mail_config::MailConfig,
@@ -110,16 +110,16 @@ impl Config {
             String::new()
         });
         let jwt_secret = secret(&get, "JWT_SECRET", &mut errs);
-        let secret_key = secret(&get, "SD_SECRET_KEY", &mut errs);
+        let secret_key = secret(&get, "DP_SECRET_KEY", &mut errs);
         if !jwt_secret.is_empty() && jwt_secret == secret_key {
-            errs.push("SD_SECRET_KEY must differ from JWT_SECRET".into());
+            errs.push("DP_SECRET_KEY must differ from JWT_SECRET".into());
         }
 
-        let production = match get("SD_ENV").as_deref() {
+        let production = match get("DP_ENV").as_deref() {
             None | Some("production") => true,
             Some("development") => false,
             Some(_) => {
-                errs.push("SD_ENV must be `production` or `development`".into());
+                errs.push("DP_ENV must be `production` or `development`".into());
                 true
             }
         };
@@ -133,14 +133,14 @@ impl Config {
             errs.push("API_VERSION must be 1-16 characters of [A-Za-z0-9._-]".into());
         }
 
-        let trusted_proxies = get("SD_TRUSTED_PROXIES")
+        let trusted_proxies = get("DP_TRUSTED_PROXIES")
             .map(|v| {
                 v.split(',')
                     .map(str::trim)
                     .filter(|s| !s.is_empty())
                     .filter_map(|s| {
                         parse_cidr(s).or_else(|| {
-                            errs.push(format!("SD_TRUSTED_PROXIES: `{s}` is not an IP or CIDR"));
+                            errs.push(format!("DP_TRUSTED_PROXIES: `{s}` is not an IP or CIDR"));
                             None
                         })
                     })
@@ -180,7 +180,7 @@ impl Config {
                 .unwrap_or_else(|| "./data/storage".into()),
             body_limit: num(
                 &get,
-                "SD_BODY_LIMIT_BYTES",
+                "DP_BODY_LIMIT_BYTES",
                 64 * 1024,
                 1,
                 MAX_LIMIT_BYTES,
@@ -188,7 +188,7 @@ impl Config {
             ),
             upload_limit: num(
                 &get,
-                "SD_UPLOAD_LIMIT_BYTES",
+                "DP_UPLOAD_LIMIT_BYTES",
                 26 * 1024 * 1024,
                 1,
                 MAX_LIMIT_BYTES,
@@ -196,37 +196,37 @@ impl Config {
             ),
             webhook_limit: num(
                 &get,
-                "SD_WEBHOOK_LIMIT_BYTES",
+                "DP_WEBHOOK_LIMIT_BYTES",
                 36 * 1024 * 1024,
                 1,
                 MAX_LIMIT_BYTES,
                 &mut errs,
             ),
-            allow_signup: flag(&get, "SD_ALLOW_SIGNUP", false, &mut errs),
-            first_user_admin: flag(&get, "SD_FIRST_USER_ADMIN", false, &mut errs),
-            allow_private_mail_hosts: flag(&get, "SD_ALLOW_PRIVATE_MAIL_HOSTS", false, &mut errs),
-            rate_limit_scale: num(&get, "SD_RATE_LIMIT_SCALE", 1, 1, 100_000, &mut errs),
+            allow_signup: flag(&get, "DP_ALLOW_SIGNUP", false, &mut errs),
+            first_user_admin: flag(&get, "DP_FIRST_USER_ADMIN", false, &mut errs),
+            allow_private_mail_hosts: flag(&get, "DP_ALLOW_PRIVATE_MAIL_HOSTS", false, &mut errs),
+            rate_limit_scale: num(&get, "DP_RATE_LIMIT_SCALE", 1, 1, 100_000, &mut errs),
             argon2: Argon2Cost::PRODUCTION,
             mail: crate::mail_config::MailConfig::from_lookup(&get, &mut errs),
         };
         let m = &config.mail;
         if m.max_file_bytes > m.max_request_bytes {
-            errs.push("SD_MAX_FILE_BYTES must not exceed SD_MAX_REQUEST_BYTES".into());
+            errs.push("DP_MAX_FILE_BYTES must not exceed DP_MAX_REQUEST_BYTES".into());
         }
         if config.upload_limit <= m.max_request_bytes {
             errs.push(
-                "SD_UPLOAD_LIMIT_BYTES must be larger than SD_MAX_REQUEST_BYTES (multipart overhead)"
+                "DP_UPLOAD_LIMIT_BYTES must be larger than DP_MAX_REQUEST_BYTES (multipart overhead)"
                     .into(),
             );
         }
         if config.webhook_limit < m.max_request_bytes / 3 * 4 {
             errs.push(
-                "SD_WEBHOOK_LIMIT_BYTES must fit SD_MAX_REQUEST_BYTES as base64 (4/3 of it)".into(),
+                "DP_WEBHOOK_LIMIT_BYTES must fit DP_MAX_REQUEST_BYTES as base64 (4/3 of it)".into(),
             );
         }
         if config.mail.system_smtp.is_some() && config.cors_origins.is_empty() {
             errs.push(
-                "FRONTEND_URL is required for SD_SYSTEM_SMTP_* (reset links point there)".into(),
+                "FRONTEND_URL is required for DP_SYSTEM_SMTP_* (reset links point there)".into(),
             );
         }
         if errs.is_empty() {

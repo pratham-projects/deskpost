@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Backup: one pg_dump (custom format) + a tarball of the file storage dir, with 14-day retention.
-#   DATABASE_URL=postgres://senddesk:...@localhost:5432/senddesk   (password is moved to PGPASSWORD, not passed in argv) STORAGE_DIR=/var/lib/senddesk/storage \
-#     BACKUP_DIR=/var/backups/senddesk scripts/backup.sh
-# Restore steps: docs/OPERATIONS.md. Cron example: 15 3 * * * /opt/senddesk/scripts/backup.sh
-# Env: DATABASE_URL (required), STORAGE_DIR (default /var/lib/senddesk/storage), BACKUP_DIR (default ./backups),
+#   DATABASE_URL=postgres://deskpost:...@localhost:5432/deskpost   (password is moved to PGPASSWORD, not passed in argv) STORAGE_DIR=/var/lib/deskpost/storage \
+#     BACKUP_DIR=/var/backups/deskpost scripts/backup.sh
+# Restore steps: docs/OPERATIONS.md. Cron example: 15 3 * * * /opt/deskpost/scripts/backup.sh
+# Env: DATABASE_URL (required), STORAGE_DIR (default /var/lib/deskpost/storage), BACKUP_DIR (default ./backups),
 #      KEEP_DAYS (default 14; 0 disables pruning). Docker compose: see OPERATIONS.md for the exec form.
 set -euo pipefail
 : "${DATABASE_URL:?set DATABASE_URL}"
-STORAGE_DIR=${STORAGE_DIR:-/var/lib/senddesk/storage}
+STORAGE_DIR=${STORAGE_DIR:-/var/lib/deskpost/storage}
 BACKUP_DIR=${BACKUP_DIR:-./backups}
 KEEP_DAYS=${KEEP_DAYS:-14}
 case "$KEEP_DAYS" in '' | *[!0-9]*) echo "KEEP_DAYS must be a number" >&2; exit 2 ;; esac
@@ -26,8 +26,8 @@ print(u.urlunsplit((p.scheme,n,p.path,p.query,p.fragment)), end="")' "$DATABASE_
 umask 077 # dumps contain customer data and sealed credentials
 mkdir -p "$BACKUP_DIR"
 ts=$(date -u +%Y%m%dT%H%M%SZ)
-db_out="$BACKUP_DIR/senddesk-db-$ts.dump"
-files_out="$BACKUP_DIR/senddesk-files-$ts.tar.gz"
+db_out="$BACKUP_DIR/deskpost-db-$ts.dump"
+files_out="$BACKUP_DIR/deskpost-files-$ts.tar.gz"
 
 # A dump from a newer pg_dump than the server cannot be restored onto that server (e.g. pg_dump 18 -> PG 16).
 client_major=$(pg_dump --version | sed -E 's/[^0-9]*([0-9]+).*/\1/')
@@ -52,7 +52,7 @@ else
 fi
 
 if [ "$KEEP_DAYS" -gt 0 ]; then
-  find "$BACKUP_DIR" -maxdepth 1 -type f \( -name 'senddesk-db-*.dump' -o -name 'senddesk-files-*.tar.gz' \) \
+  find "$BACKUP_DIR" -maxdepth 1 -type f \( -name 'deskpost-db-*.dump' -o -name 'deskpost-files-*.tar.gz' \) \
     -mtime +"$KEEP_DAYS" -delete
 fi
 echo "backup ok: $db_out${files_out:+ $files_out}"

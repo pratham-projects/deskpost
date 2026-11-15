@@ -2,8 +2,8 @@ mod common;
 
 use chrono::{Duration, Utc};
 use common::*;
-use sd_db::sessions::{ClientMeta, Rotation, rotate, start_family};
-use sd_db::{Pool, sessions};
+use dp_db::sessions::{ClientMeta, Rotation, rotate, start_family};
+use dp_db::{Pool, sessions};
 
 fn meta() -> ClientMeta {
     ClientMeta {
@@ -12,7 +12,7 @@ fn meta() -> ClientMeta {
     }
 }
 
-async fn start(pool: &Pool, user: sd_db::Id, hash: &str) -> sd_db::Id {
+async fn start(pool: &Pool, user: dp_db::Id, hash: &str) -> dp_db::Id {
     let now = Utc::now();
     start_family(
         pool,
@@ -292,7 +292,7 @@ async fn revoke_family_is_idempotent_and_purge_and_cascade_work(pool: Pool) {
     );
     assert!(!sessions::revoke_family(&pool, f, "logout").await.unwrap());
     assert!(
-        sessions::get_family(&pool, sd_db::new_id())
+        sessions::get_family(&pool, dp_db::new_id())
             .await
             .unwrap()
             .is_none()
@@ -305,7 +305,7 @@ async fn revoke_family_is_idempotent_and_purge_and_cascade_work(pool: Pool) {
     assert_eq!(sessions::purge_expired(&pool).await.unwrap(), 1);
     assert_eq!(count(&pool, "refresh_families").await, 1);
 
-    sd_db::users::delete(&pool, u.id).await.unwrap();
+    dp_db::users::delete(&pool, u.id).await.unwrap();
     assert_eq!(count(&pool, "refresh_families").await, 0);
     assert_eq!(count(&pool, "refresh_tokens").await, 0);
 }

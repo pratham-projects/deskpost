@@ -53,7 +53,7 @@ test("reset by email: link works once, old password and sessions die", async ({ 
   await page.getByRole("button", { name: /send reset link/i }).click()
   await expect(page.getByText(/if an account exists/i)).toBeVisible()
 
-  const mail = await waitForMail(EMAIL, "Reset your SendDesk password")
+  const mail = await waitForMail(EMAIL, "Reset your Deskpost password")
   const link = linkFrom(mail.source)
 
   await page.goto(link)

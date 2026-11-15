@@ -7,12 +7,12 @@ use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use chrono::{Duration, Utc};
-use sd_core::api_key::hash_api_key;
-use sd_core::email_addr::is_valid_email;
-use sd_db::resets;
-use sd_db::sessions::{self, ClientMeta, Rotation};
-use sd_db::users::{self, User};
-use sd_db::{Role, Status, is_unique_violation};
+use dp_core::api_key::hash_api_key;
+use dp_core::email_addr::is_valid_email;
+use dp_db::resets;
+use dp_db::sessions::{self, ClientMeta, Rotation};
+use dp_db::users::{self, User};
+use dp_db::{Role, Status, is_unique_violation};
 use serde::{Deserialize, Serialize};
 
 use crate::client_ip::ClientIp;
@@ -105,7 +105,7 @@ async fn signup(
 
 /// First admin from the CLI, before anyone can sign up (or when sign-up is disabled).
 pub async fn create_admin(
-    pool: &sd_db::Pool,
+    pool: &dp_db::Pool,
     hasher: &Hasher,
     email: &str,
     password: &str,
@@ -118,7 +118,7 @@ pub async fn create_admin(
         .map_err(conflict_on_email)
 }
 
-fn conflict_on_email(e: sd_db::Error) -> ApiError {
+fn conflict_on_email(e: dp_db::Error) -> ApiError {
     if is_unique_violation(&e) {
         ApiError::Conflict("An account with this email already exists.".into())
     } else {
@@ -313,7 +313,7 @@ async fn send_reset(s: &AppState, email: &str) -> Result<(), String> {
     .map_err(|e| e.to_string())?;
     // The token rides in the fragment so it never reaches server logs or Referer headers.
     let text = format!(
-        "Someone asked to reset the SendDesk password for this address.\n\n\
+        "Someone asked to reset the Deskpost password for this address.\n\n\
          Open this link to choose a new password (valid for {RESET_TTL_HOURS} hour, works once):\n\
          {origin}/reset-password/#token={}\n\n\
          If it was not you, ignore this mail; your password stays as it is.\n",
@@ -322,7 +322,7 @@ async fn send_reset(s: &AppState, email: &str) -> Result<(), String> {
     s.mailer
         .send_system(SystemMail {
             to: user.email,
-            subject: "Reset your SendDesk password".into(),
+            subject: "Reset your Deskpost password".into(),
             text,
         })
         .await

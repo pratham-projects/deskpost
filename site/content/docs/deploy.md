@@ -14,25 +14,25 @@ Postgres 16, the `api` binary or the compose stack, and Caddy in front. Everythi
 | Piece | Where |
 | --- | --- |
 | API binary | `/usr/local/bin/api` |
-| Env file | `/etc/senddesk/env`, `chmod 600`. Set `STORAGE_DIR=/var/lib/senddesk/storage` here. |
-| Attachments | `/var/lib/senddesk/storage` (`<root>/ab/cd/<key>` plus `.json` sidecars) |
-| Static UI | `/srv/senddesk/web`, from `NEXT_PUBLIC_API_URL= NEXT_PUBLIC_API_VERSION=v3 bun run build` in `apps/web` |
+| Env file | `/etc/deskpost/env`, `chmod 600`. Set `STORAGE_DIR=/var/lib/deskpost/storage` here. |
+| Attachments | `/var/lib/deskpost/storage` (`<root>/ab/cd/<key>` plus `.json` sidecars) |
+| Static UI | `/srv/deskpost/web`, from `NEXT_PUBLIC_API_URL= NEXT_PUBLIC_API_VERSION=v3 bun run build` in `apps/web` |
 | Proxy | `deploy/Caddyfile`: `/api/*` and `/health*` to `127.0.0.1:3000`, the rest is the UI |
-| Unit | `deploy/senddesk-api.service`, runs as the `senddesk` user |
+| Unit | `deploy/deskpost-api.service`, runs as the `deskpost` user |
 
 The API binds `0.0.0.0:$PORT` with no bind-address setting. Block port 3000 from outside so clients cannot skip Caddy and spoof client IPs.
 
 ## Steps
 
 ```bash
-useradd --system --home /var/lib/senddesk --shell /usr/sbin/nologin senddesk
-install -d -m 755 /etc/senddesk
-sed -E '/^[[:space:]]*#/d; s/[[:space:]]+#.*$//; /^[[:space:]]*$/d' .env | install -m 600 /dev/stdin /etc/senddesk/env
+useradd --system --home /var/lib/deskpost --shell /usr/sbin/nologin deskpost
+install -d -m 755 /etc/deskpost
+sed -E '/^[[:space:]]*#/d; s/[[:space:]]+#.*$//; /^[[:space:]]*$/d' .env | install -m 600 /dev/stdin /etc/deskpost/env
 install -m 755 target/release/api /usr/local/bin/api
-install -m 644 deploy/senddesk-api.service /etc/systemd/system/
-(set -a; . /etc/senddesk/env; set +a; sudo -E -u senddesk /usr/local/bin/api migrate)
-systemctl daemon-reload && systemctl enable --now senddesk-api
-install -d /srv/senddesk/web && cp -R apps/web/out/. /srv/senddesk/web/
+install -m 644 deploy/deskpost-api.service /etc/systemd/system/
+(set -a; . /etc/deskpost/env; set +a; sudo -E -u deskpost /usr/local/bin/api migrate)
+systemctl daemon-reload && systemctl enable --now deskpost-api
+install -d /srv/deskpost/web && cp -R apps/web/out/. /srv/deskpost/web/
 caddy validate --config deploy/Caddyfile --adapter caddyfile && systemctl reload caddy
 scripts/smoke.sh https://desk.example.com
 ```
@@ -45,16 +45,16 @@ The `sed` strips trailing comments because systemd, unlike compose, keeps them i
 
 ## Trusted proxies
 
-Set `SD_TRUSTED_PROXIES` to the proxy only: `127.0.0.1` for Caddy on the same host, the container network address for Caddy in a container. Left empty, every client shares one rate-limit bucket behind the proxy and the API logs a warning.
+Set `DP_TRUSTED_PROXIES` to the proxy only: `127.0.0.1` for Caddy on the same host, the container network address for Caddy in a container. Left empty, every client shares one rate-limit bucket behind the proxy and the API logs a warning.
 
 ## Backups
 
 ```bash
-DATABASE_URL=postgres://senddesk:...@localhost:5432/senddesk \
-STORAGE_DIR=/var/lib/senddesk/storage BACKUP_DIR=/var/backups/senddesk scripts/backup.sh
+DATABASE_URL=postgres://deskpost:...@localhost:5432/deskpost \
+STORAGE_DIR=/var/lib/deskpost/storage BACKUP_DIR=/var/backups/deskpost scripts/backup.sh
 ```
 
-It writes a custom-format `pg_dump` and a tarball of `STORAGE_DIR` (mode 600, 14-day retention). It refuses to run when `pg_dump` and the server have different major versions. Copy backups off the host. A dump is only restorable with the `SD_SECRET_KEY` it was made under, so store that key separately.
+It writes a custom-format `pg_dump` and a tarball of `STORAGE_DIR` (mode 600, 14-day retention). It refuses to run when `pg_dump` and the server have different major versions. Copy backups off the host. A dump is only restorable with the `DP_SECRET_KEY` it was made under, so store that key separately.
 
 ## Upgrades
 
@@ -67,4 +67,4 @@ The API and UI are versioned together. Deploy both in one step.
 
 ## Smoke and health
 
-`scripts/smoke.sh https://desk.example.com` checks health, the API through the proxy, the static UI, security headers (HSTS, nosniff, X-Frame-Options, CSP), CORS allowed and denied origins, and body limits. Run it after every deploy and from a cron or uptime job. Logs go to stdout: `journalctl -u senddesk-api -f` or `docker compose logs -f app`. Query strings are never logged, because download tokens travel in them.
+`scripts/smoke.sh https://desk.example.com` checks health, the API through the proxy, the static UI, security headers (HSTS, nosniff, X-Frame-Options, CSP), CORS allowed and denied origins, and body limits. Run it after every deploy and from a cron or uptime job. Logs go to stdout: `journalctl -u deskpost-api -f` or `docker compose logs -f app`. Query strings are never logged, because download tokens travel in them.

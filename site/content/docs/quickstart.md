@@ -12,8 +12,8 @@ The fastest local loop is Docker Compose with Mailpit.
 ## 1. Configure
 
 ```bash
-git clone https://github.com/pratham-projects/sendesk
-cd sendesk && cp .env.example .env
+git clone https://github.com/pratham-projects/deskpost
+cd deskpost && cp .env.example .env
 ```
 
 Fill these in `.env`. The last one is dev only: it lets a project use Mailpit.
@@ -21,9 +21,9 @@ Fill these in `.env`. The last one is dev only: it lets a project use Mailpit.
 ```dotenv
 POSTGRES_PASSWORD=<openssl rand -base64 24>
 JWT_SECRET=<openssl rand -base64 48>
-SD_SECRET_KEY=<openssl rand -base64 48>
+DP_SECRET_KEY=<openssl rand -base64 48>
 FRONTEND_URL=http://localhost:4000
-SD_ALLOW_PRIVATE_MAIL_HOSTS=true
+DP_ALLOW_PRIVATE_MAIL_HOSTS=true
 ```
 
 ## 2. Start
@@ -43,8 +43,8 @@ docker compose --profile dev up --build
 Public sign-up is off by default, so create the first admin with `bootstrap`. Pass the password through the environment, never as an argument (arguments show up in `ps`):
 
 ```bash
-export SD_BOOTSTRAP_PASSWORD='a-long-password'
-docker compose run --rm -e SD_BOOTSTRAP_PASSWORD \
+export DP_BOOTSTRAP_PASSWORD='a-long-password'
+docker compose run --rm -e DP_BOOTSTRAP_PASSWORD \
   app bootstrap --email admin@example.com --name Admin
 ```
 
@@ -57,8 +57,8 @@ Sign in, create a project, and in its settings point SMTP at `mailpit` port `102
 ```bash
 export DATABASE_URL=postgres://user@localhost:5432/postgres
 cargo run -p api -- migrate
-SD_ENV=development JWT_SECRET=... SD_SECRET_KEY=... cargo run -p api -- serve
+DP_ENV=development JWT_SECRET=... DP_SECRET_KEY=... cargo run -p api -- serve
 cd apps/web && bun install && bun run dev
 ```
 
-`SD_ENV=development` returns the refresh token in the JSON body and relaxes cookies. Never set it on a real deployment.
+`DP_ENV=development` returns the refresh token in the JSON body and relaxes cookies. Never set it on a real deployment.

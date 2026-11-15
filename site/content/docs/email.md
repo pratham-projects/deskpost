@@ -21,7 +21,7 @@ Per-project auto-replies exist for two events, `created` and `resolved`, one ent
 
 ## Inbound by IMAP
 
-Configure the mailbox on the project. The API polls every `SD_IMAP_POLL_SECS` (60), fetching at most 50 messages per round with `BODY.PEEK`, so the poller does not mark mail as read. A message over the size caps or unparseable is consumed, so it cannot wedge the poller. If the server's `UIDVALIDITY` changes the cursor restarts and duplicates are dropped by `Message-ID`. IMAP needs no approval: the credentials prove ownership.
+Configure the mailbox on the project. The API polls every `DP_IMAP_POLL_SECS` (60), fetching at most 50 messages per round with `BODY.PEEK`, so the poller does not mark mail as read. A message over the size caps or unparseable is consumed, so it cannot wedge the poller. If the server's `UIDVALIDITY` changes the cursor restarts and duplicates are dropped by `Message-ID`. IMAP needs no approval: the credentials prove ownership.
 
 ## Inbound by webhook
 
@@ -29,7 +29,7 @@ Configure the mailbox on the project. The API polls every `SD_IMAP_POLL_SECS` (6
 
 ```
 X-Webhook-Timestamp: <unix seconds, within 5 minutes>
-X-Webhook-Signature: <hex HMAC-SHA256 of "{timestamp}.{raw body}" with SD_WEBHOOK_SECRET>
+X-Webhook-Signature: <hex HMAC-SHA256 of "{timestamp}.{raw body}" with DP_WEBHOOK_SECRET>
 ```
 
 The mail is routed to the project whose `smtpEmail` equals the recipient. Because a tenant cannot prove ownership of an address, a global admin approves it once with `POST /api/v3/projects/{id}/mailbox/approve`. Changing the project's address or mail servers clears the approval.
@@ -52,4 +52,4 @@ The from address must be one the provider accepts: the same Gmail address, a sen
 
 ## Local testing
 
-Run Mailpit (`mailpit`, or compose `--profile dev`) and open http://localhost:8025 to see everything the app sends. Mailpit has no IMAP; the repo's tests use GreenMail and in-process fakes for the poller. Local mail servers need `SD_ALLOW_PRIVATE_MAIL_HOSTS=true`.
+Run Mailpit (`mailpit`, or compose `--profile dev`) and open http://localhost:8025 to see everything the app sends. Mailpit has no IMAP; the repo's tests use GreenMail and in-process fakes for the poller. Local mail servers need `DP_ALLOW_PRIVATE_MAIL_HOSTS=true`.

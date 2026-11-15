@@ -9,7 +9,7 @@
 #      API_VERSION        default v3
 #      ORIGIN             allowed CORS origin, default = BASE_URL (must match FRONTEND_URL)
 #      INSECURE=1         curl -k (self-signed / internal CA)
-#      BODY_LIMIT_BYTES   api SD_BODY_LIMIT_BYTES, default 65536 (a bigger JSON body must give 413)
+#      BODY_LIMIT_BYTES   api DP_BODY_LIMIT_BYTES, default 65536 (a bigger JSON body must give 413)
 #      PROXY_LIMIT_BYTES  proxy cap, default 41943040 (40MB); set SMOKE_BIG=1 to send one oversize body
 #      EXPECT_HSTS        default auto (on for https); set 0/1 to force
 # Exit code is the number of failed checks (0 = healthy).

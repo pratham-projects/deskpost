@@ -1,8 +1,8 @@
 mod common;
 
 use common::*;
-use sd_db::members::{self, MemberPatch};
-use sd_db::{Page, Pool, Role, is_unique_violation, tickets};
+use dp_db::members::{self, MemberPatch};
+use dp_db::{Page, Pool, Role, is_unique_violation, tickets};
 
 #[sqlx::test(migrations = "./migrations")]
 async fn add_list_and_role_lookup(pool: Pool) {
@@ -71,10 +71,10 @@ async fn only_project_admins_add_and_no_duplicates(pool: Pool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn search_matches_name_or_email_case_insensitively(pool: Pool) {
     let (a, pa, b, _pb) = two_tenants(&pool).await;
-    let anna = sd_db::users::create(&pool, "anna@corp.io", "Anna Smith", "h", Role::Agent)
+    let anna = dp_db::users::create(&pool, "anna@corp.io", "Anna Smith", "h", Role::Agent)
         .await
         .unwrap();
-    let bob = sd_db::users::create(&pool, "bob@corp.io", "Bob 100%", "h", Role::Agent)
+    let bob = dp_db::users::create(&pool, "bob@corp.io", "Bob 100%", "h", Role::Agent)
         .await
         .unwrap();
     add_member(&pool, a.id, pa.id, anna.id, Role::Agent).await;
@@ -183,7 +183,7 @@ async fn update_permissions_and_protect_the_owner(pool: Pool) {
             .is_some()
     );
     assert!(
-        members::update(&pool, a.id, pa.id, sd_db::new_id(), &flags)
+        members::update(&pool, a.id, pa.id, dp_db::new_id(), &flags)
             .await
             .unwrap()
             .is_none()
@@ -254,11 +254,11 @@ async fn notify_recipients_are_flagged_active_members(pool: Pool) {
         .await
         .unwrap()
         .unwrap();
-    sd_db::users::admin_update(
+    dp_db::users::admin_update(
         &pool,
         gone.id,
-        &sd_db::users::AdminPatch {
-            status: Some(sd_db::Status::Suspended),
+        &dp_db::users::AdminPatch {
+            status: Some(dp_db::Status::Suspended),
             ..Default::default()
         },
     )

@@ -1,8 +1,8 @@
 mod common;
 
 use common::*;
-use sd_db::tickets::{Access, TicketFilter, TicketPatch, TicketStats};
-use sd_db::{
+use dp_db::tickets::{Access, TicketFilter, TicketPatch, TicketStats};
+use dp_db::{
     Page, Pool, Priority, Role, TicketSource, TicketStatus, clients, is_foreign_key_violation,
     members, new_id, projects, tickets,
 };
@@ -97,7 +97,7 @@ async fn duplicate_number_in_a_project_is_rejected_by_the_database(pool: Pool) {
     let t = ticket(&pool, a.id, pa.id, "c@example.com").await;
     let dup = sqlx::query("INSERT INTO tickets (id, project_id, ticket_number, client_id, subject) VALUES ($1, $2, 1, $3, 's')")
         .bind(new_id()).bind(pa.id).bind(t.client_id).execute(&pool).await.unwrap_err();
-    assert!(sd_db::is_unique_violation(&dup));
+    assert!(dp_db::is_unique_violation(&dup));
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -167,7 +167,7 @@ async fn create_checks_access(pool: Pool) {
         a.id,
         pa.id,
         &projects::ProjectPatch {
-            status: Some(sd_db::Status::Suspended),
+            status: Some(dp_db::Status::Suspended),
             ..Default::default()
         },
     )
@@ -355,9 +355,9 @@ async fn list_filters_order_and_pagination(pool: Pool) {
     .await
     .unwrap()
     .unwrap();
-    sd_db::unread::clear(&pool, a.id, t3.id).await.unwrap();
+    dp_db::unread::clear(&pool, a.id, t3.id).await.unwrap();
 
-    let ids = |rows: &[sd_db::tickets::Ticket]| rows.iter().map(|t| t.id).collect::<Vec<_>>();
+    let ids = |rows: &[dp_db::tickets::Ticket]| rows.iter().map(|t| t.id).collect::<Vec<_>>();
     let page = Page::new(50, 0);
     let (all, total) = tickets::list(&pool, a.id, &TicketFilter::default(), page)
         .await
@@ -429,7 +429,7 @@ async fn list_filters_order_and_pagination(pool: Pool) {
         .unwrap();
     assert_eq!((p1.len(), p2.len(), total), (2, 1, 3));
     // Limits are clamped, never unbounded or zero.
-    assert_eq!(Page::new(10_000, -5).limit, sd_db::MAX_LIMIT);
+    assert_eq!(Page::new(10_000, -5).limit, dp_db::MAX_LIMIT);
     assert_eq!((Page::new(0, -5).limit, Page::new(0, -5).offset), (1, 0));
 }
 
@@ -728,7 +728,7 @@ async fn delete_needs_admin_and_cascades(pool: Pool) {
     let agent = user(&pool, "agent@example.com").await;
     add_member(&pool, a.id, pa.id, agent.id, Role::Agent).await;
     let t = ticket(&pool, a.id, pa.id, "c@example.com").await;
-    sd_db::viewers::touch(&pool, a.id, t.id).await.unwrap();
+    dp_db::viewers::touch(&pool, a.id, t.id).await.unwrap();
 
     assert!(!tickets::delete(&pool, agent.id, t.id).await.unwrap());
     assert!(tickets::delete(&pool, a.id, t.id).await.unwrap());

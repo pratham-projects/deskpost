@@ -49,7 +49,7 @@ export function AuthPage() {
           <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-4">
             <Inbox className="w-6 h-6 text-primary" />
           </div>
-          <h1 className="text-2xl font-semibold">SendDesk</h1>
+          <h1 className="text-2xl font-semibold">Deskpost</h1>
           <p className="text-muted-foreground text-sm mt-1">
             {isLogin ? "Sign in to your account" : "Create a new account"}
           </p>

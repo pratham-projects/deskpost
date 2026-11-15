@@ -6,7 +6,7 @@
 import { buildInitialDB } from "./seed"
 import type { DemoDB } from "./schema"
 
-const STORAGE_KEY = "sendesk_demo_db_v3"
+const STORAGE_KEY = "deskpost_demo_db_v3"
 
 let db: DemoDB | null = null
 

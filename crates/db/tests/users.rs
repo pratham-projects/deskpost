@@ -1,8 +1,8 @@
 mod common;
 
 use common::*;
-use sd_db::users::{AdminPatch, ProfilePatch, UserFilter};
-use sd_db::{
+use dp_db::users::{AdminPatch, ProfilePatch, UserFilter};
+use dp_db::{
     Page, Pool, Role, Status, constraint, is_foreign_key_violation, is_unique_violation, users,
 };
 
@@ -28,7 +28,7 @@ async fn create_get_and_case_insensitive_lookup(pool: Pool) {
             .unwrap()
             .is_none()
     );
-    assert!(users::get(&pool, sd_db::new_id()).await.unwrap().is_none());
+    assert!(users::get(&pool, dp_db::new_id()).await.unwrap().is_none());
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -46,15 +46,15 @@ async fn email_unique_ignoring_case(pool: Pool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn check_constraints_reject_bad_values(pool: Pool) {
     let bad_role = sqlx::query("INSERT INTO users (id, email, name, password_hash, role) VALUES ($1, 'x@e.com', 'x', 'h', 'root')")
-        .bind(sd_db::new_id()).execute(&pool).await;
+        .bind(dp_db::new_id()).execute(&pool).await;
     assert!(bad_role.is_err());
     let bad_status = sqlx::query("INSERT INTO users (id, email, name, password_hash, status) VALUES ($1, 'y@e.com', 'y', 'h', 'banned')")
-        .bind(sd_db::new_id()).execute(&pool).await;
+        .bind(dp_db::new_id()).execute(&pool).await;
     assert!(bad_status.is_err());
     let empty_name = sqlx::query(
         "INSERT INTO users (id, email, name, password_hash) VALUES ($1, 'z@e.com', '', 'h')",
     )
-    .bind(sd_db::new_id())
+    .bind(dp_db::new_id())
     .execute(&pool)
     .await;
     assert!(empty_name.is_err());
@@ -234,7 +234,7 @@ async fn updates_login_password_and_delete(pool: Pool) {
     assert_eq!(cleared.phone, None);
     assert_eq!(cleared.name, "New");
     assert!(
-        users::update_profile(&pool, sd_db::new_id(), &ProfilePatch::default())
+        users::update_profile(&pool, dp_db::new_id(), &ProfilePatch::default())
             .await
             .unwrap()
             .is_none()
@@ -259,7 +259,7 @@ async fn updates_login_password_and_delete(pool: Pool) {
         (Role::Admin, Status::Inactive, "Boss")
     );
     assert!(
-        users::admin_update(&pool, sd_db::new_id(), &AdminPatch::default())
+        users::admin_update(&pool, dp_db::new_id(), &AdminPatch::default())
             .await
             .unwrap()
             .is_none()
@@ -279,7 +279,7 @@ async fn updates_login_password_and_delete(pool: Pool) {
         "new-hash"
     );
     assert!(
-        !users::set_password_hash(&pool, sd_db::new_id(), "x")
+        !users::set_password_hash(&pool, dp_db::new_id(), "x")
             .await
             .unwrap()
     );
@@ -304,7 +304,7 @@ fn demote() -> AdminPatch {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn guarded_update_and_delete_keep_one_active_admin(pool: Pool) {
-    use sd_db::users::Guarded;
+    use dp_db::users::Guarded;
     let a = users::create(&pool, "a@example.com", "A", "h", Role::Admin)
         .await
         .unwrap();
@@ -351,14 +351,14 @@ async fn guarded_update_and_delete_keep_one_active_admin(pool: Pool) {
     };
     assert_eq!(u.status, Status::Suspended);
     assert_eq!(
-        users::delete_guarded(&pool, sd_db::new_id()).await.unwrap(),
+        users::delete_guarded(&pool, dp_db::new_id()).await.unwrap(),
         Guarded::Done(false)
     );
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn concurrent_demotions_cannot_remove_every_admin(pool: Pool) {
-    use sd_db::users::Guarded;
+    use dp_db::users::Guarded;
     let a = users::create(&pool, "a@example.com", "A", "h", Role::Admin)
         .await
         .unwrap();

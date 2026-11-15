@@ -25,10 +25,10 @@ use axum::body::Body;
 use axum::extract::{ConnectInfo, DefaultBodyLimit};
 use axum::http::{HeaderMap, Method, Request, StatusCode, header};
 use axum::routing::{get, put};
+use dp_db::projects::{NewProject, Project};
+use dp_db::users::User;
+use dp_db::{Id, Pool, Role, members, projects, users};
 use http_body_util::BodyExt;
-use sd_db::projects::{NewProject, Project};
-use sd_db::users::User;
-use sd_db::{Id, Pool, Role, members, projects, users};
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
@@ -41,10 +41,10 @@ pub fn env_with(extra: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
     let mut vars: Vec<(String, String)> = [
         ("DATABASE_URL", "postgres://unused"),
         ("JWT_SECRET", JWT_SECRET),
-        ("SD_SECRET_KEY", SECRET_KEY),
-        ("SD_ENV", "development"),
+        ("DP_SECRET_KEY", SECRET_KEY),
+        ("DP_ENV", "development"),
         ("FRONTEND_URL", FRONTEND),
-        ("SD_TRUSTED_PROXIES", "10.0.0.0/8"),
+        ("DP_TRUSTED_PROXIES", "10.0.0.0/8"),
     ]
     .map(|(k, v)| (k.to_string(), v.to_string()))
     .into();

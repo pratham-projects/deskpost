@@ -1,7 +1,7 @@
 //! Wire shapes shared by several route modules (`docs/API.md` section 2).
 
 use chrono::{DateTime, SecondsFormat, Utc};
-use sd_db::users::User;
+use dp_db::users::User;
 use serde::Serialize;
 
 /// RFC 3339 UTC with second precision: `2026-10-27T10:00:00Z`.
@@ -12,7 +12,7 @@ pub fn ts(t: DateTime<Utc>) -> String {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserDto {
-    pub id: sd_db::Id,
+    pub id: dp_db::Id,
     pub email: String,
     pub name: String,
     pub role: &'static str,

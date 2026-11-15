@@ -12,7 +12,7 @@ case "$BASE_DB" in
   *@localhost[:/]*|*@127.0.0.1[:/]*|*//localhost[:/]*|*//127.0.0.1[:/]*) ;;
   *) echo "refusing non-local database host in E2E_DATABASE_URL/DATABASE_URL" >&2; exit 1 ;;
 esac
-DB_NAME=sd_e2e
+DB_NAME=dp_e2e
 DB_URL="${BASE_DB%/*}/$DB_NAME"
 API_PORT=${E2E_API_PORT:-3100}
 WEB_PORT=${E2E_WEB_PORT:-4100}
@@ -69,16 +69,16 @@ fi
 
 echo "== api"
 export DATABASE_URL=$DB_URL
-export JWT_SECRET=$(openssl rand -hex 32) SD_SECRET_KEY=$(openssl rand -hex 32)
-export SD_ENV=development PORT=$API_PORT FRONTEND_URL=http://127.0.0.1:$WEB_PORT
-export STORAGE_DIR=$ROOT/$RUN/storage SD_ALLOW_PRIVATE_MAIL_HOSTS=true SD_MAIL_PLAINTEXT=true
-export SD_IMAP_POLL_SECS=5 SD_TRUSTED_PROXIES=127.0.0.1
-export SD_WEBHOOK_SECRET=$(openssl rand -hex 32)
+export JWT_SECRET=$(openssl rand -hex 32) DP_SECRET_KEY=$(openssl rand -hex 32)
+export DP_ENV=development PORT=$API_PORT FRONTEND_URL=http://127.0.0.1:$WEB_PORT
+export STORAGE_DIR=$ROOT/$RUN/storage DP_ALLOW_PRIVATE_MAIL_HOSTS=true DP_MAIL_PLAINTEXT=true
+export DP_IMAP_POLL_SECS=5 DP_TRUSTED_PROXIES=127.0.0.1
+export DP_WEBHOOK_SECRET=$(openssl rand -hex 32)
 # Platform mailbox for account mail (password reset): GreenMail, so the spec can read the link.
-export SD_SYSTEM_SMTP_HOST=127.0.0.1 SD_SYSTEM_SMTP_PORT=$SMTP_PORT SD_SYSTEM_SMTP_FROM=noreply@desk.test
+export DP_SYSTEM_SMTP_HOST=127.0.0.1 DP_SYSTEM_SMTP_PORT=$SMTP_PORT DP_SYSTEM_SMTP_FROM=noreply@desk.test
 rm -rf "$STORAGE_DIR"
 "$API" migrate >/dev/null
-SD_BOOTSTRAP_PASSWORD=$ADMIN_PASS "$API" bootstrap --email $ADMIN_EMAIL --name "E2E Admin" >/dev/null
+DP_BOOTSTRAP_PASSWORD=$ADMIN_PASS "$API" bootstrap --email $ADMIN_EMAIL --name "E2E Admin" >/dev/null
 "$API" serve >"$RUN/api.log" 2>&1 &
 PIDS+=($!)
 wait_port api $API_PORT
@@ -111,7 +111,7 @@ wait_port caddy $WEB_PORT
 echo "== playwright"
 (cd e2e && bun install --frozen-lockfile >/dev/null 2>&1 || bun install >/dev/null)
 export E2E_BASE_URL=http://127.0.0.1:$WEB_PORT E2E_ADMIN_EMAIL=$ADMIN_EMAIL E2E_ADMIN_PASS=$ADMIN_PASS
-export E2E_SMTP_PORT=$SMTP_PORT E2E_IMAP_PORT=$IMAP_PORT E2E_WEBHOOK_SECRET=$SD_WEBHOOK_SECRET
+export E2E_SMTP_PORT=$SMTP_PORT E2E_IMAP_PORT=$IMAP_PORT E2E_WEBHOOK_SECRET=$DP_WEBHOOK_SECRET
 set +e
 (cd e2e && bunx playwright test)
 rc=$?

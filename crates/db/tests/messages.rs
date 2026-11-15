@@ -1,10 +1,10 @@
 mod common;
 
 use common::*;
-use sd_db::attachments::{self, NewAttachment, Stored};
-use sd_db::messages::{self, NewAgentMessage, NewInbound, Posted};
-use sd_db::tickets::{self, TicketPatch};
-use sd_db::{
+use dp_db::attachments::{self, NewAttachment, Stored};
+use dp_db::messages::{self, NewAgentMessage, NewInbound, Posted};
+use dp_db::tickets::{self, TicketPatch};
+use dp_db::{
     MessageType, Page, Pool, Role, SenderType, TicketStatus, is_unique_violation, new_id, unread,
 };
 
@@ -15,7 +15,7 @@ fn reply(body: &str) -> NewAgentMessage {
     }
 }
 
-fn inbound(project: sd_db::Id, ticket: sd_db::Id, message_id: Option<&str>) -> NewInbound {
+fn inbound(project: dp_db::Id, ticket: dp_db::Id, message_id: Option<&str>) -> NewInbound {
     NewInbound {
         project_id: project,
         ticket_id: ticket,

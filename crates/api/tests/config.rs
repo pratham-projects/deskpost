@@ -32,7 +32,7 @@ fn production_is_the_default_and_secures_cookies() {
     let get = |k: &str| match k {
         "DATABASE_URL" => Some("postgres://x".to_string()),
         "JWT_SECRET" => Some(JWT_SECRET.into()),
-        "SD_SECRET_KEY" => Some(SECRET_KEY.into()),
+        "DP_SECRET_KEY" => Some(SECRET_KEY.into()),
         _ => None,
     };
     let c = Config::from_lookup(get).unwrap();
@@ -44,7 +44,7 @@ fn production_is_the_default_and_secures_cookies() {
 #[test]
 fn required_values_are_reported_together() {
     let e = Config::from_lookup(|_| None).unwrap_err().0;
-    for name in ["DATABASE_URL", "JWT_SECRET", "SD_SECRET_KEY"] {
+    for name in ["DATABASE_URL", "JWT_SECRET", "DP_SECRET_KEY"] {
         assert!(e.iter().any(|m| m.contains(name)), "{name}: {e:?}");
     }
 }
@@ -56,8 +56,8 @@ fn short_secrets_are_rejected() {
         "JWT_SECRET must be at least 32 bytes",
     );
     rejects(
-        &[("SD_SECRET_KEY", "Zp7Qm2Xv9Lk4Nb8Tc3Wr6Yh1Gs5Df0J")],
-        "SD_SECRET_KEY must be at least 32 bytes",
+        &[("DP_SECRET_KEY", "Zp7Qm2Xv9Lk4Nb8Tc3Wr6Yh1Gs5Df0J")],
+        "DP_SECRET_KEY must be at least 32 bytes",
     );
     // 31 bytes: one short.
     rejects(&[("JWT_SECRET", &JWT_SECRET[..31])], "at least 32 bytes");
@@ -76,8 +76,8 @@ fn known_placeholders_are_rejected() {
     ] {
         rejects(&[("JWT_SECRET", p)], "JWT_SECRET looks like a placeholder");
         rejects(
-            &[("SD_SECRET_KEY", p)],
-            "SD_SECRET_KEY looks like a placeholder",
+            &[("DP_SECRET_KEY", p)],
+            "DP_SECRET_KEY looks like a placeholder",
         );
     }
 }
@@ -90,29 +90,29 @@ fn low_entropy_secrets_are_rejected() {
 
 #[test]
 fn the_two_secrets_must_differ() {
-    rejects(&[("SD_SECRET_KEY", JWT_SECRET)], "must differ");
+    rejects(&[("DP_SECRET_KEY", JWT_SECRET)], "must differ");
 }
 
 #[test]
 fn bad_values_are_named() {
-    rejects(&[("SD_ENV", "staging")], "SD_ENV");
+    rejects(&[("DP_ENV", "staging")], "DP_ENV");
     rejects(&[("PORT", "0")], "PORT");
     rejects(&[("PORT", "70000")], "PORT");
     rejects(&[("PORT", "abc")], "PORT");
     rejects(&[("API_VERSION", "v3/../x")], "API_VERSION");
     rejects(&[("API_VERSION", "v3;path")], "API_VERSION");
     rejects(&[("COOKIE_SECURE", "maybe")], "COOKIE_SECURE");
-    rejects(&[("SD_RATE_LIMIT_SCALE", "0")], "SD_RATE_LIMIT_SCALE");
-    rejects(&[("SD_BODY_LIMIT_BYTES", "0")], "SD_BODY_LIMIT_BYTES");
+    rejects(&[("DP_RATE_LIMIT_SCALE", "0")], "DP_RATE_LIMIT_SCALE");
+    rejects(&[("DP_BODY_LIMIT_BYTES", "0")], "DP_BODY_LIMIT_BYTES");
     rejects(
-        &[("SD_UPLOAD_LIMIT_BYTES", "99999999999")],
-        "SD_UPLOAD_LIMIT_BYTES",
+        &[("DP_UPLOAD_LIMIT_BYTES", "99999999999")],
+        "DP_UPLOAD_LIMIT_BYTES",
     );
     rejects(
-        &[("SD_TRUSTED_PROXIES", "10.0.0.0/8, not-a-cidr")],
+        &[("DP_TRUSTED_PROXIES", "10.0.0.0/8, not-a-cidr")],
         "not-a-cidr",
     );
-    rejects(&[("SD_TRUSTED_PROXIES", "10.0.0.0/99")], "10.0.0.0/99");
+    rejects(&[("DP_TRUSTED_PROXIES", "10.0.0.0/99")], "10.0.0.0/99");
 }
 
 #[test]
@@ -142,12 +142,12 @@ fn frontend_origins_must_be_plain_origins() {
 #[test]
 fn trusted_proxies_accept_cidrs_and_bare_addresses() {
     let c = Config::from_lookup(env_with(&[(
-        "SD_TRUSTED_PROXIES",
+        "DP_TRUSTED_PROXIES",
         "10.0.0.0/8, 192.168.1.5, ::1, fd00::/8",
     )]))
     .unwrap();
     assert_eq!(c.trusted_proxies.len(), 4);
-    let c = Config::from_lookup(env_with(&[("SD_TRUSTED_PROXIES", "")])).unwrap();
+    let c = Config::from_lookup(env_with(&[("DP_TRUSTED_PROXIES", "")])).unwrap();
     assert!(c.trusted_proxies.is_empty());
 }
 
@@ -168,11 +168,11 @@ fn private_mail_hosts_are_off_unless_asked_for() {
             .unwrap()
             .allow_private_mail_hosts
     );
-    let on = Config::from_lookup(env_with(&[("SD_ALLOW_PRIVATE_MAIL_HOSTS", "1")])).unwrap();
+    let on = Config::from_lookup(env_with(&[("DP_ALLOW_PRIVATE_MAIL_HOSTS", "1")])).unwrap();
     assert!(on.allow_private_mail_hosts);
     rejects(
-        &[("SD_ALLOW_PRIVATE_MAIL_HOSTS", "yes")],
-        "SD_ALLOW_PRIVATE_MAIL_HOSTS",
+        &[("DP_ALLOW_PRIVATE_MAIL_HOSTS", "yes")],
+        "DP_ALLOW_PRIVATE_MAIL_HOSTS",
     );
 }
 
@@ -180,30 +180,30 @@ fn private_mail_hosts_are_off_unless_asked_for() {
 fn size_limits_must_agree() {
     rejects(
         &[
-            ("SD_MAX_FILE_BYTES", "2000000"),
-            ("SD_MAX_REQUEST_BYTES", "1000000"),
+            ("DP_MAX_FILE_BYTES", "2000000"),
+            ("DP_MAX_REQUEST_BYTES", "1000000"),
         ],
-        "SD_MAX_FILE_BYTES must not exceed",
+        "DP_MAX_FILE_BYTES must not exceed",
     );
     // raising the mail cap alone would 413 before it: refuse at startup instead
     rejects(
-        &[("SD_MAX_REQUEST_BYTES", "100000000")],
-        "SD_UPLOAD_LIMIT_BYTES must be larger",
+        &[("DP_MAX_REQUEST_BYTES", "100000000")],
+        "DP_UPLOAD_LIMIT_BYTES must be larger",
     );
     rejects(
         &[
-            ("SD_MAX_REQUEST_BYTES", "20000000"),
-            ("SD_UPLOAD_LIMIT_BYTES", "26000000"),
-            ("SD_WEBHOOK_LIMIT_BYTES", "26000000"),
+            ("DP_MAX_REQUEST_BYTES", "20000000"),
+            ("DP_UPLOAD_LIMIT_BYTES", "26000000"),
+            ("DP_WEBHOOK_LIMIT_BYTES", "26000000"),
         ],
-        "SD_WEBHOOK_LIMIT_BYTES must fit",
+        "DP_WEBHOOK_LIMIT_BYTES must fit",
     );
     // consistent custom values are fine
     assert!(
         Config::from_lookup(env_with(&[
-            ("SD_MAX_REQUEST_BYTES", "50000000"),
-            ("SD_UPLOAD_LIMIT_BYTES", "52000000"),
-            ("SD_WEBHOOK_LIMIT_BYTES", "70000000"),
+            ("DP_MAX_REQUEST_BYTES", "50000000"),
+            ("DP_UPLOAD_LIMIT_BYTES", "52000000"),
+            ("DP_WEBHOOK_LIMIT_BYTES", "70000000"),
         ]))
         .is_ok()
     );
@@ -215,8 +215,8 @@ fn system_smtp_is_optional_and_checked_together() {
     assert!(off.mail.system_smtp.is_none());
 
     let on = Config::from_lookup(env_with(&[
-        ("SD_SYSTEM_SMTP_HOST", "smtp.desk.test"),
-        ("SD_SYSTEM_SMTP_FROM", "noreply@desk.test"),
+        ("DP_SYSTEM_SMTP_HOST", "smtp.desk.test"),
+        ("DP_SYSTEM_SMTP_FROM", "noreply@desk.test"),
     ]))
     .unwrap();
     let s = on.mail.system_smtp.unwrap();
@@ -224,34 +224,34 @@ fn system_smtp_is_optional_and_checked_together() {
     assert!(s.username.is_none());
 
     rejects(
-        &[("SD_SYSTEM_SMTP_FROM", "noreply@desk.test")],
-        "SD_SYSTEM_SMTP_HOST",
+        &[("DP_SYSTEM_SMTP_FROM", "noreply@desk.test")],
+        "DP_SYSTEM_SMTP_HOST",
     );
     rejects(
-        &[("SD_SYSTEM_SMTP_HOST", "smtp.desk.test")],
-        "SD_SYSTEM_SMTP_FROM",
-    );
-    rejects(
-        &[
-            ("SD_SYSTEM_SMTP_HOST", "smtp.desk.test"),
-            ("SD_SYSTEM_SMTP_FROM", "not-an-address"),
-        ],
-        "SD_SYSTEM_SMTP_FROM",
+        &[("DP_SYSTEM_SMTP_HOST", "smtp.desk.test")],
+        "DP_SYSTEM_SMTP_FROM",
     );
     rejects(
         &[
-            ("SD_SYSTEM_SMTP_HOST", "smtp.desk.test"),
-            ("SD_SYSTEM_SMTP_FROM", "noreply@desk.test"),
-            ("SD_SYSTEM_SMTP_USER", "bot"),
+            ("DP_SYSTEM_SMTP_HOST", "smtp.desk.test"),
+            ("DP_SYSTEM_SMTP_FROM", "not-an-address"),
         ],
-        "SD_SYSTEM_SMTP_PASSWORD",
+        "DP_SYSTEM_SMTP_FROM",
+    );
+    rejects(
+        &[
+            ("DP_SYSTEM_SMTP_HOST", "smtp.desk.test"),
+            ("DP_SYSTEM_SMTP_FROM", "noreply@desk.test"),
+            ("DP_SYSTEM_SMTP_USER", "bot"),
+        ],
+        "DP_SYSTEM_SMTP_PASSWORD",
     );
     // Links need a front-end origin to point at.
     let errs = Config::from_lookup(|k| match k {
         "FRONTEND_URL" => None,
         other => env_with(&[
-            ("SD_SYSTEM_SMTP_HOST", "smtp.desk.test"),
-            ("SD_SYSTEM_SMTP_FROM", "noreply@desk.test"),
+            ("DP_SYSTEM_SMTP_HOST", "smtp.desk.test"),
+            ("DP_SYSTEM_SMTP_FROM", "noreply@desk.test"),
         ])(other),
     })
     .expect_err("rejected");

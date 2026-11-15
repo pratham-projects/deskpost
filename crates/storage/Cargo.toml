@@ -1,5 +1,5 @@
 [package]
-name = "sd-storage"
+name = "dp-storage"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

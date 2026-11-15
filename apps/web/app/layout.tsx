@@ -9,7 +9,7 @@ const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "SendDesk",
+  title: "Deskpost",
   description: "Centralized multi-tenant support ticket system",
   icons: {
     icon: [

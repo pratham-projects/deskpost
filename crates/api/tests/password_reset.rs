@@ -6,9 +6,9 @@ use api::config::Config;
 use axum::http::StatusCode;
 use chrono::Utc;
 use common::*;
-use sd_core::api_key::hash_api_key;
-use sd_db::{Role, resets};
-use sd_mail::testing::FakeSmtp;
+use dp_core::api_key::hash_api_key;
+use dp_db::{Role, resets};
+use dp_mail::testing::FakeSmtp;
 use serde_json::json;
 use sqlx::PgPool;
 
@@ -18,10 +18,10 @@ async fn app_with_mail(pool: PgPool) -> (TestApp, FakeSmtp) {
     let smtp = FakeSmtp::start().await;
     let port = smtp.port().to_string();
     let mut c = Config::from_lookup(env_with(&[
-        ("SD_MAIL_PLAINTEXT", "1"),
-        ("SD_SYSTEM_SMTP_HOST", "127.0.0.1"),
-        ("SD_SYSTEM_SMTP_PORT", &port),
-        ("SD_SYSTEM_SMTP_FROM", "noreply@desk.test"),
+        ("DP_MAIL_PLAINTEXT", "1"),
+        ("DP_SYSTEM_SMTP_HOST", "127.0.0.1"),
+        ("DP_SYSTEM_SMTP_PORT", &port),
+        ("DP_SYSTEM_SMTP_FROM", "noreply@desk.test"),
     ]))
     .expect("config");
     let base = test_config();
@@ -43,7 +43,7 @@ async fn reset(t: &TestApp, token: &str, password: &str) -> Resp {
 }
 
 /// Waits for `n` mails (the send runs in the background).
-async fn mails(smtp: &FakeSmtp, n: usize) -> Vec<sd_mail::testing::ReceivedMail> {
+async fn mails(smtp: &FakeSmtp, n: usize) -> Vec<dp_mail::testing::ReceivedMail> {
     for _ in 0..100 {
         if smtp.messages().len() >= n {
             break;
@@ -54,7 +54,7 @@ async fn mails(smtp: &FakeSmtp, n: usize) -> Vec<sd_mail::testing::ReceivedMail>
 }
 
 /// Pulls the reset token out of the mail body (quoted-printable decoded).
-fn token_in(mail: &sd_mail::testing::ReceivedMail) -> String {
+fn token_in(mail: &dp_mail::testing::ReceivedMail) -> String {
     let raw = String::from_utf8_lossy(&mail.data).replace("=\r\n", "");
     let raw = raw.replace("=3D", "=");
     let start = raw.find("/reset-password/#token=").expect("link in mail")
@@ -305,10 +305,10 @@ async fn a_failed_mail_still_answers_200(pool: PgPool) {
     // Nothing listens on this port: the background send fails and is only logged.
     let c = {
         let mut c = Config::from_lookup(env_with(&[
-            ("SD_MAIL_PLAINTEXT", "1"),
-            ("SD_SYSTEM_SMTP_HOST", "127.0.0.1"),
-            ("SD_SYSTEM_SMTP_PORT", "1"),
-            ("SD_SYSTEM_SMTP_FROM", "noreply@desk.test"),
+            ("DP_MAIL_PLAINTEXT", "1"),
+            ("DP_SYSTEM_SMTP_HOST", "127.0.0.1"),
+            ("DP_SYSTEM_SMTP_PORT", "1"),
+            ("DP_SYSTEM_SMTP_FROM", "noreply@desk.test"),
         ]))
         .unwrap();
         c.argon2 = test_config().argon2;

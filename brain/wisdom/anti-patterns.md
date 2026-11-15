@@ -1,7 +1,7 @@
 ---
 type: AntiPattern
 title: Banned Anti-Patterns
-description: Rules that must hold in every change to SendDesk.
+description: Rules that must hold in every change to Deskpost.
 tags: [wisdom, rules]
 timestamp: 2026-10-27
 ---
