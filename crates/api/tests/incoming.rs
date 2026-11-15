@@ -103,7 +103,12 @@ async fn new_mail_opens_a_ticket(pool: PgPool) {
         )
     );
     assert_eq!(k.count("unread_tickets").await, 1);
-    assert_eq!(k.count("mail_outbox").await, 1, "auto-response queued");
+    let kinds: Vec<String> = sqlx::query_scalar("SELECT kind FROM mail_outbox ORDER BY kind")
+        .fetch_all(&k.t.pool)
+        .await
+        .unwrap();
+    // The confirmation for the client and the new-ticket notice for the owner (shouldNotify).
+    assert_eq!(kinds, ["created", "new_ticket"], "mail queued");
     let source: String = sqlx::query_scalar("SELECT source FROM tickets")
         .fetch_one(&k.t.pool)
         .await

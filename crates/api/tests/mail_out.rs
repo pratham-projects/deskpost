@@ -562,3 +562,103 @@ async fn auto_response_quotes_only_a_short_excerpt(pool: PgPool) {
         .unwrap();
     assert!(text.matches('a').count() < 400, "{}", text.len());
 }
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn new_ticket_notice_goes_to_flagged_active_members_only(pool: PgPool) {
+    let k = Kit::new(pool).await;
+    let (owner, project, ticket, _) = k.tenant("owner@example.com", "acme").await;
+    let smtp = dp_mail::testing::FakeSmtp::start().await;
+    k.configure_mail(project.id, smtp.port(), None).await;
+    let quiet = k.t.user("quiet@example.com", dp_db::Role::Agent).await;
+    k.t.add_member(owner.id, project.id, quiet.id, dp_db::Role::Agent)
+        .await;
+    let loud = k.t.user("loud@example.com", dp_db::Role::Agent).await;
+    dp_db::members::add(
+        &k.t.pool,
+        owner.id,
+        project.id,
+        loud.id,
+        dp_db::Role::Agent,
+        true,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let gone = k.t.user("gone@example.com", dp_db::Role::Agent).await;
+    dp_db::members::add(
+        &k.t.pool,
+        owner.id,
+        project.id,
+        gone.id,
+        dp_db::Role::Agent,
+        true,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    sqlx::query("UPDATE users SET status = 'suspended' WHERE id = $1")
+        .bind(gone.id)
+        .execute(&k.t.pool)
+        .await
+        .unwrap();
+
+    // Owner and `loud` asked for notices; `quiet` did not and `gone` is suspended.
+    assert_eq!(
+        enqueue_team_notice(&k.t.pool, project.id, ticket.id)
+            .await
+            .unwrap(),
+        2
+    );
+    assert_eq!(run_outbox_once(&k.t.state).await.unwrap(), 2);
+    let mut rcpt: Vec<String> = smtp
+        .messages()
+        .iter()
+        .flat_map(|m| m.rcpt_to.clone())
+        .collect();
+    rcpt.sort();
+    assert_eq!(rcpt, ["loud@example.com", "owner@example.com"]);
+    let m = parse_inbound(&smtp.messages()[0].data, &Limits::default()).unwrap();
+    assert_eq!(
+        m.subject,
+        format!("[Project acme] New ticket #{}", ticket.ticket_number)
+    );
+    let text = m.text.unwrap();
+    assert!(text.contains("client@example.com") && text.contains("Printer on fire"));
+    assert!(
+        !text.contains("It is burning"),
+        "the description stays in the app"
+    );
+    let sent: i64 = sqlx::query_scalar("SELECT count(*) FROM email_logs WHERE status = 'sent'")
+        .fetch_one(&k.t.pool)
+        .await
+        .unwrap();
+    assert_eq!(sent, 2);
+}
+
+#[sqlx::test(migrations = "../db/migrations")]
+async fn new_ticket_notice_respects_the_pending_bound(pool: PgPool) {
+    let k = Kit::new(pool).await;
+    let (_, project, ticket, _) = k.tenant("owner@example.com", "acme").await;
+    sqlx::query(
+        "INSERT INTO email_logs (id, project_id, ticket_id, to_email, subject)
+         SELECT gen_random_uuid(), $1, $2, 'x@example.com', 's' FROM generate_series(1, 1000)",
+    )
+    .bind(project.id)
+    .bind(ticket.id)
+    .execute(&k.t.pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO mail_outbox (id, project_id, ticket_id, email_log_id, kind)
+         SELECT gen_random_uuid(), project_id, ticket_id, id, 'created' FROM email_logs",
+    )
+    .execute(&k.t.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        enqueue_team_notice(&k.t.pool, project.id, ticket.id)
+            .await
+            .unwrap(),
+        0
+    );
+}

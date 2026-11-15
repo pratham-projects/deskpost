@@ -26,6 +26,10 @@ ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 LockPersonality=true
+ProtectKernelModules=true
+RestrictNamespaces=true
+CapabilityBoundingSet=
+UMask=0077
 ReadWritePaths=/var/lib/deskpost
 
 [Install]

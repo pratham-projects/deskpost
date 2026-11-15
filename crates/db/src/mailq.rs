@@ -337,6 +337,70 @@ pub async fn enqueue(
     Ok(Some(id))
 }
 
+/// Queue a "new ticket" notice for every active member with `should_notify`: one `email_logs` row and
+/// one `new_ticket` job each. Skipped when the project already holds `MAX_PENDING_PER_PROJECT`
+/// pending jobs. Returns how many were queued.
+pub async fn enqueue_team_notice(
+    pool: &Pool,
+    project_id: Id,
+    ticket_id: Id,
+    subject: &str,
+) -> Result<usize> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("SELECT 1 FROM projects WHERE id = $1 FOR UPDATE")
+        .bind(project_id)
+        .execute(&mut *tx)
+        .await?;
+    let pending: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM mail_outbox WHERE project_id = $1 AND status = 'pending'",
+    )
+    .bind(project_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    let room = (MAX_PENDING_PER_PROJECT - pending).max(0);
+    let emails: Vec<String> = sqlx::query_scalar(
+        "SELECT u.email FROM project_members m JOIN users u ON u.id = m.user_id
+         WHERE m.project_id = $1 AND m.should_notify AND u.status = 'active'
+         ORDER BY u.email LIMIT $2",
+    )
+    .bind(project_id)
+    .bind(room)
+    .fetch_all(&mut *tx)
+    .await?;
+    for email in &emails {
+        let (log_id, id) = (new_id(), new_id());
+        sqlx::query(
+            "INSERT INTO email_logs (id, project_id, ticket_id, to_email, subject) VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(log_id)
+        .bind(project_id)
+        .bind(ticket_id)
+        .bind(email)
+        .bind(subject)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "INSERT INTO mail_outbox (id, project_id, ticket_id, email_log_id, kind) VALUES ($1, $2, $3, $4, 'new_ticket')",
+        )
+        .bind(id)
+        .bind(project_id)
+        .bind(ticket_id)
+        .bind(log_id)
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    Ok(emails.len())
+}
+
+/// Recipient of a queued job (the address on its `email_logs` row).
+pub async fn log_recipient(pool: &Pool, email_log_id: Id) -> Result<Option<String>> {
+    sqlx::query_scalar("SELECT to_email FROM email_logs WHERE id = $1")
+        .bind(email_log_id)
+        .fetch_optional(pool)
+        .await
+}
+
 /// Take up to `limit` due jobs. Each is leased for `lease_secs` (its `next_attempt_at` moves out and
 /// `attempts` goes up), so a crashed worker's job comes back later and two workers never share one.
 pub async fn claim_due(pool: &Pool, limit: i64, lease_secs: i64) -> Result<Vec<OutboxJob>> {

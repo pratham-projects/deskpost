@@ -136,6 +136,12 @@ impl Env {
         let f: Vec<(&str, &str)> = f.iter().map(|(k, v)| (*k, v.as_str())).collect();
         let res = self.form("/tickets/admin", Some(token), None, &f).await;
         assert_eq!(res.status, 201, "{}", res.text());
+        // Creation also queues the team notice (the owner has shouldNotify); tests here are about
+        // replies and confirmations, so start from an empty queue of those.
+        sqlx::query("DELETE FROM email_logs WHERE id IN (SELECT email_log_id FROM mail_outbox WHERE kind = 'new_ticket')")
+            .execute(&self.t.pool)
+            .await
+            .unwrap();
         res.json()["data"].clone()
     }
 

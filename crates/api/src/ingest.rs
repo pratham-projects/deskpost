@@ -17,7 +17,7 @@ use dp_mail::{InboundAttachment, InboundEmail, Limits};
 use dp_storage::{PutMeta, Storage};
 
 use crate::config::Config;
-use crate::mail_out::enqueue_auto_response;
+use crate::mail_out::{enqueue_auto_response, enqueue_team_notice};
 use crate::state::AppState;
 
 const MAX_BODY_CHARS: usize = 50_000;
@@ -334,6 +334,9 @@ pub async fn ingest(
         &email.attachments,
     )
     .await;
+    if let Err(e) = enqueue_team_notice(&state.pool, project_id, c.ticket_id).await {
+        tracing::warn!(error = %e, "team notice not queued");
+    }
     if let Err(e) = enqueue_auto_response(
         &state.pool,
         project_id,

@@ -182,8 +182,16 @@ async fn created_auto_response_is_queued_for_admin_tickets_unless_opted_out(pool
             k.t.send_body(req, axum::body::Body::from(body)).await
         }
     };
+    // The owner's shouldNotify notice is a separate kind; only confirmations are counted here.
+    let confirmations = || async {
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM mail_outbox WHERE kind = 'created'")
+            .fetch_one(&k.t.pool)
+            .await
+            .unwrap()
+    };
     assert_eq!(post(&[]).await.status, 201);
-    assert_eq!(k.count("mail_outbox").await, 1);
+    assert_eq!(confirmations().await, 1);
     assert_eq!(post(&[("sendNotification", "false")]).await.status, 201);
-    assert_eq!(k.count("mail_outbox").await, 1);
+    assert_eq!(confirmations().await, 1);
+    assert_eq!(k.count("mail_outbox").await, 3, "one notice per ticket");
 }

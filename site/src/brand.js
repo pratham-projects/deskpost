@@ -117,7 +117,7 @@ export default {
   ],
 
   faq: [
-    ["Is it production ready?", "Not yet. It is pre-release with no tagged release. It has unit, property, integration and browser tests and a reviewed hardening pass, but the container build is not exercised in CI. `SECURITY.md` lists the accepted risks."],
+    ["Is it production ready?", "Not yet. It is pre-release with no tagged release. It has unit, property, integration and browser tests and a reviewed hardening pass, and the container images build in CI and were run end to end with Docker Compose before release. `SECURITY.md` lists the accepted risks."],
     ["What are the repo, binary and unit called?", "The repository is `deskpost` on GitHub, the binary is `api`, environment variables start with `DP_`, and the systemd unit is `deskpost-api`."],
     ["Do I need AWS or a paid email service?", "No. Outbound mail is any SMTP server and inbound is IMAP polling or a signed webhook. Gmail, Brevo, Resend and Mailgun settings are in the free email guide, and each project can use a different provider."],
     ["Can one install serve several clients?", "Yes. A project is the tenant: its own members, clients, templates, mail settings and API key. Queries are scoped by project membership and a non-member gets `404`."],

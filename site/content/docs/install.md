@@ -48,4 +48,4 @@ cargo build --release -p deskpost --locked
 
 You need a stable Rust toolchain and, for the UI, bun. With a source checkout, `docker compose up --build` builds the images locally instead.
 
-> The container build is not exercised in CI. The host layout (release binary, static export, Caddy) is the path that was replayed by hand.
+> The container images build in CI, and the Compose stack was run end to end locally (migrate, bootstrap, sign-in). The host layout (release binary, static export, Caddy) was replayed by hand.

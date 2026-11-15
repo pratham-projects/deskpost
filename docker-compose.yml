@@ -3,6 +3,7 @@
 # Quick start: cp .env.example .env, fill the secrets, then `docker compose up --build`.
 # To use mailpit as a project's SMTP server set DP_ALLOW_PRIVATE_MAIL_HOSTS=true in .env (dev only).
 # Mailpit (profile `dev`) catches all outbound mail (UI on :8025) so nothing leaves the machine.
+name: deskpost
 services:
   postgres:
     image: postgres:16

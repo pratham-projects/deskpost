@@ -45,6 +45,8 @@ These risks were reviewed and accepted (from `SECURITY.md`):
 - A DNS rebinding window exists on the connection-test endpoints.
 - `/health/db` is unauthenticated, covered by the global timeout and in-flight cap.
 - `DP_ENV=development` returns the refresh token in the body. Never use it in production.
+- The widget page is frameable on purpose and takes a public submit-only project key from the URL.
+- Mail intake has no per-sender ticket throttle beyond body, attachment and per-project limits.
 - Mail leases assume one clock; a worker that dies mid-send can repeat that one mail.
 
 ## Rotating secrets

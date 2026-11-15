@@ -34,6 +34,8 @@ Known limits of this release, decided on rather than forgotten (R50/R51 review):
 - **DNS rebinding window on the connection test.** The test endpoints resolve and check the host, then connect; real sends and polls pin the checked address at connect time.
 - **`/health/db` is unauthenticated.** It runs one trivial query; it is covered by the global request timeout and in-flight cap (120 s, 512 requests), not by a rate limit.
 - **Development mode.** `DP_ENV=development` returns the refresh token in the JSON body and relaxes cookies. `DP_ENV` defaults to production; never set it in compose or systemd files for a real deployment.
+- **The widget page is frameable on purpose.** `/widget` is meant to be embedded on customer sites, so it sets no `frame-ancestors`, and it takes the project key from the URL. The key is a public submit-only key; the page sends `Referrer-Policy: no-referrer`.
+- **No per-sender throttle on mail intake.** The IMAP and webhook paths are bounded by body, attachment and per-project limits, but one sender can still create many tickets until an agent blocks them.
 - **Mail leases assume one clock.** The outbox lease (`batch x 45 s + 60 s`) keeps two API instances from sending one job twice; a worker that dies mid-send can still repeat that one mail after the lease. Jobs claimed five times without an outcome are given up.
 
 ## Built-in protections
