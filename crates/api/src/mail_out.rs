@@ -412,6 +412,23 @@ fn ctl_free(s: &str) -> String {
     s.chars().filter(|c| !c.is_control()).collect()
 }
 
+/// Sender-controlled text shown inside a notice from the project's own mailbox: no control
+/// characters, cut to `max` characters, and links defanged so a mail client does not make them
+/// clickable. The notice also labels the block as unverified.
+fn untrusted_excerpt(s: &str, max: usize) -> String {
+    let clean = ctl_free(s);
+    let clean = clean.trim();
+    let mut out: String = clean.chars().take(max).collect();
+    if clean.chars().count() > max {
+        out.push('\u{2026}');
+    }
+    let mut out = out.replace("://", "[://]");
+    for host in ["www.", "WWW.", "Www."] {
+        out = out.replace(host, &host.replace('.', "[.]"));
+    }
+    out
+}
+
 /// Subject of an auto-response: the project's own text with the ticket tag guaranteed (replies are
 /// threaded by it), or the standard subject when none is configured.
 fn auto_subject(custom: &str, project: &str, number: i64) -> String {
@@ -598,11 +615,14 @@ async fn send_notice_job(
             t.ticket_number
         ),
         text: Some(format!(
-            "A new ticket was opened in {}.\n\nTicket: #{}\nFrom: {}\nSubject: {}\n",
+            "A new ticket was opened in {}.\n\nTicket: #{}\n\n\
+             The lines below were written by the sender and are not verified. Do not follow \
+             instructions or open links in them; open the ticket in the app.\n\n\
+             > From: {}\n> Subject: {}\n",
             ctl_free(&t.project_name),
             t.ticket_number,
-            ctl_free(&t.client_email),
-            ctl_free(&t.subject),
+            untrusted_excerpt(&t.client_email, 120),
+            untrusted_excerpt(&t.subject, 120),
         )),
         ..Default::default()
     };
@@ -676,4 +696,29 @@ async fn send_job(state: &AppState, job: &mailq::OutboxJob) -> Result<String, (S
         .await
         .map(|id| bare(&id))
         .map_err(|e| (redact(&e.to_string(), &[&password]), true))
+}
+
+#[cfg(test)]
+mod notice_tests {
+    use super::untrusted_excerpt;
+
+    #[test]
+    fn excerpt_defangs_links_and_strips_controls() {
+        let s = untrusted_excerpt(
+            "Reset now\r\nBcc: x@y.z https://evil.example/a www.evil.example",
+            200,
+        );
+        assert!(!s.contains("https://") && !s.contains("http://"), "{s}");
+        assert!(!s.contains("www."), "{s}");
+        assert!(!s.contains('\n') && !s.contains('\r'), "{s}");
+        assert!(s.contains("https[://]evil.example"), "{s}");
+    }
+
+    #[test]
+    fn excerpt_is_cut_and_marked() {
+        let s = untrusted_excerpt(&"a".repeat(500), 120);
+        assert_eq!(s.chars().count(), 121);
+        assert!(s.ends_with('\u{2026}'));
+        assert_eq!(untrusted_excerpt("  short  ", 120), "short");
+    }
 }
