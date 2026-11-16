@@ -1,0 +1,51 @@
+[package]
+name = "deskpost"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[package.metadata.dist]
+dist = true
+
+[lib]
+name = "api"
+
+[[bin]]
+name = "deskpost"
+path = "src/main.rs"
+
+[dependencies]
+dp-core.workspace = true
+dp-db.workspace = true
+dp-mail.workspace = true
+dp-storage.workspace = true
+argon2 = "0.5"
+axum = { version = "0.8", features = ["multipart"] }
+base64 = "0.23.1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+clap = { version = "4", features = ["derive", "env"] }
+hmac = "0.13"
+ipnet = "2"
+rand = "0.10.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11.1"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
+tower = { version = "0.5", default-features = false, features = ["limit"] }
+tower-http = { version = "0.6", features = ["cors", "set-header", "timeout", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tokio-util = { version = "0.7", features = ["io"] }
+uuid = { version = "1", features = ["serde", "v4"] }
+
+[dev-dependencies]
+dp-mail = { workspace = true, features = ["testing"] }
+tempfile = "3"
+http-body-util = "0.1"
+proptest = "1.12.0"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "macros", "uuid", "chrono"] }
+tower = { version = "0.5", features = ["util"] }

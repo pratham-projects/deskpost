@@ -1,6 +1,6 @@
 # Upstream
 
-This repo is a frontend-only extraction of **SendDesk**, a real multi-tenant support-ticket
+This repo is a frontend-only extraction of **Deskpost**, a real multi-tenant support-ticket
 product. It is packaged for a portfolio, not maintained as a product.
 
 - **Source:** `Pratham-Jobs/sendesk` (GitHub, real remote).
@@ -37,7 +37,7 @@ Everything under `app/`, `components/` (other than `components/demo/`), `hooks/`
 ## Judgment calls — deviations from "byte-identical + additive only"
 
 The general rule for this whole set of demos is: add files, never edit upstream ones. Two
-places in Sendesk genuinely couldn't satisfy the plan's explicit requirements without a
+places in Deskpost genuinely couldn't satisfy the plan's explicit requirements without a
 small, targeted edit:
 
 1. **`components/widget-form.tsx`** — upstream's version doesn't call any API; it just

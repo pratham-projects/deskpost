@@ -28,3 +28,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# rust
+/target/
+# attachments written by local runs
+/data/
+
+# web deps
+apps/web/node_modules/
+apps/web/.next/
+
+# e2e harness
+/.tools/
+/e2e/node_modules/
+/e2e/test-results/
+/e2e/.run/
+apps/web/out/
+*.tsbuildinfo

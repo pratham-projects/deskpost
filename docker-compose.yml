@@ -1,0 +1,113 @@
+# api containers get an explicit env allow-list (no POSTGRES_PASSWORD/bootstrap secrets leak in); unset vars use api defaults.
+# Release install (no source): `docker compose pull && docker compose up -d --no-build`; pin with DP_API_IMAGE/DP_WEB_IMAGE.
+# Quick start: cp .env.example .env, fill the secrets, then `docker compose up --build`.
+# To use mailpit as a project's SMTP server set DP_ALLOW_PRIVATE_MAIL_HOSTS=true in .env (dev only).
+# Mailpit (profile `dev`) catches all outbound mail (UI on :8025) so nothing leaves the machine.
+name: deskpost
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: deskpost
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: deskpost
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deskpost"]
+      interval: 5s
+      retries: 10
+
+  migrate:
+    image: ${DP_API_IMAGE:-ghcr.io/pratham-projects/deskpost-api:latest}
+    build: { context: ., target: api }
+    command: ["migrate"]
+    environment:
+      DATABASE_URL: postgres://deskpost:${POSTGRES_PASSWORD}@postgres:5432/deskpost
+      JWT_SECRET:
+      DP_SECRET_KEY:
+      DP_ENV:
+      API_VERSION:
+      FRONTEND_URL:
+      COOKIE_SECURE:
+      DP_TRUSTED_PROXIES:
+      DP_ALLOW_SIGNUP:
+      DP_FIRST_USER_ADMIN:
+      DP_ALLOW_PRIVATE_MAIL_HOSTS:
+      DP_BODY_LIMIT_BYTES:
+      DP_UPLOAD_LIMIT_BYTES:
+      DP_WEBHOOK_LIMIT_BYTES:
+      DP_WEBHOOK_SECRET:
+      DP_MAIL_PLAINTEXT:
+      DP_MAX_FILE_BYTES:
+      DP_MAX_REQUEST_BYTES:
+      DP_MAX_FILES:
+      DP_IMAP_POLL_SECS:
+      DP_IMAP_CONCURRENCY:
+      DP_RATE_LIMIT_SCALE:
+      DP_SYSTEM_SMTP_HOST:
+      DP_SYSTEM_SMTP_PORT:
+      DP_SYSTEM_SMTP_USER:
+      DP_SYSTEM_SMTP_PASSWORD:
+      DP_SYSTEM_SMTP_FROM:
+      RUST_LOG:
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  app:
+    image: ${DP_API_IMAGE:-ghcr.io/pratham-projects/deskpost-api:latest}
+    build: { context: ., target: api }
+    environment:
+      DATABASE_URL: postgres://deskpost:${POSTGRES_PASSWORD}@postgres:5432/deskpost
+      JWT_SECRET:
+      DP_SECRET_KEY:
+      DP_ENV:
+      API_VERSION:
+      FRONTEND_URL:
+      COOKIE_SECURE:
+      DP_TRUSTED_PROXIES:
+      DP_ALLOW_SIGNUP:
+      DP_FIRST_USER_ADMIN:
+      DP_ALLOW_PRIVATE_MAIL_HOSTS:
+      DP_BODY_LIMIT_BYTES:
+      DP_UPLOAD_LIMIT_BYTES:
+      DP_WEBHOOK_LIMIT_BYTES:
+      DP_WEBHOOK_SECRET:
+      DP_MAIL_PLAINTEXT:
+      DP_MAX_FILE_BYTES:
+      DP_MAX_REQUEST_BYTES:
+      DP_MAX_FILES:
+      DP_IMAP_POLL_SECS:
+      DP_IMAP_CONCURRENCY:
+      DP_RATE_LIMIT_SCALE:
+      DP_SYSTEM_SMTP_HOST:
+      DP_SYSTEM_SMTP_PORT:
+      DP_SYSTEM_SMTP_USER:
+      DP_SYSTEM_SMTP_PASSWORD:
+      DP_SYSTEM_SMTP_FROM:
+      RUST_LOG:
+    ports: ["127.0.0.1:3000:3000"]
+    volumes: [storage:/var/lib/deskpost/storage]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  web:
+    image: ${DP_WEB_IMAGE:-ghcr.io/pratham-projects/deskpost-web:latest}
+    build:
+      context: .
+      target: web
+      args:
+        NEXT_PUBLIC_API_URL: ${PUBLIC_URL:-}
+        NEXT_PUBLIC_API_VERSION: ${API_VERSION:-v3}
+    ports: ["127.0.0.1:4000:4000"]
+    depends_on: [app]
+
+  mailpit:
+    image: axllent/mailpit
+    profiles: ["dev"] # docker compose --profile dev up
+    ports:
+      - "127.0.0.1:8025:8025" # web UI
+      - "127.0.0.1:1025:1025" # SMTP
+
+volumes:
+  pgdata:
+  storage:

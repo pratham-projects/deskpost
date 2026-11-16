@@ -1,0 +1,12 @@
+{
+  "name": "deskpost-e2e",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "@types/node": "^25.8.0",
+    "imapflow": "2.10.2",
+    "nodemailer": "10.3.1",
+    "@types/nodemailer": "^7.0.0"
+  }
+}

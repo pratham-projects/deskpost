@@ -1,0 +1,31 @@
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+# pin-utils is only a macro helper pulled in by async-imap (IMAP polling); no known flaw, just unmaintained.
+ignore = ["RUSTSEC-2026-0441"]
+
+[licenses]
+version = 2
+allow = [
+    "0BSD",
+    "AGPL-3.0-only",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+    "Zlib",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

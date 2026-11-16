@@ -1,0 +1,52 @@
+/* deskpost skin: mirrors the product UI (apps/web/app/globals.css): cool paper, navy primary, Geist, 10px radius.
+   Light by default, dark follows the OS. Pixel type stays on the wordmark and the ASCII scene only. */
+@font-face { font-family: "Geist Sans"; font-weight: 100 900; src: url("/fonts/GeistVariable.woff2") format("woff2"); font-display: swap; }
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.97 0.003 250);
+  --bg-2: oklch(0.985 0.002 250);
+  --bg-3: oklch(0.93 0.008 240);
+  --line: oklch(0.9 0.008 240);
+  --line-2: oklch(0.8 0.015 240);
+  --fg: oklch(0.25 0.01 240);
+  --fg-dim: oklch(0.47 0.03 240);
+  --accent: oklch(0.4 0.12 250);
+  --accent-ink: oklch(0.98 0.002 250);
+  --term: oklch(0.2 0.02 245);
+  --term-fg: oklch(0.95 0.005 250);
+  --radius: 10px;
+  --font-display: "Geist Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Geist Sans", ui-sans-serif, system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.145 0 0);
+    --bg-2: oklch(0.19 0.005 250);
+    --bg-3: oklch(0.24 0.008 250);
+    --line: oklch(0.27 0.008 250);
+    --line-2: oklch(0.4 0.012 250);
+    --fg: oklch(0.97 0.003 250);
+    --fg-dim: oklch(0.74 0.02 250);
+    --accent: oklch(0.72 0.12 250);
+    --accent-ink: oklch(0.16 0.01 250);
+    --term: oklch(0.11 0 0);
+  }
+}
+.display, h2.display, h3.display, .doc h1, .doc h2, .flow h3, .foot h5 { letter-spacing: -0.03em; font-weight: 600; }
+.mark { font-family: "Geist Pixel Square", ui-monospace, monospace; letter-spacing: 0; font-weight: 400; }
+.btn, x-copy, .code, .nav-toggle, [role="tablist"], .flow code, .tab-note code, dialog.search { border-radius: var(--radius); }
+.btn { border-radius: calc(var(--radius) * 0.8); }
+[role="tablist"] button:first-child { border-radius: calc(var(--radius) - 1px) 0 0 calc(var(--radius) - 1px); }
+[role="tablist"] button:last-child { border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0; }
+.flow .node, .flow .node::after { border-radius: 50%; }
+.code { background: var(--term); color: var(--term-fg); border-color: var(--term); }
+.code button { color: var(--term-fg); }
+.btn.ink { background: var(--term); color: var(--term-fg); border-color: var(--term); }
+.btn.ink:hover { background: transparent; color: var(--accent-ink); border-color: var(--accent-ink); }
+.btn.primary:hover { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+.install-grid .sec-lede, .tab-note { color: color-mix(in oklab, var(--accent-ink) 96%, var(--accent)); }
+/* "Support inbox / you host / yourself." needs a wider measure than the kit default. */
+.hero h1 { max-width: 13ch; }
+x-copy { max-width: 660px; }
+/* leave room under the copy for the scene on phones */
+@media (max-width: 760px) { .hero-inner { padding-bottom: min(96vw, 400px); } }

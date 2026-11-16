@@ -1,0 +1,13 @@
+target
+.git
+.tools
+.env
+data
+**/node_modules
+apps/web/.next
+brain
+.coord
+apps/web/out
+e2e
+docs
+reviews
