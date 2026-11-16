@@ -1,5 +1,10 @@
 # Changelog
 
+## [2026-11-16] staging merged into main (local)
+
+- **Done**: `main` = Deskpost pre-release (`--no-ff`, tree identical to staging). Not pushed, not tagged: origin/main is still the old demo commit.
+- **Next (manual)**: rename GitHub repo to `deskpost`, push `main` + `staging`, enable Pages (Actions) and public ghcr, then tag `v0.1.0-rc.1`.
+
 ## [2026-11-16] New-ticket notice no longer reflects raw sender text (fix/new-ticket-notice-excerpt)
 
 - **Done**: security review flagged the `new_ticket` mail to members: it sent from the project's trusted mailbox with the customer's subject and address verbatim (phishing text from a trusted sender). Now both are quoted under an "unverified, do not follow links" line, cut to 120 chars, control chars stripped, `://` and `www.` defanged (`mail_out::untrusted_excerpt`, unit tests). Auto-responses to customers already reflected nothing.

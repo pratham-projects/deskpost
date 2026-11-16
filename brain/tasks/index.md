@@ -18,7 +18,7 @@
 | P3 | feat/deploy | done: deploy verified natively (no docker), `docs/OPERATIONS.md`, `scripts/smoke.sh`, `backup.sh`, `make deploy-check` |
 | P4 | feat/webload | done (e2e for every screen; `scripts/load.sh` + `docs/PERFORMANCE.md`) |
 | P4-merge | feat/webload | merged to staging (migration renumbered 0006) |
-| R60 | final gate | ci + e2e green on staging, main merge awaits approval |
+| R60 | final gate | done: staging merged into main locally (2026-11-16); push + tag await approval |
 | S2 | feat/site | done, merged (Deskpost site in `site/`) |
 | R70 | feat/rebrand | done: SendDesk -> Deskpost full rename + deploy-check env fix; awaiting merge to staging |
 | R90 | feat/pre-release | done: binary rename, reopen semantics, LICENSE/CHANGELOG, CI docker + deploy-check, docker verified; awaiting merge to staging |
