@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-11-19] v0.1.0 (release/0.1.0)
+
+- **Done**: rc.2 validated, then final. Checks on rc.2: all assets + sha256 present, released macOS binary migrates/bootstraps/signs in in production mode, `smoke.sh` all green against released binary + Caddy (`tls internal`) + static UI export (closes the old "smoke through Caddy" gap). Added `deskpost --version`. GitHub renames the dotfile asset `.env.example` to `default.env.example`; docs now say so. Site copy changed from "pre-release / not production ready" to "first release (0.1), no field history, one node, small team" (no overclaim).
+- **Manual**: ghcr packages `deskpost-api`, `deskpost-web` are created private by the first push; GitHub has no API for visibility, set Public in package settings once. Docker api image takes ~70 min (arm64 under QEMU); a native arm runner would cut it.
+- **Lesson**: `gh` token lacks `read:packages`, so private images cannot be pulled for verification; run `docker manifest inspect` anonymously to prove public.
+
 ## [2026-11-19] First push, CI shakedown, rc.2 (fix/ci-runner, fix/deploy-check-stat, fix/release-version)
 
 - **Done**: GitHub repo renamed `sendesk` -> `deskpost`, `main` + `staging` pushed, Pages on (site live at `/deskpost/`). First real GitHub CI runs found three bugs local runs could not: (1) `ubuntu-latest` is 26.04 (pg_dump 18 vs server 16, Playwright unsupported) -> runners pinned to `ubuntu-24.04` (not `release.yml`, dist-generated, uses 22.04); (2) `deploy-check.sh` file-mode test used `stat -f %Lp` first, which on GNU means filesystem stat and "succeeds" with junk -> GNU `stat -c %a` first; (3) tag `v0.1.0-rc.1` failed `dist host`: tag must equal the crate version, so version is `0.1.0-rc.2`. rc.1 tag deleted.

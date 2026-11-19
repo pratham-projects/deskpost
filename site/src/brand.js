@@ -9,7 +9,7 @@ export default {
   shot: { name: "inbox", alt: "The ticket inbox: status and project filters on the left, the ticket list, a threaded conversation with an internal note, and customer details." },
   license: "AGPL-3.0-only",
   stack: "Rust · Postgres 16 · Next.js",
-  status: "pre-release",
+  status: "v0.1",
   headline: "Support inbox you host <em>yourself.</em>",
   sub: "A shared queue across projects, threaded replies, internal notes and an embeddable widget. Customers can just email. <strong>A Rust API, a web UI and one Postgres.</strong> No paid services.",
   heroCmdPre: "git clone https://github.com/pratham-projects/deskpost && cd deskpost",
@@ -117,7 +117,7 @@ export default {
   ],
 
   faq: [
-    ["Is it production ready?", "Not yet. It is pre-release with no tagged release. It has unit, property, integration and browser tests and a reviewed hardening pass, and the container images build in CI and were run end to end with Docker Compose before release. `SECURITY.md` lists the accepted risks."],
+    ["Is it production ready?", "It is a first release (0.1) with no field history, meant for one node and a small team. It has unit, property, integration and browser tests and a reviewed hardening pass, and the container images build in CI and were run end to end with Docker Compose before release. `SECURITY.md` lists the accepted risks."],
     ["What are the repo, binary and unit called?", "The repository is `deskpost` on GitHub, the binary is `api`, environment variables start with `DP_`, and the systemd unit is `deskpost-api`."],
     ["Do I need AWS or a paid email service?", "No. Outbound mail is any SMTP server and inbound is IMAP polling or a signed webhook. Gmail, Brevo, Resend and Mailgun settings are in the free email guide, and each project can use a different provider."],
     ["Can one install serve several clients?", "Yes. A project is the tenant: its own members, clients, templates, mail settings and API key. Queries are scoped by project membership and a non-member gets `404`."],
@@ -126,5 +126,5 @@ export default {
   ],
 
   footBlurb: "A self-hosted support inbox. Repository `deskpost`, binary `api`.",
-  footNote: "Pre-release. Figures come from one laptop.",
+  footNote: "First release. Figures come from one laptop.",
 };
