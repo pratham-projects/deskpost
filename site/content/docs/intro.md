@@ -11,7 +11,7 @@ A multi-tenant support inbox you host yourself: a shared queue across projects, 
 
 > Names to look for: the repository is `pratham-projects/deskpost`, the server binary is `api`, environment variables start with `DP_` and the systemd unit is `deskpost-api`.
 
-> Deskpost is pre-release. There is no tagged release yet. Read the [FAQ](#/faq) and the accepted risks in [Security](#/security) before you rely on it.
+> Deskpost 0.1 is the first release. It has no field history yet. Read the [FAQ](#/faq) and the accepted risks in [Security](#/security) before you rely on it.
 
 ## What runs
 

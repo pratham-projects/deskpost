@@ -4,6 +4,10 @@ All notable changes to Deskpost are documented here. Format: [Keep a Changelog](
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-19
+
+First release. Same code as `v0.1.0-rc.2` plus `deskpost --version`; no field history yet, so read the accepted risks in `SECURITY.md`. Install files are release assets (`default.env.example` is the env template).
+
 ## [0.1.0-rc.2] - 2026-11-19
 
 First pre-release (`v0.1.0-rc.2`; rc.1 never built, its tag did not match the crate version), not yet recommended for production. The API may still change before `v0.1.0`.
@@ -19,5 +23,6 @@ First pre-release (`v0.1.0-rc.2`; rc.1 never built, its tag did not match the cr
 - CI: fmt, clippy, tests, cargo-deny, web build, Docker build check, deploy-file check.
 - AGPL-3.0-only license, project site and docs.
 
-[Unreleased]: https://github.com/pratham-projects/deskpost/compare/v0.1.0-rc.2...HEAD
+[Unreleased]: https://github.com/pratham-projects/deskpost/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/pratham-projects/deskpost/releases/tag/v0.1.0
 [0.1.0-rc.2]: https://github.com/pratham-projects/deskpost/releases/tag/v0.1.0-rc.2
