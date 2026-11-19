@@ -4,7 +4,7 @@
 Branch flow: `feat/*` -> `staging` -> `main` (prod). Merge with `--no-ff` only.
 1. On `staging`: update `CHANGELOG.md` (move `Unreleased` items under the new version), bump `version` in root `Cargo.toml`, run `make ci` + `make e2e`, commit.
 2. Merge `staging` into `main` (`--no-ff`).
-3. First release goes out as a candidate: `git tag v0.1.0-rc.1 && git push origin v0.1.0-rc.1`. cargo-dist marks tags with a prerelease suffix as GitHub pre-releases. Smoke-test the artifacts and images.
+3. First release goes out as a candidate: set `version = "0.1.0-rc.N"` in root `Cargo.toml` (the tag must equal the crate version or `dist` refuses to plan), then `git tag v0.1.0-rc.N && git push origin v0.1.0-rc.N`. cargo-dist marks tags with a prerelease suffix as GitHub pre-releases. Smoke-test the artifacts and images.
 4. If good, tag the final: `git tag v0.1.0 && git push origin v0.1.0`. Fix problems with `rc.2`, `rc.3`, ...
 5. Each tag fires 3 workflows:
    - `release` (cargo-dist): builds the `deskpost` binary, creates the GitHub Release.

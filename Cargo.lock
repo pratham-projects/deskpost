@@ -658,7 +658,7 @@ dependencies = [
 
 [[package]]
 name = "deskpost"
-version = "0.1.0"
+version = "0.1.0-rc.2"
 dependencies = [
  "argon2",
  "axum",
@@ -731,7 +731,7 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "dp-core"
-version = "0.1.0"
+version = "0.1.0-rc.2"
 dependencies = [
  "aes-gcm",
  "base64 0.23.1",
@@ -746,7 +746,7 @@ dependencies = [
 
 [[package]]
 name = "dp-db"
-version = "0.1.0"
+version = "0.1.0-rc.2"
 dependencies = [
  "chrono",
  "sqlx",
@@ -756,7 +756,7 @@ dependencies = [
 
 [[package]]
 name = "dp-mail"
-version = "0.1.0"
+version = "0.1.0-rc.2"
 dependencies = [
  "async-imap",
  "futures",
@@ -773,7 +773,7 @@ dependencies = [
 
 [[package]]
 name = "dp-storage"
-version = "0.1.0"
+version = "0.1.0-rc.2"
 dependencies = [
  "hmac 0.12.1",
  "proptest",
