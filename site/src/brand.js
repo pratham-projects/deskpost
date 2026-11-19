@@ -102,7 +102,7 @@ export default {
     { id: "images", label: "Images", cmds: [
       "V=v0.1.0; B=https://github.com/pratham-projects/deskpost/releases/download/$V",
       "mkdir deskpost && cd deskpost",
-      "curl -LO $B/docker-compose.yml && curl -L $B/.env.example -o .env",
+      "curl -LO $B/docker-compose.yml && curl -L $B/default.env.example -o .env",
       "# edit .env: POSTGRES_PASSWORD, JWT_SECRET, DP_SECRET_KEY, FRONTEND_URL",
       "docker compose pull && docker compose up -d --no-build",
       "docker compose run --rm -e DP_BOOTSTRAP_PASSWORD app bootstrap --email you@example.com --name \"You\"",
