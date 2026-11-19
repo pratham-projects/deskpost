@@ -53,5 +53,5 @@ DATABASE_URL=$SRC STORAGE_DIR=$W/storage BACKUP_DIR=$W/bk scripts/backup.sh >/de
 pg_restore --no-owner --exit-on-error --dbname="$DST" "$W"/bk/deskpost-db-*.dump
 [ "$(psql "$DST" -tAc 'select count(*) from t')" = 2 ] || { echo "FAIL restore row count" >&2; exit 1; }
 tar -tzf "$W"/bk/deskpost-files-*.tar.gz | grep -q abcdfile || { echo "FAIL files tarball" >&2; exit 1; }
-[ "$(stat -f %Lp "$W"/bk/deskpost-db-*.dump 2>/dev/null || stat -c %a "$W"/bk/deskpost-db-*.dump)" = 600 ] || { echo "FAIL dump mode" >&2; exit 1; }
+[ "$(stat -c %a "$W"/bk/deskpost-db-*.dump 2>/dev/null || stat -f %Lp "$W"/bk/deskpost-db-*.dump)" = 600 ] || { echo "FAIL dump mode" >&2; exit 1; }
 echo "ok backup -> restore round-trip"
