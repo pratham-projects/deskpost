@@ -4,9 +4,9 @@ All notable changes to Deskpost are documented here. Format: [Keep a Changelog](
 
 ## [Unreleased]
 
-## [0.1.0] - Pre-release
+## [0.1.0-rc.2] - 2026-11-19
 
-First pre-release (`v0.1.0-rc.1`), not yet recommended for production. The API may still change before `v0.1.0`.
+First pre-release (`v0.1.0-rc.2`; rc.1 never built, its tag did not match the crate version), not yet recommended for production. The API may still change before `v0.1.0`.
 
 ### Added
 - Multi-tenant support-ticket inbox: Rust API (Axum, SQLx, Postgres 16) and Next.js web UI.
@@ -19,5 +19,5 @@ First pre-release (`v0.1.0-rc.1`), not yet recommended for production. The API m
 - CI: fmt, clippy, tests, cargo-deny, web build, Docker build check, deploy-file check.
 - AGPL-3.0-only license, project site and docs.
 
-[Unreleased]: https://github.com/pratham-projects/deskpost/compare/v0.1.0-rc.1...HEAD
-[0.1.0]: https://github.com/pratham-projects/deskpost/releases/tag/v0.1.0-rc.1
+[Unreleased]: https://github.com/pratham-projects/deskpost/compare/v0.1.0-rc.2...HEAD
+[0.1.0-rc.2]: https://github.com/pratham-projects/deskpost/releases/tag/v0.1.0-rc.2
