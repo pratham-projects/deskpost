@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-11-19] Prod push prep (fix/lettre-advisory)
+
+- **Done**: gate rerun on main tree found `cargo deny` failing on new RustSec notices. `lettre` 0.11.23 -> 0.11.24 (Cargo.lock) cleared the four lettre/email advisories. `chrono` unmaintained notice (RUSTSEC-2026-0543, no upgrade, hard dep of sqlx + async-imap) ignored in `deny.toml` with reason.
+- **Gate**: `make ci`, `make e2e` (20), `make deploy-check` green. Local pg on 5432 (pg16 brew); the old 5433 instance is gone, use `DATABASE_URL=postgres://pratham@localhost:5432/postgres`.
+- **Lesson**: advisories land on a calendar, not a commit. Rerun `cargo deny check` right before any tag, not just in CI history.
+
 ## [2026-11-16] staging merged into main (local)
 
 - **Done**: `main` = Deskpost pre-release (`--no-ff`, tree identical to staging). Not pushed, not tagged: origin/main is still the old demo commit.

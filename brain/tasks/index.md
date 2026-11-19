@@ -23,5 +23,6 @@
 | R70 | feat/rebrand | done: SendDesk -> Deskpost full rename + deploy-check env fix; awaiting merge to staging |
 | R90 | feat/pre-release | done: binary rename, reopen semantics, LICENSE/CHANGELOG, CI docker + deploy-check, docker verified; awaiting merge to staging |
 | R80 | feat/pre-release | done: review findings audit (`reviews/STATUS.md`), `shouldNotify` new-ticket mail (migration 0007) |
+| R95 | fix/lettre-advisory | done: lettre 0.11.24, chrono notice ignored, gate green |
 
 Rules: [Pre-Merge Gate](/wisdom/pre-merge-gate.md).
