@@ -1,5 +1,10 @@
 # Changelog
 
+## [2026-11-19] First push, CI shakedown, rc.2 (fix/ci-runner, fix/deploy-check-stat, fix/release-version)
+
+- **Done**: GitHub repo renamed `sendesk` -> `deskpost`, `main` + `staging` pushed, Pages on (site live at `/deskpost/`). First real GitHub CI runs found three bugs local runs could not: (1) `ubuntu-latest` is 26.04 (pg_dump 18 vs server 16, Playwright unsupported) -> runners pinned to `ubuntu-24.04` (not `release.yml`, dist-generated, uses 22.04); (2) `deploy-check.sh` file-mode test used `stat -f %Lp` first, which on GNU means filesystem stat and "succeeds" with junk -> GNU `stat -c %a` first; (3) tag `v0.1.0-rc.1` failed `dist host`: tag must equal the crate version, so version is `0.1.0-rc.2`. rc.1 tag deleted.
+- **Lesson**: a pushed tag is a one-way door: before tagging, run `dist host --steps=create --tag=<tag>` locally. Never use `x || y` stat fallbacks where the first form can succeed wrongly.
+
 ## [2026-11-19] Prod push prep (fix/lettre-advisory)
 
 - **Done**: gate rerun on main tree found `cargo deny` failing on new RustSec notices. `lettre` 0.11.23 -> 0.11.24 (Cargo.lock) cleared the four lettre/email advisories. `chrono` unmaintained notice (RUSTSEC-2026-0543, no upgrade, hard dep of sqlx + async-imap) ignored in `deny.toml` with reason.
