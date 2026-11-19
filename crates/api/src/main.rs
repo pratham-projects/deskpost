@@ -7,7 +7,7 @@ use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
-#[command(name = "deskpost", about = "Deskpost API server")]
+#[command(name = "deskpost", version, about = "Deskpost API server")]
 struct Cli {
     #[command(subcommand)]
     command: Command,

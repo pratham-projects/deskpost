@@ -24,12 +24,12 @@ The binary is the API only. Serve the UI from the web image or from a static exp
 
 ## Docker Compose
 
-No source checkout needed. The compose file and `.env.example` are release assets.
+No source checkout needed. The compose file and `default.env.example` (GitHub renames dotfiles on upload) are release assets.
 
 ```bash
 V=v0.1.0; B=https://github.com/pratham-projects/deskpost/releases/download/$V
 mkdir deskpost && cd deskpost
-curl -LO $B/docker-compose.yml && curl -L $B/.env.example -o .env
+curl -LO $B/docker-compose.yml && curl -L $B/default.env.example -o .env
 # edit .env: POSTGRES_PASSWORD, JWT_SECRET, DP_SECRET_KEY, FRONTEND_URL
 docker compose pull && docker compose up -d --no-build
 ```

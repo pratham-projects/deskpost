@@ -32,7 +32,7 @@ Installs `deskpost` to `~/.cargo/bin`. Needs Postgres 16 and env from `.env.exam
 ```sh
 V=v0.1.0; B=https://github.com/pratham-projects/deskpost/releases/download/$V
 mkdir deskpost && cd deskpost
-curl -LO $B/docker-compose.yml && curl -L $B/.env.example -o .env
+curl -LO $B/docker-compose.yml && curl -L $B/default.env.example -o .env
 # edit .env: POSTGRES_PASSWORD, JWT_SECRET, DP_SECRET_KEY (openssl rand -base64 48), FRONTEND_URL
 docker compose pull && docker compose up -d --no-build
 ```
