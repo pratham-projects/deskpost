@@ -18,7 +18,7 @@ permissions:
 jobs:
   upload:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ github.event.release.tag_name || github.event.inputs.tag || github.event.workflow_run.head_branch }}
