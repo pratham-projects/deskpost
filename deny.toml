@@ -4,7 +4,8 @@ all-features = true
 [advisories]
 version = 2
 # pin-utils is only a macro helper pulled in by async-imap (IMAP polling); no known flaw, just unmaintained.
-ignore = ["RUSTSEC-2026-0441"]
+# chrono: unmaintained notice only (no vulnerability, no safe upgrade); it is a hard dependency of sqlx and async-imap.
+ignore = ["RUSTSEC-2026-0441", "RUSTSEC-2026-0543"]
 
 [licenses]
 version = 2
