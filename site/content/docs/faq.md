@@ -9,7 +9,7 @@ description: Short answers about status, names, mail, storage and licensing.
 
 ## Is it production ready?
 
-Not yet. It is pre-release with no tagged release. It has unit, property, integration and browser tests, a review pass and a local final gate, and the container images build in CI and were run end to end with Docker Compose before release. Read the accepted risks in [Security](#/security).
+It is a first release (0.1) with no field history. It has unit, property, integration and browser tests, a review pass and a local final gate, and the container images build in CI and were run end to end with Docker Compose before release. It is meant for one node and a small team. Read the accepted risks in [Security](#/security).
 
 ## What are the repo, binary and unit called?
 

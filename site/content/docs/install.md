@@ -9,7 +9,7 @@ description: Binary installer, Docker Compose from release assets, or build from
 
 Pick one. Every path needs PostgreSQL 16 (Compose brings its own) and three secrets. Generate secrets with `openssl rand -base64 48`; `JWT_SECRET` and `DP_SECRET_KEY` must differ and placeholders are rejected at startup.
 
-> This is pre-release. No release is tagged yet, so the Binary and Docker Compose sections below work from the first release. Today, use the Source section or clone the repo and run `docker compose up --build`.
+> Deskpost 0.1 is the first release. The Binary and Docker Compose sections below use the published release assets and images.
 
 ## Binary
 

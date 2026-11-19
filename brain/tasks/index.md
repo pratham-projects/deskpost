@@ -25,5 +25,6 @@
 | R80 | feat/pre-release | done: review findings audit (`reviews/STATUS.md`), `shouldNotify` new-ticket mail (migration 0007) |
 | R95 | fix/lettre-advisory | done: lettre 0.11.24, chrono notice ignored, gate green |
 | R96 | fix/ci-runner, fix/deploy-check-stat, fix/release-version | done: first real CI green, repo renamed, rc.2 |
+| R97 | release/0.1.0 | done: rc.2 validated, v0.1.0 cut |
 
 Rules: [Pre-Merge Gate](/wisdom/pre-merge-gate.md).
