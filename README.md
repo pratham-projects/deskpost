@@ -1,5 +1,10 @@
 # Deskpost
 
+[![Live Site](https://img.shields.io/badge/site%20%26%20docs-live-emerald?style=flat-square)](https://pratham-projects.github.io/deskpost/)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg?style=flat-square)](https://www.gnu.org/licenses/agpl-3.0)
+
+> **Live Website & Documentation**: [https://pratham-projects.github.io/deskpost/](https://pratham-projects.github.io/deskpost/)
+
 Multi-tenant support-ticket inbox: shared queue across projects, threaded conversations, internal notes,
 canned responses, attachments, live viewer presence, and an embeddable customer widget. Customers can
 also write in by email.
